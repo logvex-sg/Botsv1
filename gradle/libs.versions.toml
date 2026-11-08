@@ -1,0 +1,32 @@
+[versions]
+mod-version = "1.0.0"
+
+# Fabric (https://fabricmc.net/develop)
+jdk = "25"
+minecraft = "1.21.11"
+fabric-loader = "0.19.5"
+fabric-api = "0.141.6+1.21.11"
+
+# Loom (https://github.com/FabricMC/fabric-loom)
+loom = "1.18-SNAPSHOT"
+
+# Meteor (https://github.com/MeteorDevelopment/meteor-client/)
+meteor = "1.21.11-SNAPSHOT"
+
+# Testing
+junit = "5.10.2"
+
+[libraries]
+# Fabric base
+minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }
+fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
+
+# Meteor client
+meteor-client = { module = "meteordevelopment:meteor-client", version.ref = "meteor" }
+
+# Testing
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "1.10.2" }
+
+[plugins]
+fabric-loom = { id = "fabric-loom", version.ref = "loom" }

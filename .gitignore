@@ -1,0 +1,36 @@
+# gradle
+.gradle/
+build/
+out/
+classes/
+
+# eclipse
+*.launch
+
+# idea
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# vscode
+.settings/
+.vscode/
+bin/
+.classpath
+.project
+
+# macos
+*.DS_Store
+
+# fabric
+run/
+
+# node / electron (fleet-manager)
+node_modules/
+dist/
+dist-electron/
+release/
+*.log
+coverage/
+.openhands/
