@@ -5,6 +5,7 @@ import com.logvex.hunter.mc.HunterRuntime;
 import com.logvex.hunter.modules.combat.CombatCoordinatorModule;
 import com.logvex.hunter.modules.dashboard.HunterDashboardModule;
 import com.logvex.hunter.modules.equipment.EquipmentManagerModule;
+import com.logvex.hunter.modules.instances.CompanionModule;
 import com.logvex.hunter.modules.instances.InstanceManagerModule;
 import com.logvex.hunter.modules.messages.NotificationModule;
 import com.logvex.hunter.modules.stasis.DefensiveStasisModule;
@@ -26,6 +27,7 @@ public final class HunterRegistry {
     private static DefensiveStasisModule stasis;
     private static NotificationModule notifications;
     private static InstanceManagerModule instances;
+    private static CompanionModule companion;
     private static StatisticsModule statistics;
 
     private HunterRegistry() {}
@@ -40,6 +42,7 @@ public final class HunterRegistry {
         stasis = add(new DefensiveStasisModule());
         notifications = add(new NotificationModule());
         instances = add(new InstanceManagerModule());
+        companion = add(new CompanionModule());
         statistics = add(new StatisticsModule());
 
         HunterRuntime.get().core().setActiveModuleCountSupplier(HunterRegistry::activeCount);
@@ -103,6 +106,10 @@ public final class HunterRegistry {
 
     public static InstanceManagerModule instances() {
         return instances;
+    }
+
+    public static CompanionModule companion() {
+        return companion;
     }
 
     public static StatisticsModule statistics() {

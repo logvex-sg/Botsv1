@@ -85,6 +85,77 @@ public class HunterCommand extends Command {
             for (String name : core().config().profiles().keySet()) info(" - %s", name);
             return SINGLE_SUCCESS;
         }));
+
+        builder.then(literal("companion").executes(context -> {
+            companionStatus();
+            return SINGLE_SUCCESS;
+        })
+            .then(literal("status").executes(context -> {
+                companionStatus();
+                return SINGLE_SUCCESS;
+            }))
+            .then(literal("start").executes(context -> {
+                var module = HunterRegistry.companion();
+                if (module == null) {
+                    error("Companion module is not registered.");
+                } else {
+                    if (!module.isActive()) module.enable();
+                    info("Companion endpoint enabled.");
+                }
+                return SINGLE_SUCCESS;
+            }))
+            .then(literal("stop").executes(context -> {
+                var module = HunterRegistry.companion();
+                if (module != null && module.isActive()) module.disable();
+                info("Companion endpoint disabled.");
+                return SINGLE_SUCCESS;
+            }))
+            .then(literal("token").executes(context -> {
+                var module = HunterRegistry.companion();
+                if (module == null) {
+                    error("Companion module is not registered.");
+                } else {
+                    String token = module.currentToken();
+                    if (token.isBlank()) info("No token set; one is generated when the endpoint starts.");
+                    else info("Companion token: %s", token);
+                }
+                return SINGLE_SUCCESS;
+            }))
+            .then(literal("regenerate").executes(context -> {
+                var module = HunterRegistry.companion();
+                if (module == null) {
+                    error("Companion module is not registered.");
+                } else {
+                    info("New companion token: %s", module.regenerateToken());
+                }
+                return SINGLE_SUCCESS;
+            }))
+            .then(literal("port")
+                .then(argument("port", com.mojang.brigadier.arguments.IntegerArgumentType.integer(1, 65535))
+                    .executes(context -> {
+                        int port = com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(context, "port");
+                        core().config().setCompanionPort(port);
+                        core().markDirty();
+                        var module = HunterRegistry.companion();
+                        if (module != null && module.isActive()) {
+                            module.disable();
+                            module.enable();
+                        }
+                        info("Companion port set to %d.", port);
+                        return SINGLE_SUCCESS;
+                    }))
+            )
+        );
+    }
+
+    private void companionStatus() {
+        var module = HunterRegistry.companion();
+        var config = core().config();
+        info("Companion: %s  Port: %d  Remote: %s",
+            module != null && module.running() ? "listening on " + module.boundPort() : "stopped",
+            config.companionPort(), config.companionAllowRemote() ? "yes" : "no");
+        String token = config.companionToken();
+        info("Token: %s", token.isBlank() ? "(none - generated on start)" : token);
     }
 
     private HunterCore core() {

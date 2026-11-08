@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "targets": [
+    {
+      "username": "Griefer01",
+      "category": "priority",
+      "priority": 9,
+      "lastSeen": 0,
+      "encounters": 0,
+      "kills": 0,
+      "deaths": 0
+    },
+    {
+      "username": "SpamBot_42",
+      "category": "bot",
+      "priority": 7,
+      "encounters": 0,
+      "kills": 0,
+      "deaths": 0
+    },
+    {
+      "username": "FriendlySteve",
+      "category": "friend",
+      "priority": 0,
+      "encounters": 0,
+      "kills": 0,
+      "deaths": 0
+    },
+    {
+      "username": "AnnoyingBot",
+      "category": "ignore",
+      "priority": 0,
+      "encounters": 0,
+      "kills": 0,
+      "deaths": 0
+    },
+    {
+      "username": "UnknownGuy",
+      "category": "temporary",
+      "priority": 5,
+      "lastPosition": { "x": 128.5, "y": 64.0, "z": -512.25 },
+      "dimension": "minecraft:overworld",
+      "encounters": 2,
+      "kills": 0,
+      "deaths": 1
+    }
+  ]
+}

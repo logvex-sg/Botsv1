@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "active": "aggressive",
+  "profiles": {
+    "aggressive": {
+      "name": "aggressive",
+      "events": {
+        "target-detected": [
+          { "text": "Target detected: {player} at {distance}m", "enabled": true },
+          { "text": "{player} showed up on {server} ({health} hp)", "enabled": true }
+        ],
+        "target-disappeared": [
+          { "text": "{player} vanished near {coordinates}", "enabled": true, "cooldown": 5 }
+        ],
+        "target-reappeared": [
+          { "text": "{player} is back at {distance}m", "enabled": true }
+        ],
+        "target-entered-range": [
+          { "text": "{player} entered range ({distance}m) holding {weapon}", "enabled": true, "cooldown": 3 }
+        ],
+        "target-eliminated": [
+          { "text": "{player} killed by logvex because you suck", "enabled": false, "cooldown": 10 },
+          { "text": "{player} eliminated by logvex at {time}", "enabled": false, "cooldown": 10 }
+        ],
+        "target-low-health": [
+          { "text": "{player} is low: {health} hp, {armor} armor", "enabled": true, "cooldown": 5 }
+        ],
+        "stasis-danger": [
+          { "text": "STASIS DANGER: {health} hp, check totems", "enabled": true }
+        ],
+        "stasis-recovered": [
+          { "text": "Stasis recovered ({health} hp)", "enabled": true }
+        ],
+        "connection-lost": [
+          { "text": "Connection to {server} lost at {time}", "enabled": true }
+        ]
+      }
+    },
+    "quiet": {
+      "name": "quiet",
+      "events": {
+        "target-detected": [
+          { "text": "{player} detected", "enabled": true, "cooldown": 30 }
+        ],
+        "stasis-danger": [
+          { "text": "Stasis danger", "enabled": true }
+        ]
+      }
+    }
+  }
+}

@@ -111,6 +111,9 @@ public class HunterDashboardModule extends HunterModule {
             enableCompanion("equipment-manager");
             enableCompanion("defensive-stasis");
         }
+        if (core.config().companionEnabled()) {
+            enableCompanion("companion");
+        }
         core.recordEvent(CombatEvent.Kind.INFO, "Hunter started", core.serverAddress());
         core.markDirty();
         if (announceStartStop.get()) HunterChat.info("Hunter started. Session " + core.sessions().current().id);

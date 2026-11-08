@@ -86,6 +86,7 @@ public class DashboardScreen extends TabScreen {
 
         var nav2 = controls.add(theme.horizontalList()).expandX().widget();
         navButton(nav2, "Instances", () -> mc.setScreen(new InstancesScreen(theme, this)));
+        navButton(nav2, "Companion", () -> mc.setScreen(new com.logvex.hunter.gui.instances.CompanionScreen(theme, this)));
         navButton(nav2, "Statistics", () -> mc.setScreen(new StatisticsScreen(theme, this)));
         navButton(nav2, "Profiles", () -> mc.setScreen(new ProfilesScreen(theme, this)));
         WButton save = nav2.add(theme.button("Save all")).widget();

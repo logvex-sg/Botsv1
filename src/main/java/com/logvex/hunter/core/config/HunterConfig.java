@@ -35,6 +35,15 @@ public final class HunterConfig {
     private boolean debugLogging;
     private boolean autoStartTracking = true;
 
+    /** Whether the companion HTTP endpoint (Fleet Manager / web dashboard) runs. */
+    private boolean companionEnabled;
+    /** Port of the companion endpoint. */
+    private int companionPort = 8720;
+    /** Bearer token required by the companion endpoint; empty disables authentication. */
+    private String companionToken = "";
+    /** Whether the companion endpoint accepts connections from other hosts. */
+    private boolean companionAllowRemote;
+
     public HunterConfig() {
         profiles.put("default", new HunterProfile("default"));
     }
@@ -158,6 +167,38 @@ public final class HunterConfig {
         this.autoStartTracking = autoStartTracking;
     }
 
+    public boolean companionEnabled() {
+        return companionEnabled;
+    }
+
+    public void setCompanionEnabled(boolean companionEnabled) {
+        this.companionEnabled = companionEnabled;
+    }
+
+    public int companionPort() {
+        return companionPort;
+    }
+
+    public void setCompanionPort(int companionPort) {
+        this.companionPort = Math.max(1, Math.min(65535, companionPort));
+    }
+
+    public String companionToken() {
+        return companionToken;
+    }
+
+    public void setCompanionToken(String companionToken) {
+        this.companionToken = companionToken == null ? "" : companionToken;
+    }
+
+    public boolean companionAllowRemote() {
+        return companionAllowRemote;
+    }
+
+    public void setCompanionAllowRemote(boolean companionAllowRemote) {
+        this.companionAllowRemote = companionAllowRemote;
+    }
+
     // ----------------------------------------------------------- persistence
 
     public Map<String, Object> toJson() {
@@ -173,6 +214,10 @@ public final class HunterConfig {
         root.put("allowRemoteControl", allowRemoteControl);
         root.put("debugLogging", debugLogging);
         root.put("autoStartTracking", autoStartTracking);
+        root.put("companionEnabled", companionEnabled);
+        root.put("companionPort", companionPort);
+        root.put("companionToken", companionToken);
+        root.put("companionAllowRemote", companionAllowRemote);
         Map<String, Object> profileMap = Json.object();
         for (Map.Entry<String, HunterProfile> entry : profiles.entrySet()) {
             profileMap.put(entry.getKey(), entry.getValue().toJson());
@@ -193,6 +238,10 @@ public final class HunterConfig {
         config.allowRemoteControl = Json.getBoolean(root, "allowRemoteControl", false);
         config.debugLogging = Json.getBoolean(root, "debugLogging", false);
         config.autoStartTracking = Json.getBoolean(root, "autoStartTracking", true);
+        config.companionEnabled = Json.getBoolean(root, "companionEnabled", false);
+        config.setCompanionPort(Json.getInt(root, "companionPort", 8720));
+        config.companionToken = Json.getString(root, "companionToken", "");
+        config.companionAllowRemote = Json.getBoolean(root, "companionAllowRemote", false);
 
         config.profiles.clear();
         Map<String, Object> profileMap = Json.getObject(root, "profiles");

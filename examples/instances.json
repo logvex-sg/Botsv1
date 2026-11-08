@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "instances": [
+    {
+      "id": "hunter-main",
+      "label": "Main hunter",
+      "host": "127.0.0.1",
+      "port": 8720,
+      "token": "",
+      "transport": "READ_ONLY",
+      "enabled": true,
+      "accountName": "logvex_main",
+      "notes": "Primary PvP client"
+    },
+    {
+      "id": "hunter-alt",
+      "label": "Alt / scout",
+      "host": "127.0.0.1",
+      "port": 8721,
+      "token": "",
+      "transport": "READ_ONLY",
+      "enabled": true,
+      "accountName": "logvex_scout",
+      "notes": "Second client, read-only statistics"
+    }
+  ]
+}
