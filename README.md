@@ -112,6 +112,9 @@ Everything is stored as JSON under `.minecraft/config/logvex-hunter/`:
 A corrupt file is moved to `backups/` and reset to defaults instead of crashing; the reason is
 reported in chat on the next launch.
 
+Ready-to-use example files for all four are in [`examples/`](examples/) — copy one over the
+matching file under `config/logvex-hunter/` to start from it.
+
 ---
 
 ## Companion API (the Hunter ↔ Fleet Manager bridge)
