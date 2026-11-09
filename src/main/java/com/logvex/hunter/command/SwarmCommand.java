@@ -64,10 +64,8 @@ public class SwarmCommand extends Command {
                         }
                         String ip = StringArgumentType.getString(context, "ip");
                         int port = IntegerArgumentType.getInteger(context, "port");
-                        core().config().setSwarmWorkerHost(ip);
-                        core().config().setSwarmWorkerPort(port);
-                        core().markDirty();
                         module.setMode(SwarmModule.Mode.WORKER);
+                        module.setWorkerEndpoint(ip, port);
                         if (!module.isActive()) module.enable();
                         module.start();
                         info("Swarm worker connecting to %s:%d.", ip, port);
@@ -129,9 +127,13 @@ public class SwarmCommand extends Command {
         builder.then(literal("token")
             .then(argument("token", StringArgumentType.greedyString())
                 .executes(context -> {
+                    SwarmModule module = module();
+                    if (module == null) {
+                        error("Swarm module is not registered.");
+                        return SINGLE_SUCCESS;
+                    }
                     String token = StringArgumentType.getString(context, "token");
-                    core().config().setSwarmHostToken(token);
-                    core().markDirty();
+                    module.setToken(token);
                     info("Swarm token set. Workers must present the same token.");
                     return SINGLE_SUCCESS;
                 }))
@@ -140,12 +142,13 @@ public class SwarmCommand extends Command {
         builder.then(literal("port")
             .then(argument("port", IntegerArgumentType.integer(1, 65535))
                 .executes(context -> {
-                    int port = IntegerArgumentType.getInteger(context, "port");
-                    core().config().setSwarmHostPort(port);
-                    core().config().setSwarmWorkerPort(port);
-                    core().markDirty();
                     SwarmModule module = module();
-                    if (module != null && module.isActive()) module.start();
+                    if (module == null) {
+                        error("Swarm module is not registered.");
+                        return SINGLE_SUCCESS;
+                    }
+                    int port = IntegerArgumentType.getInteger(context, "port");
+                    module.setPort(port);
                     info("Swarm port set to %d.", port);
                     return SINGLE_SUCCESS;
                 }))
@@ -170,9 +173,5 @@ public class SwarmCommand extends Command {
 
     private SwarmModule module() {
         return HunterRegistry.swarm();
-    }
-
-    private com.logvex.hunter.core.HunterCore core() {
-        return com.logvex.hunter.mc.HunterRuntime.get().core();
     }
 }

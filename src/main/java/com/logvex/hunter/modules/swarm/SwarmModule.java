@@ -254,6 +254,24 @@ public class SwarmModule extends HunterModule {
         mode.set(newMode);
     }
 
+    /** Sets the shared token on whichever side of the link this client is running. */
+    public void setToken(String token) {
+        if (mode.get() == Mode.HOST) hostToken.set(token == null ? "" : token);
+        else workerToken.set(token == null ? "" : token);
+    }
+
+    /** Sets the listen/connect port and restarts the link. */
+    public void setPort(int port) {
+        if (mode.get() == Mode.HOST) hostPort.set(port);
+        else workerPort.set(port);
+    }
+
+    /** Points a worker at a host and restarts the link. */
+    public void setWorkerEndpoint(String host, int port) {
+        workerHost.set(host == null || host.isBlank() ? "127.0.0.1" : host.trim());
+        workerPort.set(port);
+    }
+
     // ----------------------------------------------------------- host actions
 
     /** Sends a command to one worker. Returns {@code null} on success, otherwise an error. */
