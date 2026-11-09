@@ -1,9 +1,5 @@
 package com.logvex.hunter.core.swarm;
 
-import com.logvex.hunter.core.util.Json;
-
-import java.util.Map;
-
 /**
  * The live state of one connected swarm worker, as seen by the host.
  *
@@ -14,11 +10,9 @@ import java.util.Map;
 public final class SwarmPeer {
     private final String id;
     private final String address;
-    private volatile String label;
-    private volatile String role = "worker";
+    private final String label;
     private volatile String status = "unknown";
     private volatile String lastResult = "";
-    private volatile long connectedAt;
     private volatile long lastSeen;
     private volatile long lastLatencyMillis = -1;
     private volatile long commandsSent;
@@ -43,18 +37,6 @@ public final class SwarmPeer {
         return label;
     }
 
-    public void setLabel(String label) {
-        if (label != null && !label.isBlank()) this.label = label;
-    }
-
-    public String role() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role == null || role.isBlank() ? "worker" : role;
-    }
-
     public String status() {
         return status;
     }
@@ -69,18 +51,6 @@ public final class SwarmPeer {
 
     public void setLastResult(String lastResult) {
         this.lastResult = lastResult == null ? "" : lastResult;
-    }
-
-    public long connectedAt() {
-        return connectedAt;
-    }
-
-    public void setConnectedAt(long connectedAt) {
-        this.connectedAt = connectedAt;
-    }
-
-    public long lastSeen() {
-        return lastSeen;
     }
 
     public void touch(long timestamp) {
@@ -122,23 +92,6 @@ public final class SwarmPeer {
     /** Whether a reply arrived recently enough that the peer should still be shown as live. */
     public boolean stale(long now, long timeoutMillis) {
         return lastSeen > 0 && now - lastSeen > timeoutMillis;
-    }
-
-    public Map<String, Object> toJson() {
-        Map<String, Object> map = Json.object();
-        map.put("id", id);
-        map.put("label", label);
-        map.put("address", address);
-        map.put("role", role);
-        map.put("status", status);
-        map.put("alive", alive);
-        map.put("connectedAt", connectedAt);
-        map.put("lastSeen", lastSeen);
-        map.put("latency", lastLatencyMillis);
-        map.put("commandsSent", commandsSent);
-        map.put("resultsReceived", resultsReceived);
-        if (!lastResult.isBlank()) map.put("lastResult", lastResult);
-        return map;
     }
 
     @Override

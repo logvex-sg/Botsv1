@@ -53,7 +53,7 @@ public class SwarmModule extends HunterModule {
         .build());
 
     private final Setting<Boolean> autoStart = sgGeneral.add(new BoolSetting.Builder()
-        .name("auto-start").description("Start the swarm link when the client joins a world.")
+        .name("auto-start").description("Start the swarm link as soon as this module is enabled.")
         .defaultValue(true)
         .onChanged(this::onAutoStartChanged)
         .build());

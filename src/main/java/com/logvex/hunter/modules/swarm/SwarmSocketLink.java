@@ -3,7 +3,6 @@ package com.logvex.hunter.modules.swarm;
 import com.logvex.hunter.core.swarm.SwarmLink;
 import com.logvex.hunter.core.swarm.SwarmLineReader;
 import com.logvex.hunter.core.swarm.SwarmMessage;
-import com.logvex.hunter.core.swarm.SwarmProtocol;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -114,10 +113,5 @@ public final class SwarmSocketLink implements SwarmLink {
         } finally {
             close();
         }
-    }
-
-    /** The protocol version this link speaks, used by the host when it records the peer. */
-    public static int version() {
-        return SwarmProtocol.VERSION;
     }
 }

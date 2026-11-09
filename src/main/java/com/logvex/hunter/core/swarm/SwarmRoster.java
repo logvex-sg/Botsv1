@@ -29,7 +29,6 @@ public final class SwarmRoster {
         if (previousLink != null) previousLink.close();
         if (previous != null) previous.markDead();
         SwarmPeer peer = new SwarmPeer(id, address, label);
-        peer.setConnectedAt(now);
         peer.touch(now);
         peers.put(id, peer);
         links.put(id, link);

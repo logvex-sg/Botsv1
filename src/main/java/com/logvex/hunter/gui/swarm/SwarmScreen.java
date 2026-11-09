@@ -144,7 +144,8 @@ public class SwarmScreen extends HunterScreen {
         rosterTable.add(theme.label("Address")).expandCellX();
         rosterTable.add(theme.label("Status")).expandCellX();
         rosterTable.add(theme.label("Latency")).expandCellX();
-        rosterTable.add(theme.label("Commands")).expandCellX();
+        rosterTable.add(theme.label("Sent")).expandCellX();
+        rosterTable.add(theme.label("Replies")).expandCellX();
         rosterTable.add(theme.label("Kick")).expandCellX();
         rosterTable.row();
 
@@ -155,6 +156,7 @@ public class SwarmScreen extends HunterScreen {
             status.color = "connected".equalsIgnoreCase(peer.status()) ? Color.GREEN : Color.LIGHT_GRAY;
             rosterTable.add(theme.label(peer.lastLatencyMillis() < 0 ? "-" : peer.lastLatencyMillis() + "ms")).expandCellX();
             rosterTable.add(theme.label(Long.toString(peer.commandsSent()))).expandCellX();
+            rosterTable.add(theme.label(Long.toString(peer.resultsReceived()))).expandCellX();
 
             WButton kick = rosterTable.add(theme.button("Kick")).widget();
             kick.action = () -> {
@@ -174,7 +176,8 @@ public class SwarmScreen extends HunterScreen {
         StringBuilder sb = new StringBuilder();
         for (SwarmPeer peer : module.roster().peers()) {
             sb.append(peer.id()).append(':').append(peer.status()).append(':')
-                .append(peer.lastLatencyMillis()).append(':').append(peer.commandsSent()).append(';');
+                .append(peer.lastLatencyMillis()).append(':').append(peer.commandsSent()).append(':')
+                .append(peer.resultsReceived()).append(';');
         }
         return sb.toString();
     }
