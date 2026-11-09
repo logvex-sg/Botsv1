@@ -56,6 +56,16 @@ public class HunterCommand extends Command {
             return SINGLE_SUCCESS;
         }));
 
+        builder.then(literal("pause").executes(context -> {
+            info(control().lifecycle(ControlAction.Lifecycle.Kind.PAUSE));
+            return SINGLE_SUCCESS;
+        }));
+
+        builder.then(literal("resume").executes(context -> {
+            info(control().lifecycle(ControlAction.Lifecycle.Kind.RESUME));
+            return SINGLE_SUCCESS;
+        }));
+
         builder.then(literal("gui").executes(context -> {
             mc.setScreen(new DashboardScreen(GuiThemes.get(), null));
             return SINGLE_SUCCESS;
