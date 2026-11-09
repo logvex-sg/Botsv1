@@ -44,6 +44,24 @@ public final class HunterConfig {
     /** Whether the companion endpoint accepts connections from other hosts. */
     private boolean companionAllowRemote;
 
+    // Swarm (in-game multi-client control, Meteor-Swarm style) -----------------
+    /** Port the swarm host listens on when it is started. */
+    private int swarmHostPort = 6969;
+    /** Shared token workers must present. Empty accepts anyone on the port. */
+    private String swarmHostToken = "";
+    /** Whether the swarm host accepts connections from other machines. */
+    private boolean swarmHostAllowRemote;
+    /** Host address the worker connects to. */
+    private String swarmWorkerHost = "127.0.0.1";
+    /** Port the worker connects to. */
+    private int swarmWorkerPort = 6969;
+    /** Whether a broadcast may change combat modules on the whole fleet. */
+    private boolean swarmAllowCombatBroadcast;
+    /** Whether the swarm link is restored when the client joins a world. */
+    private boolean swarmAutoConnect = true;
+    /** Whether this client is the host (true) or a worker (false) by default. */
+    private boolean swarmHostMode = true;
+
     public HunterConfig() {
         profiles.put("default", new HunterProfile("default"));
     }
@@ -199,6 +217,73 @@ public final class HunterConfig {
         this.companionAllowRemote = companionAllowRemote;
     }
 
+    // ------------------------------------------------------------------ swarm
+
+    public int swarmHostPort() {
+        return swarmHostPort;
+    }
+
+    public void setSwarmHostPort(int swarmHostPort) {
+        this.swarmHostPort = Math.max(1, Math.min(65535, swarmHostPort));
+    }
+
+    public String swarmHostToken() {
+        return swarmHostToken;
+    }
+
+    public void setSwarmHostToken(String swarmHostToken) {
+        this.swarmHostToken = swarmHostToken == null ? "" : swarmHostToken;
+    }
+
+    public boolean swarmHostAllowRemote() {
+        return swarmHostAllowRemote;
+    }
+
+    public void setSwarmHostAllowRemote(boolean swarmHostAllowRemote) {
+        this.swarmHostAllowRemote = swarmHostAllowRemote;
+    }
+
+    public String swarmWorkerHost() {
+        return swarmWorkerHost;
+    }
+
+    public void setSwarmWorkerHost(String swarmWorkerHost) {
+        this.swarmWorkerHost = swarmWorkerHost == null || swarmWorkerHost.isBlank()
+            ? "127.0.0.1" : swarmWorkerHost.trim();
+    }
+
+    public int swarmWorkerPort() {
+        return swarmWorkerPort;
+    }
+
+    public void setSwarmWorkerPort(int swarmWorkerPort) {
+        this.swarmWorkerPort = Math.max(1, Math.min(65535, swarmWorkerPort));
+    }
+
+    public boolean swarmAllowCombatBroadcast() {
+        return swarmAllowCombatBroadcast;
+    }
+
+    public void setSwarmAllowCombatBroadcast(boolean swarmAllowCombatBroadcast) {
+        this.swarmAllowCombatBroadcast = swarmAllowCombatBroadcast;
+    }
+
+    public boolean swarmAutoConnect() {
+        return swarmAutoConnect;
+    }
+
+    public void setSwarmAutoConnect(boolean swarmAutoConnect) {
+        this.swarmAutoConnect = swarmAutoConnect;
+    }
+
+    public boolean swarmHostMode() {
+        return swarmHostMode;
+    }
+
+    public void setSwarmHostMode(boolean swarmHostMode) {
+        this.swarmHostMode = swarmHostMode;
+    }
+
     // ----------------------------------------------------------- persistence
 
     public Map<String, Object> toJson() {
@@ -218,6 +303,14 @@ public final class HunterConfig {
         root.put("companionPort", companionPort);
         root.put("companionToken", companionToken);
         root.put("companionAllowRemote", companionAllowRemote);
+        root.put("swarmHostPort", swarmHostPort);
+        root.put("swarmHostToken", swarmHostToken);
+        root.put("swarmHostAllowRemote", swarmHostAllowRemote);
+        root.put("swarmWorkerHost", swarmWorkerHost);
+        root.put("swarmWorkerPort", swarmWorkerPort);
+        root.put("swarmAllowCombatBroadcast", swarmAllowCombatBroadcast);
+        root.put("swarmAutoConnect", swarmAutoConnect);
+        root.put("swarmHostMode", swarmHostMode);
         Map<String, Object> profileMap = Json.object();
         for (Map.Entry<String, HunterProfile> entry : profiles.entrySet()) {
             profileMap.put(entry.getKey(), entry.getValue().toJson());
@@ -242,6 +335,14 @@ public final class HunterConfig {
         config.setCompanionPort(Json.getInt(root, "companionPort", 8720));
         config.companionToken = Json.getString(root, "companionToken", "");
         config.companionAllowRemote = Json.getBoolean(root, "companionAllowRemote", false);
+        config.setSwarmHostPort(Json.getInt(root, "swarmHostPort", 6969));
+        config.swarmHostToken = Json.getString(root, "swarmHostToken", "");
+        config.swarmHostAllowRemote = Json.getBoolean(root, "swarmHostAllowRemote", false);
+        config.setSwarmWorkerHost(Json.getString(root, "swarmWorkerHost", "127.0.0.1"));
+        config.setSwarmWorkerPort(Json.getInt(root, "swarmWorkerPort", 6969));
+        config.swarmAllowCombatBroadcast = Json.getBoolean(root, "swarmAllowCombatBroadcast", false);
+        config.swarmAutoConnect = Json.getBoolean(root, "swarmAutoConnect", true);
+        config.swarmHostMode = Json.getBoolean(root, "swarmHostMode", true);
 
         config.profiles.clear();
         Map<String, Object> profileMap = Json.getObject(root, "profiles");

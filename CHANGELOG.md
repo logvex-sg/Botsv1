@@ -7,6 +7,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- **In-game swarm: control many LogVex Hunter clients from one host, in the game.** A new `swarm`
+  module makes one client the host and the rest workers, in the spirit of Meteor's own Swarm, with
+  no external app involved.
+  - New Minecraft-free core (`com.logvex.hunter.core.swarm`): a newline-delimited JSON protocol
+    (`SwarmProtocol`, `SwarmMessage`), the token handshake (`SwarmHandshake`), the host roster with
+    id/label/index routing (`SwarmRoster`, `SwarmPeer`), a bounded line reader (`SwarmLineReader`)
+    and the broadcast safety gate (`SwarmCommandGate`).
+  - Transport: `SwarmHostServer` accepts and authenticates workers; `SwarmWorkerClient` connects,
+    handshakes and receives commands. Sockets run on daemon threads; commands are queued and drained
+    on the client tick, so the game thread never blocks.
+  - A worker runs every host command through the same control layer as the local player, so the
+    host can drive each worker's target list, modules, settings, profiles and HUD.
+  - **Swarm screen** (dashboard → Swarm, or `.swarm gui`): mode switch, live roster, per-worker kick
+    and a broadcast box.
+  - **Swarm HUD** (`logvex-swarm`): host/worker state, port and live worker list.
+  - Chat commands: `.swarm host|join|stop|connections|send|broadcast|kick|token|port|status|gui`.
+  - **Safety.** Broadcasts are limited to read-only and cosmetic commands; lifecycle changes and
+    anything that would arm combat on the whole fleet are refused unless `allow-combat-broadcast` is
+    on. `emergency-stop` always broadcasts. The link requires a shared token and binds to loopback
+    unless `allow-remote` is enabled.
+  - Config gains `swarmHostPort`, `swarmHostToken`, `swarmHostAllowRemote`, `swarmWorkerHost`,
+    `swarmWorkerPort`, `swarmAllowCombatBroadcast`, `swarmAutoConnect` and `swarmHostMode`.
 - **Full remote control surface for the Hunter, shared by chat and the Fleet Manager.** A new
   Minecraft-free control layer (`com.logvex.hunter.core.control`) parses a single text grammar into
   typed actions and dispatches them through a `ControlTarget`. The in-game chat commands, the

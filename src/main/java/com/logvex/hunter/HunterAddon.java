@@ -5,6 +5,7 @@ import com.logvex.hunter.hud.EquipmentHud;
 import com.logvex.hunter.hud.HunterStatusHud;
 import com.logvex.hunter.hud.StasisHud;
 import com.logvex.hunter.hud.StatisticsHud;
+import com.logvex.hunter.hud.SwarmHud;
 import com.logvex.hunter.hud.TargetHud;
 import com.logvex.hunter.modules.HunterRegistry;
 import com.mojang.logging.LogUtils;
@@ -34,6 +35,7 @@ public class HunterAddon extends MeteorAddon {
         Commands.add(new com.logvex.hunter.command.HunterCommand());
         Commands.add(new com.logvex.hunter.command.TargetCommand());
         Commands.add(new com.logvex.hunter.command.HunterStatsCommand());
+        Commands.add(new com.logvex.hunter.command.SwarmCommand());
     }
 
     @Override
@@ -48,6 +50,7 @@ public class HunterAddon extends MeteorAddon {
         hud.register(EquipmentHud.INFO);
         hud.register(StasisHud.INFO);
         hud.register(StatisticsHud.INFO);
+        hud.register(SwarmHud.INFO);
     }
 
     @Override

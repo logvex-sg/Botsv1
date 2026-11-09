@@ -10,6 +10,7 @@ import com.logvex.hunter.modules.instances.InstanceManagerModule;
 import com.logvex.hunter.modules.messages.NotificationModule;
 import com.logvex.hunter.modules.stasis.DefensiveStasisModule;
 import com.logvex.hunter.modules.stats.StatisticsModule;
+import com.logvex.hunter.modules.swarm.SwarmModule;
 import com.logvex.hunter.modules.target.PlayerTrackerModule;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 
@@ -28,6 +29,7 @@ public final class HunterRegistry {
     private static NotificationModule notifications;
     private static InstanceManagerModule instances;
     private static CompanionModule companion;
+    private static SwarmModule swarm;
     private static StatisticsModule statistics;
 
     private HunterRegistry() {}
@@ -43,6 +45,7 @@ public final class HunterRegistry {
         notifications = add(new NotificationModule());
         instances = add(new InstanceManagerModule());
         companion = add(new CompanionModule());
+        swarm = add(new SwarmModule());
         statistics = add(new StatisticsModule());
 
         HunterRuntime.get().core().setActiveModuleCountSupplier(HunterRegistry::activeCount);
@@ -110,6 +113,10 @@ public final class HunterRegistry {
 
     public static CompanionModule companion() {
         return companion;
+    }
+
+    public static SwarmModule swarm() {
+        return swarm;
     }
 
     public static StatisticsModule statistics() {

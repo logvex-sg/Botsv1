@@ -41,6 +41,13 @@ HTTP endpoint, and the Fleet Manager connects to it. See
 - **Multi-Instance Management** — register other clients, poll their read-only statistics over an
   authenticated HTTP endpoint, and send a per-instance emergency stop. Each instance is isolated;
   no client's world state is assumed to be visible to another.
+- **In-game Swarm** — control other LogVex Hunter clients from one host, in the game, in the spirit
+  of Meteor's own Swarm. One client is the **host**, the rest are **workers**; the host sees a live
+  roster and can run any hunter command on one worker or broadcast a read-only command to all of
+  them. Every worker command goes through the same control layer the local player uses, so the host
+  can drive each worker's target list, modules, settings, profiles and HUD. A broadcast that would
+  arm combat on the whole fleet is refused unless you opt in. `.swarm …` in chat, or the Swarm
+  screen from the dashboard.
 - **Defensive Stasis System** — readiness levels (SAFE/CAUTION/DANGER/CRITICAL) from health,
   totems, food, armour and durability, with connection-loss detection and a recovery dashboard.
   Observation only: it never attacks.
@@ -96,6 +103,18 @@ See [`USAGE.md`](USAGE.md) for the full use guide. The command reference:
 .hunter companion [status|start|stop|token|regenerate|port <n>]
 .hunter save
 
+.swarm                        # swarm status (mode, port, workers)
+.swarm host                   # this client becomes the swarm host
+.swarm join <ip> <port>       # this client becomes a worker of that host
+.swarm stop                   # stop the swarm link
+.swarm connections            # list connected workers
+.swarm send <worker> <command>  # run a hunter command on one worker
+.swarm broadcast <command>    # run a read-only command on every worker
+.swarm kick <worker>          # disconnect a worker
+.swarm token <token>          # set the shared swarm token
+.swarm port <port>            # set the swarm port
+.swarm gui                    # open the Swarm screen
+
 .target list [category]
 .target add <player> [category]
 .target remove <player>
@@ -109,6 +128,41 @@ See [`USAGE.md`](USAGE.md) for the full use guide. The command reference:
 
 .hstats [show|sessions|events|export|reset|gui]
 ```
+
+### In-game swarm (control many clients from one)
+
+The swarm is Meteor-Swarm-style control that lives entirely inside the game: no external app, no
+browser, no second process. One client runs as the **host**; every other client runs as a **worker**
+and obeys the host.
+
+1. On the machine you want to drive from, open the **Swarm** screen (dashboard → **Swarm**, or
+   `.swarm gui`) and press **Become host**. Or run `.swarm host`.
+2. On each other client, run `.swarm join <host-ip> <port>` (default port `6969`). Or open the Swarm
+   screen and press **Become worker**, then set the host and port in the module settings.
+3. On the host, `.swarm connections` lists who is online. From the Swarm screen you can broadcast a
+   command to all workers or kick one.
+
+Once connected, the host can run **any** hunter command on a worker:
+
+```
+.swarm send <worker> target add Griefer01
+.swarm send <worker> module player-tracker on
+.swarm send <worker> set equipment-manager min-durability 20
+.swarm broadcast status
+```
+
+`send` accepts an id, a label, or a 1-based index (`1`, `2`, …). A worker replies with the command's
+output, which the host shows in chat and on the roster row.
+
+**Safety.** A broadcast reaches every client at once, so only read-only and cosmetic commands are
+allowed to broadcast (`status`, `save`, `hud`, `profile`, `target`, `settings`, `notify`). Lifecycle
+changes (`start`, `stop`, …) and anything that would arm combat on the whole fleet are refused
+unless you tick **allow-combat-broadcast** on the host. `emergency-stop` is always allowed. The
+token is a shared secret: set the same value on the host and every worker, and leave
+`allow-remote` off unless the workers are on other machines.
+
+The protocol is newline-delimited JSON over TCP and is documented in
+`core/swarm/SwarmProtocol.java`, so a non-Meteor client can be written against it.
 
 ### Configuration
 

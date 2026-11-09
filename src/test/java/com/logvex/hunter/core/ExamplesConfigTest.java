@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,6 +42,26 @@ class ExamplesConfigTest {
         assertNotNull(config.profile("6b6t"));
         assertEquals("6b6t", config.activeProfileName());
         assertEquals(48, config.profile("6b6t").toFilterSettings().range, 0.001);
+        assertEquals(6969, config.swarmHostPort());
+        assertTrue(config.swarmHostMode());
+        assertTrue(config.swarmAutoConnect());
+    }
+
+    @Test
+    void swarmSettingsRoundTripThroughTheConfig() throws Exception {
+        HunterConfig config = HunterConfig.fromJson(read("config.json"));
+        config.setSwarmHostToken("shared-secret");
+        config.setSwarmWorkerHost("10.0.0.5");
+        config.setSwarmWorkerPort(7000);
+        config.setSwarmAllowCombatBroadcast(true);
+        config.setSwarmHostMode(false);
+
+        HunterConfig reloaded = HunterConfig.fromJson(config.toJson());
+        assertEquals("shared-secret", reloaded.swarmHostToken());
+        assertEquals("10.0.0.5", reloaded.swarmWorkerHost());
+        assertEquals(7000, reloaded.swarmWorkerPort());
+        assertTrue(reloaded.swarmAllowCombatBroadcast());
+        assertFalse(reloaded.swarmHostMode());
     }
 
     @Test

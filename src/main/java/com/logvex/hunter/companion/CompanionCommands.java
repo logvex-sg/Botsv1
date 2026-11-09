@@ -13,10 +13,10 @@ import com.logvex.hunter.core.control.ControlService;
  * addon's own state: it never sends chat to the server, never attacks and never moves the player.
  * This is what keeps a remote dashboard from turning into unattended automation.
  */
-final class CompanionCommands {
+public final class CompanionCommands {
     private CompanionCommands() {}
 
-    static String run(String command) {
+    public static String run(String command) {
         return new ControlService(new MinecraftControlTarget()).run(command);
     }
 }
