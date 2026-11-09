@@ -61,6 +61,19 @@ public final class SwarmSocketLink implements SwarmLink {
     }
 
     @Override
+    public void flush(long timeoutMillis) {
+        long deadline = System.currentTimeMillis() + Math.max(0, timeoutMillis);
+        while (open.get() && !outbound.isEmpty() && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    @Override
     public void close() {
         if (!open.compareAndSet(true, false)) return;
         try {

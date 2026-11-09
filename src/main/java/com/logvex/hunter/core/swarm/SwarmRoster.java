@@ -3,7 +3,6 @@ package com.logvex.hunter.core.swarm;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -187,7 +186,19 @@ public final class SwarmRoster {
         return sb.toString().trim();
     }
 
-    public String keyOf(String label) {
-        return label == null ? "" : label.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "-");
+    /**
+     * Waits, in total, up to {@code timeoutMillis} for queued messages to leave every link.
+     *
+     * <p>Call this before tearing links down when a final message matters (an emergency stop).
+     */
+    public void flush(long timeoutMillis) {
+        List<SwarmLink> snapshot;
+        synchronized (this) {
+            snapshot = new ArrayList<>(links.values());
+        }
+        long perLink = snapshot.isEmpty() ? 0 : Math.max(1, timeoutMillis / snapshot.size());
+        for (SwarmLink link : snapshot) {
+            if (link != null) link.flush(perLink);
+        }
     }
 }

@@ -24,6 +24,8 @@ class SwarmRosterTest {
         final List<String> sent = new ArrayList<>();
         boolean open = true;
         boolean closed;
+        long flushed;
+        int flushCalls;
 
         @Override public boolean send(String line) {
             if (!open) return false;
@@ -38,6 +40,11 @@ class SwarmRosterTest {
 
         @Override public boolean open() {
             return open;
+        }
+
+        @Override public void flush(long timeoutMillis) {
+            flushCalls++;
+            flushed += timeoutMillis;
         }
     }
 
@@ -171,6 +178,21 @@ class SwarmRosterTest {
         assertEquals("1 worker", roster.summary());
         roster.register("w2", "127.0.0.1:8", "beta", new FakeLink(), 0);
         assertEquals("2 workers", roster.summary());
+    }
+
+    @Test
+    void flushReachesEveryLink() {
+        SwarmRoster roster = new SwarmRoster();
+        FakeLink a = new FakeLink();
+        FakeLink b = new FakeLink();
+        roster.register("w1", "a", "alpha", a, 0);
+        roster.register("w2", "b", "beta", b, 0);
+
+        roster.flush(300);
+
+        assertEquals(1, a.flushCalls);
+        assertEquals(1, b.flushCalls);
+        assertEquals(300, a.flushed + b.flushed, "the budget is shared across links");
     }
 
     @Test

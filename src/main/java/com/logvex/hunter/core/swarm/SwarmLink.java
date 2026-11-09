@@ -15,4 +15,13 @@ public interface SwarmLink {
 
     /** Whether the channel is still usable. */
     boolean open();
+
+    /**
+     * Best-effort wait for already-queued messages to reach the socket.
+     *
+     * <p>Used before tearing a link down so a final command (an emergency stop) is not lost in the
+     * outbound queue. Bounded: it never waits longer than {@code timeoutMillis}. A link with no
+     * queue has nothing to do, so the default is a no-op.
+     */
+    default void flush(long timeoutMillis) {}
 }

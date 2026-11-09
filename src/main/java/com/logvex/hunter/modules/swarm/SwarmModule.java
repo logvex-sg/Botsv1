@@ -152,6 +152,9 @@ public class SwarmModule extends HunterModule {
             roster.broadcast(SwarmMessage.of(SwarmProtocol.COMMAND)
                 .with(SwarmProtocol.FIELD_LINE, "emergency-stop")
                 .with(SwarmProtocol.FIELD_TIME, System.currentTimeMillis()));
+            // The stop is queued on each socket thread; give it a moment to leave before the link
+            // is torn down, so the fleet actually receives it.
+            roster.flush(300);
         }
         super.onEmergencyStop();
     }
