@@ -12,7 +12,7 @@ public final class Protocol {
     private Protocol() {}
 
     /** Bumped whenever the envelope or a payload changes shape; mismatches are refused. */
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
 
     // worker -> host
     public static final String HELLO = "hello";
@@ -32,6 +32,7 @@ public final class Protocol {
     public static final String TASK = "task";
     public static final String PING = "ping";
     public static final String KICK = "kick";
+    public static final String CONTROL = "control";
 
     // task kinds (the "task" message's payload.kind)
     public static final String TASK_STATUS = "status";
@@ -67,6 +68,8 @@ public final class Protocol {
     public static final String FIELD_KIND = "kind";
     public static final String FIELD_DATA = "data";
     public static final String FIELD_PROGRESS = "progress";
+    public static final String FIELD_PAUSED = "paused";
+    public static final String FIELD_STOPPED = "stopped";
     public static final String FIELD_DURATION = "durationMs";
     public static final String FIELD_TOTAL = "total";
     public static final String FIELD_CARRIED = "carried";
@@ -75,6 +78,15 @@ public final class Protocol {
     public static final String FIELD_FREE_SLOTS = "freeSlots";
     public static final String FIELD_CONTAINER_OPEN = "containerOpen";
     public static final String FIELD_TOTALS = "totals";
+
+    // control actions (the "control" message's payload.action). The worker owns its own
+    // connection, so only it can drop it or dial it again; these make the host's Connect /
+    // Disconnect / Restart controls real rather than cosmetic.
+    public static final String CONTROL_CONNECT = "connect";
+    public static final String CONTROL_DISCONNECT = "disconnect";
+    public static final String CONTROL_RESTART = "restart";
+    public static final String CONTROL_PAUSE = "pause";
+    public static final String CONTROL_RESUME = "resume";
 
     /** efly actions. */
     public static final String EFLY_START = "start";

@@ -46,6 +46,10 @@ public final class WorkerSnapshot {
     public String eflyTarget = "";
     /** Free-text progress for the task in flight (e.g. "flying 128 blocks"), or blank. */
     public String taskProgress = "";
+    /** True while the host has paused mutating tasks on this worker. */
+    public boolean paused;
+    /** True while the host has disconnected this worker's service (it stays reachable for control). */
+    public boolean stopped;
 
     public int totalItems;
     public int distinctItems;

@@ -9,7 +9,7 @@ Fleet Manager** desktop app. The format follows
 ## [Unreleased]
 
 ### Changed
-- **The Fleet Manager is now a host, not a bot runner.** `fleet-manager/` was rebuilt around one
+- **The Fleet Manager is now a host, not a bot runner.** `host/` was rebuilt around one
   idea: the desktop app *controls* workers, it does not *run* bots. It no longer launches Minecraft,
   holds no game account, and needs no inbound port on a bot machine. Each bot is a real Minecraft
   client running the **Logvex Worker** mod, which dials *out* to the host over a WebSocket.
@@ -26,12 +26,37 @@ Fleet Manager** desktop app. The format follows
     and the rest needs the bearer token.
 
 ### Added
+- **Worker Mode: the desktop app can now act as a worker.** A new **Worker Mode** page in the
+  desktop app connects *this* machine out to a host, using the same wire protocol the Fabric mod
+  speaks. It is the counterpart to the Workers page: where that drives other people's clients, this
+  configures this one to be driven. Its main jobs are to validate a host before an operator commits,
+  and to write the `logvex-worker.json` that is dropped into each bot's `mods/` folder.
+  - A real protocol client in the main process (`src/main/worker-mode/worker-client.ts`) that pairs
+    with a token or a one-time code, registers, heartbeats, answers `ping`, and reports its
+    `paused`/`stopped` state. It is honest about what it is: with no Minecraft client attached it
+    answers a `status` request but refuses game tasks explicitly.
+  - Worker Mode settings live under their own key and are never mixed with the host's, so a machine
+    cannot end up half-host and half-worker.
+  - A one-shot **Test connection** button that reports the handshake result without leaving a
+    phantom worker registered on the host.
+- **Remote control from the host.** New `control` message (protocol v3) with `connect`,
+  `disconnect`, `restart`, `pause` and `resume`. `pause` blocks mutating tasks while read-only tasks
+  keep running; `disconnect` marks a worker stopped but reachable; `restart` re-applies the link.
+  The worker stamps `paused`/`stopped` onto every snapshot, so the host reads the real state rather
+  than assuming the action took effect.
+- **Bulk controls and per-worker controls** on the Workers page (Connect, Pause, Resume, Restart,
+  Disconnect, plus a select-all checkbox), and a `POST /api/v1/workers/:id/control` route on the
+  local HTTP API for the same actions from a script.
 - **Worker pairing codes.** The host can mint a short, single-use, expiring code (for example
   `ABCD2345`). A worker's first `hello` may carry it instead of the long-lived token; the host
   answers with the shared token and consumes the code. The worker stores the token and uses it on
   every later reconnect, so enrolling a bot no longer means copying a long secret onto the bot
   machine by hand.
-- **Worker protocol v2.** `Protocol.VERSION` is now `2`; the `hello` payload gained `pairingCode`,
+- **Worker protocol v3.** `Protocol.VERSION` is now `3`; the outbound `control` message was added
+  and snapshots carry `paused` and `stopped`. The three protocol mirrors (`protocol/protocol.json`,
+  `host/src/shared/workers.ts`, `worker-mod/.../Protocol.java`) and the canonical checker
+  (`protocol/check-protocol.mjs`) are all in step.
+- **Worker protocol v2.** `Protocol.VERSION` was `2`; the `hello` payload gained `pairingCode`,
   and a successful `hello-ack` may carry a granted `token`. Both sides still refuse a version
   mismatch rather than coercing it, and the host-side drift test now also pins the pairing field so
   the two declarations cannot silently diverge.

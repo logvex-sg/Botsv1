@@ -40,14 +40,15 @@ answers with what it actually observed. It never fights and never runs code the 
 The envelope is newline-framed JSON: `{ v, type, id, payload }`. `v` is the protocol version
 (`Protocol.VERSION`); a mismatch is refused at the handshake. The message types and task kinds are
 declared once in `com.logvex.worker.core.Protocol` and mirrored by the host in
-`fleet-manager/src/shared/workers.ts`. A drift test on the host side reads this file as text and
-asserts the mirror matches it, so a type added to one side only fails the host build. The full
+`host/src/shared/workers.ts`, with a third canonical copy in `protocol/protocol.json`. The checker
+`protocol/check-protocol.mjs` reads all three and asserts they agree, so a type added to one side
+only fails the build. The full
 contract is written down in [`../docs/PROTOCOL.md`](../docs/PROTOCOL.md).
 
 | Direction | Types |
 | --- | --- |
 | worker → host | `hello`, `register`, `status`, `inventory`, `equipment`, `result`, `progress`, `pong`, `error`, `log` |
-| host → worker | `hello-ack`, `command`, `task`, `ping`, `kick` |
+| host → worker | `hello-ack`, `command`, `task`, `ping`, `kick`, `control` |
 | task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position`, `efly` |
 
 Mutating kinds (`regear`, `command`, `chat`, `efly`) are exclusive: the host refuses to start a

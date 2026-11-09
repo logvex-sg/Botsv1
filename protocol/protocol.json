@@ -1,0 +1,105 @@
+{
+  "$comment": "CANONICAL worker protocol. Single source of truth for the Logvex Fleet Manager worker wire contract. Both mirrors (host/src/shared/workers.ts and worker-mod/src/main/java/com/logvex/worker/core/Protocol.java) are checked against it by protocol/check-protocol.mjs, which runs from the host test suite. Edit this file first, then both mirrors, then run `npm test` in host/.",
+  "name": "logvex-worker",
+  "version": 3,
+  "path": "/worker",
+  "envelope": {
+    "fields": [
+      "v",
+      "type",
+      "id",
+      "payload"
+    ],
+    "note": "Newline-framed JSON. `v` is the protocol version; a mismatch is refused, not coerced. `id` correlates a request with its result/progress/error. A non-object payload is replaced with {}."
+  },
+  "inbound": {
+    "note": "worker -> host",
+    "types": [
+      "hello",
+      "register",
+      "status",
+      "inventory",
+      "equipment",
+      "result",
+      "progress",
+      "pong",
+      "error",
+      "log"
+    ]
+  },
+  "outbound": {
+    "note": "host -> worker",
+    "types": [
+      "hello-ack",
+      "command",
+      "task",
+      "ping",
+      "kick",
+      "control"
+    ]
+  },
+  "taskKinds": [
+    "status",
+    "inventory",
+    "count",
+    "search",
+    "equipment",
+    "regear",
+    "command",
+    "chat",
+    "position",
+    "efly"
+  ],
+  "exclusiveTaskKinds": [
+    "regear",
+    "command",
+    "chat",
+    "efly"
+  ],
+  "eflyActions": [
+    "start",
+    "stop"
+  ],
+  "payloadFields": {
+    "pairingCode": "FIELD_PAIRING_CODE",
+    "query": "FIELD_QUERY",
+    "item": "FIELD_ITEM",
+    "message": "FIELD_MESSAGE",
+    "text": "FIELD_TEXT",
+    "command": "FIELD_COMMAND",
+    "line": "FIELD_LINE",
+    "allowMoves": "FIELD_ALLOW_MOVES",
+    "action": "FIELD_ACTION",
+    "x": "FIELD_X",
+    "y": "FIELD_Y",
+    "z": "FIELD_Z",
+    "mode": "FIELD_MODE",
+    "minHeight": "FIELD_MIN_HEIGHT",
+    "useFireworks": "FIELD_USE_FIREWORKS",
+    "taskId": "FIELD_TASK_ID",
+    "reason": "FIELD_REASON",
+    "ok": "FIELD_OK",
+    "kind": "FIELD_KIND",
+    "data": "FIELD_DATA",
+    "progress": "FIELD_PROGRESS",
+    "durationMs": "FIELD_DURATION",
+    "total": "FIELD_TOTAL",
+    "carried": "FIELD_CARRIED",
+    "accessible": "FIELD_ACCESSIBLE",
+    "armor": "FIELD_ARMOR",
+    "freeSlots": "FIELD_FREE_SLOTS",
+    "containerOpen": "FIELD_CONTAINER_OPEN",
+    "totals": "FIELD_TOTALS"
+  },
+  "controlActions": [
+    "connect",
+    "disconnect",
+    "restart",
+    "pause",
+    "resume"
+  ],
+  "snapshotFields": [
+    "paused",
+    "stopped"
+  ]
+}

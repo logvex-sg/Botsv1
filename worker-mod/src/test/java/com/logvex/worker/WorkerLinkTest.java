@@ -303,6 +303,150 @@ class WorkerLinkTest {
         }
     }
 
+    @Test
+    void disablesAndReenablesItsServiceOnHostControl() throws Exception {
+        try (TestWebSocketServer server = new TestWebSocketServer()) {
+            FakeDispatcher dispatcher = new FakeDispatcher();
+            WorkerLink link = new WorkerLink(configFor(server.port()), dispatcher);
+            try {
+                link.start();
+                read(server);
+                accept(server, "worker-1");
+                read(server);
+
+                JsonObject disconnect = new JsonObject();
+                disconnect.addProperty("action", Protocol.CONTROL_DISCONNECT);
+                server.send(new Envelope(Protocol.CONTROL, "c1", disconnect).encode());
+                assertTrue(awaitBoolean(() -> link.isStopped()), "the worker should report itself stopped");
+
+                // A task while stopped is refused without ever reaching the dispatcher.
+                JsonObject count = new JsonObject();
+                count.addProperty("kind", Protocol.TASK_COUNT);
+                server.send(new Envelope(Protocol.TASK, "t-stopped", count).encode());
+                Envelope refused = awaitType(server, Protocol.RESULT);
+                assertTrue(!refused.payload.get("ok").getAsBoolean());
+                assertEquals(0, dispatcher.dispatched.get());
+
+                JsonObject connect = new JsonObject();
+                connect.addProperty("action", Protocol.CONTROL_CONNECT);
+                server.send(new Envelope(Protocol.CONTROL, "c2", connect).encode());
+                assertTrue(awaitBoolean(() -> !link.isStopped()), "the worker should report itself running");
+
+                server.send(new Envelope(Protocol.TASK, "t-running", count).encode());
+                Envelope ok = awaitType(server, Protocol.RESULT);
+                assertTrue(ok.payload.get("ok").getAsBoolean());
+                assertEquals(1, dispatcher.dispatched.get());
+            } finally {
+                link.close();
+            }
+        }
+    }
+
+    @Test
+    void pauseBlocksMutatingTasksButAllowsReadOnlyOnes() throws Exception {
+        try (TestWebSocketServer server = new TestWebSocketServer()) {
+            FakeDispatcher dispatcher = new FakeDispatcher();
+            WorkerLink link = new WorkerLink(configFor(server.port()), dispatcher);
+            try {
+                link.start();
+                read(server);
+                accept(server, "worker-1");
+                read(server);
+
+                JsonObject pause = new JsonObject();
+                pause.addProperty("action", Protocol.CONTROL_PAUSE);
+                server.send(new Envelope(Protocol.CONTROL, "c1", pause).encode());
+                assertTrue(awaitBoolean(link::isPaused), "the worker should report itself paused");
+
+                // A mutating task is refused while paused...
+                JsonObject chat = new JsonObject();
+                chat.addProperty("kind", Protocol.TASK_CHAT);
+                chat.addProperty("line", "hello");
+                server.send(new Envelope(Protocol.TASK, "t-chat", chat).encode());
+                Envelope refused = awaitType(server, Protocol.RESULT);
+                assertTrue(!refused.payload.get("ok").getAsBoolean());
+                assertTrue(refused.payload.get("message").getAsString().contains("paused"));
+
+                // ...but a read-only task still runs.
+                JsonObject count = new JsonObject();
+                count.addProperty("kind", Protocol.TASK_COUNT);
+                server.send(new Envelope(Protocol.TASK, "t-count", count).encode());
+                Envelope ok = awaitType(server, Protocol.RESULT);
+                assertTrue(ok.payload.get("ok").getAsBoolean());
+                assertEquals(1, dispatcher.dispatched.get());
+            } finally {
+                link.close();
+            }
+        }
+    }
+
+    @Test
+    void stampsPauseAndStopOntoTheSnapshotItReports() throws Exception {
+        try (TestWebSocketServer server = new TestWebSocketServer()) {
+            WorkerLink link = new WorkerLink(configFor(server.port()), new FakeDispatcher());
+            try {
+                link.start();
+                read(server);
+                accept(server, "worker-1");
+                Envelope register = readOfType(server, Protocol.REGISTER);
+                assertTrue(!register.payload.get("paused").getAsBoolean());
+                assertTrue(!register.payload.get("stopped").getAsBoolean());
+
+                JsonObject pause = new JsonObject();
+                pause.addProperty("action", Protocol.CONTROL_PAUSE);
+                server.send(new Envelope(Protocol.CONTROL, "c1", pause).encode());
+
+                Envelope status = awaitStatusWith(server, "paused", true);
+                assertTrue(status.payload.get("paused").getAsBoolean());
+            } finally {
+                link.close();
+            }
+        }
+    }
+
+    @Test
+    void remembersTheAssignedIdSoAReconnectKeepsItsIdentity() throws Exception {
+        try (TestWebSocketServer server = new TestWebSocketServer()) {
+            WorkerConfig config = configFor(server.port());
+            WorkerLink link = new WorkerLink(config, new FakeDispatcher());
+            java.util.concurrent.atomic.AtomicInteger persisted = new java.util.concurrent.atomic.AtomicInteger();
+            link.setPersistHook(persisted::incrementAndGet);
+            try {
+                link.start();
+                read(server);
+                accept(server, "stable-id");
+                readOfType(server, Protocol.REGISTER);
+
+                assertEquals("stable-id", config.workerId);
+                assertEquals(1, persisted.get(), "the assigned id should be persisted once");
+            } finally {
+                link.close();
+            }
+        }
+    }
+
+    /** Waits for a snapshot whose field has the wanted value, ignoring other frames. */
+    private static Envelope awaitStatusWith(TestWebSocketServer server, String field, boolean value) throws Exception {
+        for (int i = 0; i < 20; i++) {
+            Envelope envelope = read(server);
+            if (Protocol.STATUS.equals(envelope.type)
+                && envelope.payload.has(field)
+                && envelope.payload.get(field).getAsBoolean() == value) {
+                return envelope;
+            }
+        }
+        throw new AssertionError("never saw a status with " + field + "=" + value);
+    }
+
+    private static boolean awaitBoolean(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 3000;
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) return true;
+            Thread.sleep(20);
+        }
+        return condition.getAsBoolean();
+    }
+
     private static void accept(TestWebSocketServer server, String workerId) throws Exception {
         JsonObject ack = new JsonObject();
         ack.addProperty("accepted", true);

@@ -21,6 +21,12 @@ import java.util.function.Consumer;
  *
  * <p>Reconnection is unconditional and unbounded with a fixed delay: a worker is expected to
  * outlive a host restart without operator intervention.
+ *
+ * <p>The host can drive this link over the wire with a {@code control} message: {@code disconnect}
+ * stops the service (the worker stays connected so it can still be asked to {@code connect} again),
+ * {@code connect} restarts it, {@code restart} cycles it, and {@code pause}/{@code resume} gate
+ * whether mutating tasks are accepted. That is what makes the host's Connect / Disconnect / Restart
+ * buttons real rather than labels: the worker owns its connection, so only it can act on them.
  */
 public final class WorkerLink implements AutoCloseable {
     /** Opens a connection. Injectable so tests can supply a loopback server. */
@@ -63,6 +69,10 @@ public final class WorkerLink implements AutoCloseable {
     private volatile CountDownLatch ackLatch;
     private volatile String registeredId = "";
     private volatile long connectedAt;
+    /** True while the host has paused mutating tasks (Start/Stop). Read-only tasks still run. */
+    private volatile boolean paused;
+    /** True while the host has disconnected this worker's service; it stays reachable for control. */
+    private volatile boolean stopped;
     /** When the last log line was forwarded to the host, so the wire is not flooded. */
     private volatile long lastHostLogAt;
     /** Called after the host grants a token, so the owner can persist the config to disk. */
@@ -89,6 +99,14 @@ public final class WorkerLink implements AutoCloseable {
 
     public long connectedAt() {
         return connectedAt;
+    }
+
+    public boolean isPaused() {
+        return paused;
+    }
+
+    public boolean isStopped() {
+        return stopped;
     }
 
     public void onStateChange(Consumer<WorkerState> listener) {
@@ -199,6 +217,11 @@ public final class WorkerLink implements AutoCloseable {
             if (snapshot != null && (snapshot.workerId == null || snapshot.workerId.isEmpty())) {
                 snapshot.workerId = registeredId;
             }
+            // The link owns the pause/stop state, so it stamps it onto whatever the dispatcher built.
+            if (snapshot != null) {
+                snapshot.paused = paused;
+                snapshot.stopped = stopped;
+            }
             send(Envelope.of(type, Json.gson().toJsonTree(snapshot).getAsJsonObject()));
         } catch (Exception ex) {
             log("could not send " + type + ": " + ex.getMessage());
@@ -267,6 +290,7 @@ public final class WorkerLink implements AutoCloseable {
                 case Protocol.HELLO_ACK -> handleHelloAck(envelope);
                 case Protocol.TASK, Protocol.COMMAND -> handleTask(envelope);
                 case Protocol.PING -> send(Envelope.reply(Protocol.PONG, envelope.id, null));
+                case Protocol.CONTROL -> handleControl(envelope);
                 case Protocol.KICK -> {
                     log("host kicked this worker: " + Json.string(envelope.payloadOrEmpty(), "reason", "no reason given"));
                     stop();
@@ -304,18 +328,73 @@ public final class WorkerLink implements AutoCloseable {
             return;
         }
         String granted = Json.string(payload, "token", "");
+        boolean changed = false;
         if (!granted.isBlank() && !granted.equals(config.token)) {
             config.token = granted;
             config.pairingCode = "";
+            changed = true;
             log("paired with the host; shared token stored");
+        }
+        // Remember the id the host assigned so a reconnect keeps the same identity (and the host's
+        // label, group and history) instead of registering as a brand new worker.
+        if (!registeredId.isBlank() && !registeredId.equals(config.workerId)) {
+            config.workerId = registeredId;
+            changed = true;
+        }
+        if (changed) {
             try {
                 persistHook.run();
             } catch (RuntimeException ignored) {
-                // Persisting is best-effort; the in-memory token still applies this session.
+                // Persisting is best-effort; the in-memory values still apply this session.
             }
         }
         CountDownLatch latch = ackLatch;
         if (latch != null) latch.countDown();
+    }
+
+    /**
+     * Applies a host control action to this link.
+     *
+     * <p>{@code disconnect}/{@code connect} do not close the socket: the worker stays connected so
+     * the host can still ask it to {@code connect} again. What they stop is the worker's *service*
+     * (accepting tasks and reporting status), which is exactly what an operator means by
+     * "disconnect" and "connect". {@code restart} cycles the service; {@code pause}/{@code resume}
+     * gate mutating tasks.
+     */
+    private void handleControl(Envelope envelope) {
+        String action = Json.string(envelope.payloadOrEmpty(), "action", "");
+        switch (action) {
+            case Protocol.CONTROL_CONNECT -> {
+                if (stopped) {
+                    stopped = false;
+                    log("host re-enabled this worker");
+                    sendSnapshot(Protocol.STATUS);
+                }
+            }
+            case Protocol.CONTROL_DISCONNECT -> {
+                if (!stopped) {
+                    stopped = true;
+                    log("host disabled this worker; still reachable for control");
+                    sendSnapshot(Protocol.STATUS);
+                }
+            }
+            case Protocol.CONTROL_RESTART -> {
+                stopped = false;
+                log("host restarted this worker's service");
+                sendSnapshot(Protocol.STATUS);
+            }
+            case Protocol.CONTROL_PAUSE -> {
+                paused = true;
+                log("host paused this worker");
+                sendSnapshot(Protocol.STATUS);
+            }
+            case Protocol.CONTROL_RESUME -> {
+                paused = false;
+                log("host resumed this worker");
+                sendSnapshot(Protocol.STATUS);
+            }
+            default -> log("ignored an unknown control action: " + action);
+        }
     }
 
     private void handleTask(Envelope envelope) {
@@ -325,6 +404,14 @@ public final class WorkerLink implements AutoCloseable {
 
         if (taskId.isEmpty()) {
             log("refused a task with no id");
+            return;
+        }
+        if (stopped) {
+            sendResult(taskId, TaskResult.failure(taskId, kind, "this worker is stopped; the host can send a 'connect' control"));
+            return;
+        }
+        if (paused && TaskCatalog.isMutating(kind)) {
+            sendResult(taskId, TaskResult.failure(taskId, kind, "this worker is paused; the host can send a 'resume' control"));
             return;
         }
         if (!TaskCatalog.isSupported(kind)) {

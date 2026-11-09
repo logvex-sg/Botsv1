@@ -12,8 +12,8 @@ direction — the host *reading* a client over HTTP — is the companion API and
 | Side | File | Role |
 | --- | --- | --- |
 | Worker (Java) | [`worker-mod/src/main/java/com/logvex/worker/core/Protocol.java`](../worker-mod/src/main/java/com/logvex/worker/core/Protocol.java) | The declared constants: version, message types, task kinds, payload field names, efly actions. |
-| Host (TypeScript) | [`fleet-manager/src/shared/workers.ts`](../fleet-manager/src/shared/workers.ts) | The host mirror: the same constants plus the envelope decoder and the snapshot/task types. |
-| Drift guard | [`fleet-manager/tests/unit/worker-protocol-drift.test.ts`](../fleet-manager/tests/unit/worker-protocol-drift.test.ts) | Reads `Protocol.java` as text and asserts the host mirror matches it. |
+| Host (TypeScript) | [`host/src/shared/workers.ts`](../host/src/shared/workers.ts) | The host mirror: the same constants plus the envelope decoder and the snapshot/task types. |
+| Drift guard | [`host/tests/unit/protocol-consistency.test.ts`](../host/tests/unit/protocol-consistency.test.ts) | Runs `protocol/check-protocol.mjs`, the canonical checker that reads all three mirrors (`protocol.json`, `workers.ts`, `Protocol.java`) and asserts they agree. |
 
 The two copies are kept in sync by hand, because one is Java and one is TypeScript. The drift test is
 what makes that safe: it parses the Java constants and compares them to the TypeScript ones, so a
@@ -45,7 +45,7 @@ If you change the protocol, change it in this order:
 ### Envelope
 
 ```json
-{ "v": 2, "type": "task", "id": "t-42", "payload": { "kind": "efly", "action": "start" } }
+{ "v": 3, "type": "task", "id": "t-42", "payload": { "kind": "efly", "action": "start" } }
 ```
 
 | Field | Type | Notes |
@@ -78,7 +78,7 @@ A code that is wrong, already used or expired is refused with `accepted: false` 
 | Direction | Types |
 | --- | --- |
 | worker → host | `hello`, `register`, `status`, `inventory`, `equipment`, `result`, `progress`, `pong`, `error`, `log` |
-| host → worker | `hello-ack`, `command`, `task`, `ping`, `kick` |
+| host → worker | `hello-ack`, `command`, `task`, `ping`, `kick`, `control` |
 
 - **`hello` / `hello-ack`** — version and credential check at connect. The `hello` payload carries
   `token` and/or `pairingCode`; when a valid one-time `pairingCode` is presented, the `hello-ack`
@@ -93,6 +93,12 @@ A code that is wrong, already used or expired is refused with `accepted: false` 
   `progress` first).
 - **`command`** — a one-line command/chat send, kept separate from `task` for the audit log.
 - **`ping` / `pong`** — liveness check.
+- **`control`** — a host-driven service action: `connect`, `disconnect`, `restart`, `pause` or
+  `resume`. `pause` blocks mutating tasks while read-only tasks keep running; `disconnect` marks the
+  worker stopped (it stays reachable so `connect` can bring it back); `restart` re-applies the link
+  settings. The worker stamps `paused` and `stopped` onto every snapshot it sends, so the host reads
+  the real state rather than assuming the action took effect. The desktop app's **Worker Mode** page
+  sends the same control messages, so a button there proves the host's command works.
 - **`kick`** — the host asks the worker to disconnect and stop.
 - **`log`** — the worker forwards its own link log (throttled to at most one line a second), which
   the host shows in the Fleet **Console** tab.

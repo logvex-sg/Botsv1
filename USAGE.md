@@ -47,7 +47,7 @@ and holds no game account. Each bot is a real Minecraft client running the **Log
 (status, inventory, count, search, equipment, regear, command, chat, position, **efly**). The host
 shows live state, pairs new workers with a short code, dispatches tasks and records the confirmed
 results. See [`worker-mod/README.md`](worker-mod/README.md) and
-[`fleet-manager/README.md`](fleet-manager/README.md).
+[`host/README.md`](host/README.md).
 
 > **Scope.** The addon observes, records and coordinates Meteor's own modules around a target that
 > is selected manually or by its filters. It adds no unattended combat automation of its own. The
@@ -481,7 +481,7 @@ holds the token can read state and issue commands.
 ## 14. Fleet Manager: install and run
 
 ```bash
-cd fleet-manager
+cd host
 npm install
 
 # Development (Vite renderer + Electron)
@@ -589,7 +589,7 @@ instead.
 Open **Workers** in the Fleet Manager: the worker appears in the roster with live state. From there
 you can refresh status, pull inventory, run a task (including **EFly**), send a command or chat line,
 and watch the worker's own **Consoles** log. See the
-[Fleet Manager README](fleet-manager/README.md) for every page.
+[Fleet Manager README](host/README.md) for every page.
 
 ---
 
