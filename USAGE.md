@@ -474,29 +474,27 @@ app down.
 
 ## 15. Fleet Manager: pages and workflow
 
-| Page | What it does |
+The app starts in **Beginner mode** with a small, focused navigation. Switch to **Advanced mode**
+(top-right, or in Settings) to reveal the deployment builder, queue editor and technical settings —
+the same features, just shown when you want them.
+
+| Section | What it does |
 | --- | --- |
-| **Overview** | Fleet-wide health, counts and recent activity. |
-| **Deployment** | Launch, stop and monitor bot instances. |
-| **Instances** | Every running instance, its status, and per-instance controls. |
+| **Dashboard** | Guided setup checklist, one-click *Start my bots*, live bot state and recent activity. |
+| **Main Features** | Tabs for **Hunter** (LogVex Hunter link), **Targets** (shared target list), **Gear** (equipment profiles), **Stasis** (defensive locations) and **Servers** (connection profiles). |
+| **Tasks** | Start and manage bots. Beginner mode is pick-and-press-start; Advanced mode adds the deployment builder, queue, validation preview and live monitor. |
 | **Accounts** | Minecraft accounts, credentials (stored in the credential vault), and status. |
-| **Gearer** | Equipment profiles and the GEARER role's loadout enforcement. |
-| **Stasis** | Stasis locations, readiness and state history. |
-| **Hunter** | Connection to LogVex Hunter clients, targets, and the HUNTER role. |
-| **Targets** | The shared target database; syncs with the addon. |
-| **Events** | The event stream from every instance, filterable. |
-| **Servers** | Server profiles (address, version, notes). |
-| **Configuration** | App settings, including the Hunter addon URL and token. |
-| **Logs** | Application and instance logs. |
+| **Activity** | The event stream, notifications, statistics and per-instance logs. |
+| **Settings** | App settings, including the Hunter addon URL and token, plus an Advanced section. |
+| **Help** | A short guide, glossary and FAQ. |
 
-Typical workflow:
+Typical workflow (everything below is also reachable from the Dashboard checklist):
 
-1. **Servers** — add the server you play on.
-2. **Accounts** — add bot accounts and their credentials.
-3. **Gearer / Stasis** — create equipment and stasis profiles.
-4. **Hunter** — create a hunter profile and (optionally) a target allowlist.
-5. **Deployment** — deploy bots with a role; each becomes an isolated worker.
-6. **Overview / Events / Logs** — watch the fleet and react.
+1. **Dashboard → Quick start** — add a server and an account in one step (or use **Main Features →
+   Servers** and **Accounts** separately).
+2. **Dashboard → Start my bots** — pick the accounts to bring online and press start.
+3. **Main Features** — adjust gear, stasis or target settings as needed.
+4. **Activity** — watch the fleet and react to events.
 
 ### Roles
 
@@ -506,7 +504,9 @@ Typical workflow:
 | **STASIS** | Monitors a saved stasis location and its readiness; notifies on state change; optional confirmation before state-changing actions. |
 | **HUNTER** | Observes targets, and — **only** with `combat-testing-enabled` plus `explicit-combat-authorisation` and a matching allowlist — engages them in a private test environment. |
 
-The HUNTER role is deliberately gated: with the two toggles off (the default) it observes only.
+The HUNTER role is deliberately gated: with the two toggles off (the default) it observes only. The
+one-click *Start my bots* flow never arms combat for you — it requires an explicit
+"Authorise combat testing" tick, and refuses to start otherwise.
 
 ### The app's own API
 
