@@ -7,7 +7,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Decides whether a command may be broadcast to every worker.
+ * Decides whether a command may be broadcast to every hunter.
  *
  * <p>A broadcast reaches every client at once, so one typo can do the same thing fifty times. This
  * gate is the guard rail: read-only and cosmetic commands pass, but lifecycle changes and anything
@@ -71,10 +71,10 @@ public final class SwarmCommandGate {
         }
         if (BROADCAST_VERBS.contains(verb)) return Verdict.allow();
         if (verb.equals("start") || verb.equals("stop") || verb.equals("pause") || verb.equals("resume")) {
-            return Verdict.deny("lifecycle changes must be sent to one worker at a time (use 'send')");
+            return Verdict.deny("lifecycle changes must be sent to one hunter at a time (use 'send')");
         }
         if (verb.equals("reload") || verb.equals("export")) {
-            return Verdict.deny("'" + verb + "' must be sent to one worker at a time (use 'send')");
+            return Verdict.deny("'" + verb + "' must be sent to one hunter at a time (use 'send')");
         }
         return Verdict.deny("'" + verb + "' is not in the broadcast allowlist");
     }
@@ -96,7 +96,7 @@ public final class SwarmCommandGate {
         return false;
     }
 
-    /** Whether the parsed command would arm combat, used to warn before a single-worker send too. */
+    /** Whether the parsed command would arm combat, used to warn before a single-hunter send too. */
     public static boolean armsCombat(String line) {
         ControlAction action = ControlParser.parse(line);
         if (action instanceof ControlAction.ModuleToggle toggle) {

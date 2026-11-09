@@ -52,12 +52,12 @@ class SwarmCommandGateTest {
     }
 
     @Test
-    void lifecycleChangesMustTargetOneWorker() {
+    void lifecycleChangesMustTargetOneHunter() {
         assertFalse(SwarmCommandGate.inspect("start", false).allowed());
         assertFalse(SwarmCommandGate.inspect("stop", false).allowed());
         assertFalse(SwarmCommandGate.inspect("pause", false).allowed());
         assertFalse(SwarmCommandGate.inspect("reload", false).allowed());
-        assertTrue(SwarmCommandGate.inspect("start", false).reason().contains("one worker at a time"));
+        assertTrue(SwarmCommandGate.inspect("start", false).reason().contains("one hunter at a time"));
     }
 
     @Test

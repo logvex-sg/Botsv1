@@ -51,15 +51,15 @@ class ExamplesConfigTest {
     void swarmSettingsRoundTripThroughTheConfig() throws Exception {
         HunterConfig config = HunterConfig.fromJson(read("config.json"));
         config.setSwarmHostToken("shared-secret");
-        config.setSwarmWorkerHost("10.0.0.5");
-        config.setSwarmWorkerPort(7000);
+        config.setSwarmHunterHost("10.0.0.5");
+        config.setSwarmHunterPort(7000);
         config.setSwarmAllowCombatBroadcast(true);
         config.setSwarmHostMode(false);
 
         HunterConfig reloaded = HunterConfig.fromJson(config.toJson());
         assertEquals("shared-secret", reloaded.swarmHostToken());
-        assertEquals("10.0.0.5", reloaded.swarmWorkerHost());
-        assertEquals(7000, reloaded.swarmWorkerPort());
+        assertEquals("10.0.0.5", reloaded.swarmHunterHost());
+        assertEquals(7000, reloaded.swarmHunterPort());
         assertTrue(reloaded.swarmAllowCombatBroadcast());
         assertFalse(reloaded.swarmHostMode());
     }

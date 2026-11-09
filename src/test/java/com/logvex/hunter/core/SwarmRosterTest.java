@@ -89,7 +89,7 @@ class SwarmRosterTest {
     @Test
     void sendReportsUnknownOrClosedPeers() {
         SwarmRoster roster = new SwarmRoster();
-        assertEquals("unknown worker: nope", roster.send("nope", SwarmMessage.of(SwarmProtocol.PING)));
+        assertEquals("unknown hunter: nope", roster.send("nope", SwarmMessage.of(SwarmProtocol.PING)));
 
         FakeLink link = new FakeLink();
         roster.register("w1", "a", "alpha", link, 0);
@@ -172,12 +172,12 @@ class SwarmRosterTest {
     @Test
     void describeSummarisesTheRoster() {
         SwarmRoster roster = new SwarmRoster();
-        assertEquals("No workers connected.", roster.describe());
+        assertEquals("No hunters connected.", roster.describe());
         roster.register("w1", "127.0.0.1:9", "alpha", new FakeLink(), 0);
         assertTrue(roster.describe().contains("alpha"));
-        assertEquals("1 worker", roster.summary());
+        assertEquals("1 hunter", roster.summary());
         roster.register("w2", "127.0.0.1:8", "beta", new FakeLink(), 0);
-        assertEquals("2 workers", roster.summary());
+        assertEquals("2 hunters", roster.summary());
     }
 
     @Test

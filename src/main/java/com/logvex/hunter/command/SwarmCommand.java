@@ -14,8 +14,8 @@ import net.minecraft.commands.SharedSuggestionProvider;
 /**
  * Controls the in-game swarm: {@code .swarm <host|join|connections|send|broadcast|kick|status|gui>}.
  *
- * <p>The host runs the same verbs on its own client that it sends to workers, so a command that works
- * here works on a worker too. Broadcasts that would arm combat on the whole fleet are refused unless
+ * <p>The host runs the same verbs on its own client that it sends to hunters, so a command that works
+ * here works on a hunter too. Broadcasts that would arm combat on the whole fleet are refused unless
  * {@code allow-combat-broadcast} is on.
  */
 public class SwarmCommand extends Command {
@@ -64,11 +64,11 @@ public class SwarmCommand extends Command {
                         }
                         String ip = StringArgumentType.getString(context, "ip");
                         int port = IntegerArgumentType.getInteger(context, "port");
-                        module.setMode(SwarmModule.Mode.WORKER);
-                        module.setWorkerEndpoint(ip, port);
+                        module.setMode(SwarmModule.Mode.HUNTER);
+                        module.setHunterEndpoint(ip, port);
                         if (!module.isActive()) module.enable();
                         module.start();
-                        info("Swarm worker connecting to %s:%d.", ip, port);
+                        info("Swarm hunter connecting to %s:%d.", ip, port);
                         return SINGLE_SUCCESS;
                     })))
         );
@@ -89,14 +89,14 @@ public class SwarmCommand extends Command {
         }));
 
         builder.then(literal("send")
-            .then(argument("worker", StringArgumentType.word())
+            .then(argument("hunter", StringArgumentType.word())
                 .then(argument("command", StringArgumentType.greedyString())
                     .executes(context -> {
                         SwarmModule module = module();
                         if (module == null) return SINGLE_SUCCESS;
-                        String worker = StringArgumentType.getString(context, "worker");
+                        String hunter = StringArgumentType.getString(context, "hunter");
                         String command = StringArgumentType.getString(context, "command");
-                        String error = module.sendTo(worker, command);
+                        String error = module.sendTo(hunter, command);
                         if (error != null) error("%s", error);
                         return SINGLE_SUCCESS;
                     })))
@@ -113,13 +113,13 @@ public class SwarmCommand extends Command {
         );
 
         builder.then(literal("kick")
-            .then(argument("worker", StringArgumentType.word())
+            .then(argument("hunter", StringArgumentType.word())
                 .executes(context -> {
                     SwarmModule module = module();
                     if (module == null) return SINGLE_SUCCESS;
-                    String worker = StringArgumentType.getString(context, "worker");
-                    if (module.kick(worker)) info("Disconnected %s.", worker);
-                    else error("No worker matches '%s'.", worker);
+                    String hunter = StringArgumentType.getString(context, "hunter");
+                    if (module.kick(hunter)) info("Disconnected %s.", hunter);
+                    else error("No hunter matches '%s'.", hunter);
                     return SINGLE_SUCCESS;
                 }))
         );
@@ -134,7 +134,7 @@ public class SwarmCommand extends Command {
                     }
                     String token = StringArgumentType.getString(context, "token");
                     module.setToken(token);
-                    info("Swarm token set. Workers must present the same token.");
+                    info("Swarm token set. Hunters must present the same token.");
                     return SINGLE_SUCCESS;
                 }))
         );

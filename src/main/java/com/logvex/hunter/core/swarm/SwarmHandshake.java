@@ -2,15 +2,15 @@ package com.logvex.hunter.core.swarm;
 
 /**
  * The pure half of the swarm handshake: building the {@code hello}/{@code hello-ack} messages and
- * deciding whether a worker may join.
+ * deciding whether a hunter may join.
  *
  * <p>Keeping this free of sockets means the token check and protocol check are unit-tested directly,
- * and both the host and the worker share exactly one implementation of the rule.
+ * and both the host and the hunter share exactly one implementation of the rule.
  */
 public final class SwarmHandshake {
     private SwarmHandshake() {}
 
-    /** The worker's opening message: the protocol id, version, shared token, and a display label. */
+    /** The hunter's opening message: the protocol id, version, shared token, and a display label. */
     public static SwarmMessage hello(String token, String label) {
         return SwarmMessage.of(SwarmProtocol.HELLO)
             .with(SwarmProtocol.FIELD_PROTOCOL, SwarmProtocol.ID)
@@ -19,7 +19,7 @@ public final class SwarmHandshake {
             .with(SwarmProtocol.FIELD_LABEL, label == null ? "" : label);
     }
 
-    /** The host's reply accepting a worker. */
+    /** The host's reply accepting a hunter. */
     public static SwarmMessage accept(String label) {
         return SwarmMessage.of(SwarmProtocol.HELLO_ACK)
             .with(SwarmProtocol.FIELD_OK, true)
@@ -28,7 +28,7 @@ public final class SwarmHandshake {
             .with(SwarmProtocol.FIELD_LABEL, label == null ? "" : label);
     }
 
-    /** The host's reply rejecting a worker, with a reason the worker can show the user. */
+    /** The host's reply rejecting a hunter, with a reason the hunter can show the user. */
     public static SwarmMessage reject(String reason) {
         return SwarmMessage.of(SwarmProtocol.HELLO_ACK)
             .with(SwarmProtocol.FIELD_OK, false)
@@ -38,7 +38,7 @@ public final class SwarmHandshake {
     /**
      * Decides whether a {@code hello} may join.
      *
-     * @return {@code null} when the worker is accepted, otherwise the reason to send back. An empty
+     * @return {@code null} when the hunter is accepted, otherwise the reason to send back. An empty
      *         configured token means the host accepts anyone on the port, which the caller warns
      *         about when the host is started.
      */
@@ -58,7 +58,7 @@ public final class SwarmHandshake {
         return null;
     }
 
-    /** Whether a {@code hello-ack} says the worker was accepted. */
+    /** Whether a {@code hello-ack} says the hunter was accepted. */
     public static boolean accepted(SwarmMessage ack) {
         return ack != null && SwarmProtocol.HELLO_ACK.equals(ack.type()) && ack.flag(SwarmProtocol.FIELD_OK);
     }

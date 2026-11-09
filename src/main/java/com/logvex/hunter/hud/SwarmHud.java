@@ -13,14 +13,14 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Shows the swarm link state: host/worker, the port and the live worker count. */
+/** Shows the swarm link state: host/hunter, the port and the live hunter count. */
 public class SwarmHud extends HunterHudElement {
     public static final HudElementInfo<SwarmHud> INFO = new HudElementInfo<>(
-        Hud.GROUP, "logvex-swarm", "Logvex Swarm", "Shows the in-game swarm host/worker status.",
+        Hud.GROUP, "logvex-swarm", "Logvex Swarm", "Shows the in-game swarm host/hunter status.",
         SwarmHud::new);
 
-    private final Setting<Integer> maxWorkers = sgGeneral.add(new IntSetting.Builder()
-        .name("max-workers").description("How many workers to list.")
+    private final Setting<Integer> maxHunters = sgGeneral.add(new IntSetting.Builder()
+        .name("max-hunters").description("How many hunters to list.")
         .defaultValue(5).min(0).sliderRange(0, 20).build());
 
     public SwarmHud() {
@@ -42,15 +42,15 @@ public class SwarmHud extends HunterHudElement {
             lines.add(module.roster().summary());
             int shown = 0;
             for (SwarmPeer peer : module.roster().peers()) {
-                if (shown++ >= maxWorkers.get()) break;
+                if (shown++ >= maxHunters.get()) break;
                 String suffix = peer.lastLatencyMillis() >= 0 ? " " + peer.lastLatencyMillis() + "ms" : "";
                 lines.add(" " + peer.label() + " " + peer.status() + suffix);
             }
             titleColor = hosting ? Color.GREEN : Color.GRAY;
         } else {
-            boolean up = module.isWorkerConnected();
-            lines.add("Worker " + (up ? "connected" : "offline"));
-            lines.add(module.workerEndpoint());
+            boolean up = module.isHunterConnected();
+            lines.add("Hunter " + (up ? "connected" : "offline"));
+            lines.add(module.hunterEndpoint());
             titleColor = up ? Color.GREEN : Color.YELLOW;
         }
 

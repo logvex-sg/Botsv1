@@ -3,7 +3,7 @@ package com.logvex.hunter.core.swarm;
 /**
  * A single, one-way outbound channel to a connected peer.
  *
- * <p>The host keeps one link per worker. The interface exists so the roster and command dispatch can
+ * <p>The host keeps one link per hunter. The interface exists so the roster and command dispatch can
  * be exercised in a test with an in-memory link, with no socket and no Minecraft.
  */
 public interface SwarmLink {

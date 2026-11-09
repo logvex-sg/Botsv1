@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
- * One host-to-worker TCP channel.
+ * One host-to-hunter TCP channel.
  *
  * <p>A single writer thread drains a bounded queue so the game thread never blocks on the socket:
  * {@link #send} only offers to the queue and returns. A reader thread parses incoming lines and

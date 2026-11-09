@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The host's view of every connected worker: who is connected, and how to reach them.
+ * The host's view of every connected hunter: who is connected, and how to reach them.
  *
  * <p>This class owns no sockets. The transport layer registers a peer together with its
  * {@link SwarmLink}; the roster then routes commands by id, label or 1-based index. Keeping the
@@ -93,10 +93,10 @@ public final class SwarmRoster {
         SwarmLink link;
         synchronized (this) {
             peer = peers.get(id);
-            if (peer == null) return "unknown worker: " + id;
+            if (peer == null) return "unknown hunter: " + id;
             link = links.get(id);
         }
-        if (link == null || !link.open()) return "worker " + peer.label() + " is not connected";
+        if (link == null || !link.open()) return "hunter " + peer.label() + " is not connected";
         if (!link.send(message.encode())) return "could not reach " + peer.label();
         peer.incrementCommandsSent();
         peer.touch(System.currentTimeMillis());
@@ -166,12 +166,12 @@ public final class SwarmRoster {
     /** A compact, one-line summary used by the HUD and the status command. */
     public String summary() {
         int size = size();
-        return size + " worker" + (size == 1 ? "" : "s");
+        return size + " hunter" + (size == 1 ? "" : "s");
     }
 
     public String describe() {
         List<SwarmPeer> list = peers();
-        if (list.isEmpty()) return "No workers connected.";
+        if (list.isEmpty()) return "No hunters connected.";
         StringBuilder sb = new StringBuilder();
         int i = 1;
         for (SwarmPeer peer : list) {

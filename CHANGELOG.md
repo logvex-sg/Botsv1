@@ -1,56 +1,39 @@
 # Changelog
 
 All notable changes to the products in this repository are documented here: **LogVex Hunter** (the
-Meteor Client addon) and **Logvex Worker** (the standalone Fabric worker mod). The format follows
+single Meteor Client addon, which also provides the in-game Host/Hunter swarm) and the **Logvex
+Fleet Manager** desktop app. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Added
-- **Logvex Worker mod (`worker-mod/`): a Fabric client that answers the Fleet Manager's fleet
-  tasks.** A new subproject, built as its own jar, so the Hunter addon and the worker can be
-  installed independently.
-  - A closed protocol (`com.logvex.worker.core.Protocol`): a newline-framed JSON envelope
-    (`Envelope`) with a version that is checked at the handshake, a fixed set of message types and a
-    fixed set of task kinds. The host never sends code, a class name or a shell command.
-  - Transport: `WebSocketClient` + `WorkerLink` connect out to the host, authenticate with a shared
-    token, heartbeat a status snapshot and reconnect on their own; sockets run on daemon threads so
-    the game thread never blocks.
-  - Task handling: `TaskDispatcher`/`MinecraftTaskDispatcher` answer `status`, `inventory`, `count`,
-    `search`, `equipment`, `regear`, `command`, `chat` and `position` against the live client.
-  - `CommandValidator` allow-lists the verbs a remote host may run and rejects control characters,
-    so a chat line can never smuggle a second line.
-  - Config (`config/logvex-worker.json`) with usable defaults; the default host is
-    `127.0.0.1:8721`, matching the Fleet Manager's worker server.
-  - Unit tests for the Minecraft-free core (`Envelope`, `CommandValidator`, `ItemQuery`,
-    `InventorySummary`, `EquipmentReport`, and `WorkerLink` against a real loopback WebSocket
-    server).
 - **In-game swarm: control many LogVex Hunter clients from one host, in the game.** A new `swarm`
-  module makes one client the host and the rest workers, in the spirit of Meteor's own Swarm, with
-  no external app involved.
+  module makes one client the **host** and the rest **hunters**, in the spirit of Meteor's own
+  Swarm. It is the only mod involved — no server, no separate worker mod, no external app.
   - New Minecraft-free core (`com.logvex.hunter.core.swarm`): a newline-delimited JSON protocol
     (`SwarmProtocol`, `SwarmMessage`), the token handshake (`SwarmHandshake`), the host roster with
     id/label/index routing (`SwarmRoster`, `SwarmPeer`), a bounded line reader (`SwarmLineReader`)
     and the broadcast safety gate (`SwarmCommandGate`).
-  - Transport: `SwarmHostServer` accepts and authenticates workers; `SwarmWorkerClient` connects,
+  - Transport: `SwarmHostServer` accepts and authenticates hunters; `SwarmHunterClient` connects,
     handshakes and receives commands. Sockets run on daemon threads; commands are queued and drained
     on the client tick, so the game thread never blocks.
-  - A worker runs every host command through the same control layer as the local player, so the
-    host can drive each worker's target list, modules, settings, profiles and HUD.
-  - **Swarm screen** (dashboard → Swarm, or `.swarm gui`): mode switch, live roster, per-worker kick
+  - A hunter runs every host command through the same control layer as the local player, so the
+    host can drive each hunter's target list, modules, settings, profiles and HUD.
+  - **Swarm screen** (dashboard → Swarm, or `.swarm gui`): mode switch, live roster, per-hunter kick
     and a broadcast box.
-  - **Swarm HUD** (`logvex-swarm`): host/worker state, port and live worker list.
+  - **Swarm HUD** (`logvex-swarm`): host/hunter state, port and live hunter list.
   - Chat commands: `.swarm host|join|stop|connections|send|broadcast|kick|token|port|status|gui`.
   - **Safety.** Broadcasts are limited to read-only, cosmetic and non-combat tuning commands
     (`status`, `save`, `settings`, `set` of a non-combat setting, `profile`, `hud`, `target`,
     `notify`); lifecycle changes and anything that would arm combat on the whole fleet are refused
-    unless `allow-combat-broadcast` is on. A single-worker send that arms combat still warns.
+    unless `allow-combat-broadcast` is on. A single-hunter send that arms combat still warns.
     `emergency-stop` always broadcasts, and the host sends it to the fleet on its own emergency stop
     before the link is torn down. The link requires a shared token and binds to loopback unless
     `allow-remote` is enabled.
-  - Config gains `swarmHostPort`, `swarmHostToken`, `swarmHostAllowRemote`, `swarmWorkerHost`,
-    `swarmWorkerPort`, `swarmAllowCombatBroadcast`, `swarmAutoConnect` and `swarmHostMode`.
+  - Config gains `swarmHostPort`, `swarmHostToken`, `swarmHostAllowRemote`, `swarmHunterHost`,
+    `swarmHunterPort`, `swarmAllowCombatBroadcast`, `swarmAutoConnect` and `swarmHostMode`.
 - **Full remote control surface for the Hunter, shared by chat and the Fleet Manager.** A new
   Minecraft-free control layer (`com.logvex.hunter.core.control`) parses a single text grammar into
   typed actions and dispatches them through a `ControlTarget`. The in-game chat commands, the
@@ -70,6 +53,17 @@ Meteor Client addon) and **Logvex Worker** (the standalone Fabric worker mod). T
   dropdowns for enums, text boxes otherwise), switches and saves profiles, and toggles HUD elements —
   all through the same control layer the API uses.
 - Dashboard quick-control row: an active-profile dropdown, Save profile and Reload buttons.
+
+### Changed
+- **Consolidated to a single mod with two swarm modes, Host and Hunter.** The standalone
+  `worker-mod/` Fabric mod has been removed; controlling other clients is done entirely in game by
+  the one LogVex Hunter addon. In the swarm, the former **worker** mode is now **hunter** mode and is
+  fully controlled by the host.
+  - Renamed throughout: `Mode.WORKER` → `Mode.HUNTER`, the "Worker" settings group and its
+    `host`/`port`/`token` settings, the `SwarmWorkerClient` class, the roster/HUD/screen wording and
+    the `.swarm send|broadcast|kick <hunter>` arguments.
+  - Config keys `swarmWorkerHost`/`swarmWorkerPort` are now `swarmHunterHost`/`swarmHunterPort`; the
+    old keys are still read once so an existing config keeps its host address.
 
 ### Fixed
 - **The built jar now targets Java 21 instead of Java 25.** Minecraft 1.21.11 and Meteor

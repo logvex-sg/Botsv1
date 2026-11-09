@@ -68,7 +68,7 @@ public interface CompanionApi {
      * Runs an administrative command and returns a human-readable result.
      *
      * <p>The implementation must hop onto the client thread; commands never touch game state from
-     * the HTTP worker.
+     * the HTTP worker thread.
      */
     String handleCommand(String command);
 

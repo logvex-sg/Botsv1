@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Tests one worker's live state as the host tracks it. */
+/** Tests one hunter's live state as the host tracks it. */
 class SwarmPeerTest {
 
     @Test

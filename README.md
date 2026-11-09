@@ -4,15 +4,16 @@ Two cooperating products live in this repository:
 
 | Product | What it is | Where |
 | --- | --- | --- |
-| **LogVex Hunter** | A Meteor Client addon for Minecraft 1.21.11 (Fabric). Target tracking, combat coordination, equipment and stasis monitoring, statistics, and a local companion API. | repository root (`src/main/java/com/logvex/hunter`) |
-| **Logvex Fleet Manager** | An Electron + React + TypeScript desktop app that manages many Minecraft bot instances, reads/controls one or more LogVex Hunter clients over the companion API, and drives a fleet of **Logvex Worker** clients over a WebSocket. | `fleet-manager/` |
-| **Logvex Worker** | A small Fabric client mod for Minecraft 1.21.11 that connects a client to the Fleet Manager and answers a closed set of named tasks (status, inventory, count, search, equipment, regear, command, chat, position). | `worker-mod/` |
+| **LogVex Hunter** | A single Meteor Client addon for Minecraft 1.21.11 (Fabric). Target tracking, combat coordination, equipment and stasis monitoring, statistics, an in-game **Host/Hunter swarm**, and a local companion API. | repository root (`src/main/java/com/logvex/hunter`) |
+| **Logvex Fleet Manager** | An Electron + React + TypeScript desktop app that manages Minecraft bot instances and reads/controls a LogVex Hunter client over the companion API. | `fleet-manager/` |
 
-The three parts are designed to work together. The Hunter addon serves an authenticated local HTTP
-endpoint that the Fleet Manager reads and controls (the *inbound* direction); the Worker mod
-connects out to the Fleet Manager's own WebSocket server and answers tasks (the *outbound*
-direction). See [Companion API](#companion-api-the-hunter--fleet-manager-bridge) and the
-[Worker fleet](#worker-fleet-the-fleet-manager--worker-mod-bridge) below.
+**One mod, in-game only.** Controlling several clients is done entirely inside Minecraft with this
+one addon: each client runs **Logvex Hunter**, and the **swarm** module puts it in one of two modes —
+**Host** (drives the fleet) or **Hunter** (fully controlled by the host). There is no server, no
+separate worker mod and no external process involved in the swarm; see
+[In-game swarm](#in-game-swarm-control-many-clients-from-one). The desktop app is optional and talks
+to a client through the addon's local companion API (the *inbound* direction) — see
+[Companion API](#companion-api-the-hunter--fleet-manager-bridge).
 
 > **Scope note.** The Hunter addon is a *monitoring and coordination* tool. It observes players,
 > records statistics, and coordinates Meteor's own combat modules around a manually or
@@ -45,12 +46,13 @@ direction). See [Companion API](#companion-api-the-hunter--fleet-manager-bridge)
   authenticated HTTP endpoint, and send a per-instance emergency stop. Each instance is isolated;
   no client's world state is assumed to be visible to another.
 - **In-game Swarm** — control other LogVex Hunter clients from one host, in the game, in the spirit
-  of Meteor's own Swarm. One client is the **host**, the rest are **workers**; the host sees a live
-  roster and can run any hunter command on one worker or broadcast a read-only command to all of
-  them. Every worker command goes through the same control layer the local player uses, so the host
-  can drive each worker's target list, modules, settings, profiles and HUD. A broadcast that would
-  arm combat on the whole fleet is refused unless you opt in. `.swarm …` in chat, or the Swarm
-  screen from the dashboard.
+  of Meteor's own Swarm. This is the **only mod** involved: each client runs LogVex Hunter and picks
+  a mode. One client is the **host**; the rest run in **hunter** mode and are fully controlled by it.
+  The host sees a live roster and can run any hunter command on one hunter or broadcast a read-only
+  command to all of them. Every hunter command goes through the same control layer the local player
+  uses, so the host can drive each hunter's target list, modules, settings, profiles and HUD. A
+  broadcast that would arm combat on the whole fleet is refused unless you opt in. `.swarm …` in
+  chat, or the Swarm screen from the dashboard.
 - **Defensive Stasis System** — readiness levels (SAFE/CAUTION/DANGER/CRITICAL) from health,
   totems, food, armour and durability, with connection-loss detection and a recovery dashboard.
   Observation only: it never attacks.
@@ -106,15 +108,15 @@ See [`USAGE.md`](USAGE.md) for the full use guide. The command reference:
 .hunter companion [status|start|stop|token|regenerate|port <n>]
 .hunter save
 
-.swarm                        # swarm status (mode, port, workers)
+.swarm                        # swarm status (mode, port, hunters)
 .swarm status                 # same as above
 .swarm host                   # this client becomes the swarm host
-.swarm join <ip> <port>       # this client becomes a worker of that host
+.swarm join <ip> <port>       # this client becomes a hunter of that host
 .swarm stop                   # stop the swarm link
-.swarm connections            # list connected workers
-.swarm send <worker> <command>  # run a hunter command on one worker
-.swarm broadcast <command>    # run a read-only command on every worker
-.swarm kick <worker>          # disconnect a worker
+.swarm connections            # list connected hunters
+.swarm send <hunter> <command>  # run a hunter command on one hunter
+.swarm broadcast <command>    # run a read-only command on every hunter
+.swarm kick <hunter>          # disconnect a hunter
 .swarm token <token>          # set the shared swarm token
 .swarm port <port>            # set the swarm port
 .swarm gui                    # open the Swarm screen
@@ -135,37 +137,42 @@ See [`USAGE.md`](USAGE.md) for the full use guide. The command reference:
 
 ### In-game swarm (control many clients from one)
 
-The swarm is Meteor-Swarm-style control that lives entirely inside the game: no external app, no
-browser, no second process. One client runs as the **host**; every other client runs as a **worker**
-and obeys the host.
+The swarm is Meteor-Swarm-style control that lives entirely inside the game: **one mod**, no
+external app, no browser, no server, no second process. Every client runs LogVex Hunter; the swarm
+module puts each one in one of **two modes**:
+
+- **Host** — drives the fleet. It listens on a port, keeps a live roster of connected hunters, and
+  sends them commands.
+- **Hunter** — fully controlled by the host. It connects to the host and executes whatever the host
+  sends, replying with the command's output.
 
 1. On the machine you want to drive from, open the **Swarm** screen (dashboard → **Swarm**, or
    `.swarm gui`) and press **Become host**. Or run `.swarm host`.
 2. On each other client, run `.swarm join <host-ip> <port>` (default port `6969`). Or open the Swarm
-   screen and press **Become worker**, then set the host and port in the module settings.
+   screen and press **Become hunter**, then set the host and port in the module settings.
 3. On the host, `.swarm connections` lists who is online. From the Swarm screen you can broadcast a
-   command to all workers or kick one.
+   command to all hunters or kick one.
 
-Once connected, the host can run **any** hunter command on a worker:
+Once connected, the host can run **any** hunter command on a hunter:
 
 ```
-.swarm send <worker> target add Griefer01
-.swarm send <worker> module player-tracker on
-.swarm send <worker> set equipment-manager min-durability 20
+.swarm send <hunter> target add Griefer01
+.swarm send <hunter> module player-tracker on
+.swarm send <hunter> set equipment-manager min-durability 20
 .swarm broadcast status
 ```
 
-`send` accepts an id, a label, or a 1-based index (`1`, `2`, …). A worker replies with the command's
+`send` accepts an id, a label, or a 1-based index (`1`, `2`, …). A hunter replies with the command's
 output, which the host shows in chat and on the roster row.
 
 **Safety.** A broadcast reaches every client at once, so only read-only, cosmetic and non-combat
 tuning commands are allowed to broadcast (`status`, `save`, `hud`, `profile`, `target`, `settings`,
 `notify`, and `set` of a setting that does not belong to a combat module). Lifecycle changes
 (`start`, `stop`, …) and anything that would arm combat on the whole fleet are refused unless you
-tick **allow-combat-broadcast** on the host; a single-worker `send` that arms combat only warns.
+tick **allow-combat-broadcast** on the host; a single-hunter `send` that arms combat only warns.
 `emergency-stop` is always allowed, and the host sends it to the fleet on its own emergency stop
 before the link is torn down. The token is a shared secret: set the same value on the host and every
-worker, and leave `allow-remote` off unless the workers are on other machines.
+hunter, and leave `allow-remote` off unless the hunters are on other machines.
 
 The protocol is newline-delimited JSON over TCP and is documented in
 `core/swarm/SwarmProtocol.java`, so a non-Meteor client can be written against it.
@@ -255,31 +262,14 @@ The end-to-end walkthrough for both halves is in [`USAGE.md`](USAGE.md).
 
 ---
 
-## Worker fleet (the Fleet Manager ↔ Worker mod bridge)
+## Fleet section (desktop, optional)
 
-The **Logvex Worker** mod (`worker-mod/`) is a Fabric client mod that connects *out* to the Fleet
-Manager's own WebSocket server. It is the outbound direction of the ecosystem: Hunter lets the app
-read a client over an inbound HTTP endpoint, while the worker mod lets the app ask a client to do a
-bounded, named task. The Fleet Manager's **Fleet** section (dashboard, workers, groups, tasks,
-inventory, commands, regear) is the UI for it.
+The Fleet Manager's **Fleet** section talks to LogVex Hunter clients that have the **companion**
+module enabled: it reads their state and sends the same commands the in-game commands accept. Each
+client is addressed by its companion URL and token (**Settings → Hunter addon URL / token**).
 
-The protocol is a closed set of message types and task kinds declared in
-`worker-mod/src/main/java/com/logvex/worker/core/Protocol.java` and mirrored in
-`fleet-manager/src/shared/workers.ts`. The host never sends code, a class name or a shell command,
-so a compromised host cannot turn a worker into remote code execution. A protocol-version mismatch
-is refused at the handshake. Commands are additionally checked against an allow-list by the worker
-itself.
-
-| Direction | Types |
-| --- | --- |
-| worker → host | `hello`, `register`, `status`, `inventory`, `equipment`, `result`, `progress`, `pong`, `error`, `log` |
-| host → worker | `hello-ack`, `command`, `task`, `ping`, `kick` |
-| task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position` |
-
-The worker authenticates with a shared token from **Settings → Worker server** in the Fleet Manager
-and connects to the default address `127.0.0.1:8721`. See
-[`worker-mod/README.md`](worker-mod/README.md) and the
-[Fleet section of the Fleet Manager README](fleet-manager/README.md#fleet-worker-management).
+In-game control of several clients does not need the desktop app at all — use the
+[in-game swarm](#in-game-swarm-control-many-clients-from-one) instead.
 
 ---
 
@@ -288,21 +278,16 @@ and connects to the default address `127.0.0.1:8721`. See
 ```
 .
 ├── build.gradle.kts, settings.gradle.kts, gradle/   # LogVex Hunter Gradle build
-├── src/main/java/com/logvex/hunter/                 # addon source
+├── src/main/java/com/logvex/hunter/                 # the addon (the only mod)
 │   ├── core/            Minecraft-free logic (unit-tested): targets, stats, messages, stasis,
-│   │                    equipment, instances, companion router/server
+│   │                    equipment, instances, swarm, companion router/server
 │   ├── mc/              game bridge: runtime, chat, player scanner
-│   ├── modules/         the Meteor modules
+│   ├── modules/         the Meteor modules (incl. modules/swarm — Host/Hunter)
 │   ├── gui/             ClickGUI dashboard and screens
 │   ├── hud/             HUD elements
 │   └── companion/       game-layer companion API + command handling
 ├── src/test/java/com/logvex/hunter/                 # addon unit tests
-├── worker-mod/                                      # the standalone worker Fabric mod
-│   ├── src/main/java/com/logvex/worker/core/        # Minecraft-free protocol + task logic
-│   ├── src/main/java/com/logvex/worker/mc/          # game bridge (inventory, containers, commands)
-│   └── src/test/java/com/logvex/worker/             # worker unit tests
 └── fleet-manager/                                   # the Electron desktop application
-    └── src/main/workers/                            # worker WebSocket server + WorkerService
 ```
 
 ## Testing
@@ -319,11 +304,9 @@ npm test
 ```
 
 The addon's Minecraft-free core is covered by JUnit tests (targets, statistics, messages, stasis,
-configuration, the companion router and a real-socket companion server test). The worker mod's
-Minecraft-free core (envelope, command validator, item query, inventory summary, equipment report
-and `WorkerLink` against a real loopback WebSocket server) is covered the same way. The Fleet
-Manager has unit and integration tests run with Vitest, including host-side worker tests that drive
-a real worker-shaped WebSocket client against the real server.
+configuration, the swarm protocol/handshake/roster/command-gate, the companion router and a
+real-socket companion server test). The Fleet Manager has unit and integration tests run with
+Vitest.
 
 ## License
 

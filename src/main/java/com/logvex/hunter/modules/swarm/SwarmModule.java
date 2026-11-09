@@ -25,11 +25,11 @@ import java.util.List;
 /**
  * In-game multi-client control, in the spirit of Meteor's own Swarm.
  *
- * <p>One client runs as the <b>host</b> and any number of others run as <b>workers</b>. The host
- * accepts connections, keeps a roster of who is online and broadcasts commands; a worker applies
+ * <p>One client runs as the <b>host</b> and any number of others run as <b>hunters</b>. The host
+ * accepts connections, keeps a roster of who is online and broadcasts commands; a hunter applies
  * whatever the host sends. Unlike a plain command relay, every command is routed through the same
  * {@link com.logvex.hunter.core.control.ControlService} the local player uses, so the host can
- * control each worker's hunter state, target list, modules and settings.
+ * control each hunter's game state, target list, modules and settings.
  *
  * <p>Threading: the sockets run on daemon threads and never touch the game. Incoming commands are
  * queued and drained on the client tick; outgoing results are sent straight back from the tick.
@@ -39,15 +39,15 @@ public class SwarmModule extends HunterModule {
     /** Modes this client can run in. */
     public enum Mode {
         HOST,
-        WORKER
+        HUNTER
     }
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgHost = settings.createGroup("Host");
-    private final SettingGroup sgWorker = settings.createGroup("Worker");
+    private final SettingGroup sgHunter = settings.createGroup("Hunter");
 
     private final Setting<Mode> mode = sgGeneral.add(new EnumSetting.Builder<Mode>()
-        .name("mode").description("Run this client as the swarm host, or as a worker.")
+        .name("mode").description("Run this client as the swarm host, or as a hunter.")
         .defaultValue(Mode.HOST)
         .onChanged(value -> restart())
         .build());
@@ -59,7 +59,7 @@ public class SwarmModule extends HunterModule {
         .build());
 
     private final Setting<Boolean> announce = sgGeneral.add(new BoolSetting.Builder()
-        .name("announce").description("Report worker joins, leaves and results in chat.")
+        .name("announce").description("Report hunter joins, leaves and results in chat.")
         .defaultValue(true)
         .build());
 
@@ -81,37 +81,37 @@ public class SwarmModule extends HunterModule {
         .build());
 
     private final Setting<String> hostToken = sgHost.add(new StringSetting.Builder()
-        .name("token").description("Shared token workers must present. Empty accepts anyone on the port.")
+        .name("token").description("Shared token hunters must present. Empty accepts anyone on the port.")
         .defaultValue("")
         .visible(() -> mode.get() == Mode.HOST)
         .onChanged(value -> restart())
         .build());
 
     private final Setting<Boolean> hostAllowRemote = sgHost.add(new BoolSetting.Builder()
-        .name("allow-remote").description("Accept workers from other machines. Off keeps it on loopback.")
+        .name("allow-remote").description("Accept hunters from other machines. Off keeps it on loopback.")
         .defaultValue(false)
         .visible(() -> mode.get() == Mode.HOST)
         .onChanged(value -> restart())
         .build());
 
-    private final Setting<String> workerHost = sgWorker.add(new StringSetting.Builder()
+    private final Setting<String> hunterHost = sgHunter.add(new StringSetting.Builder()
         .name("host").description("Address of the swarm host.")
         .defaultValue("127.0.0.1")
-        .visible(() -> mode.get() == Mode.WORKER)
+        .visible(() -> mode.get() == Mode.HUNTER)
         .onChanged(value -> restart())
         .build());
 
-    private final Setting<Integer> workerPort = sgWorker.add(new IntSetting.Builder()
+    private final Setting<Integer> hunterPort = sgHunter.add(new IntSetting.Builder()
         .name("port").description("Port of the swarm host.")
         .defaultValue(6969).min(1).sliderRange(1024, 65535)
-        .visible(() -> mode.get() == Mode.WORKER)
+        .visible(() -> mode.get() == Mode.HUNTER)
         .onChanged(value -> restart())
         .build());
 
-    private final Setting<String> workerToken = sgWorker.add(new StringSetting.Builder()
+    private final Setting<String> hunterToken = sgHunter.add(new StringSetting.Builder()
         .name("token").description("Shared token the host expects.")
         .defaultValue("")
-        .visible(() -> mode.get() == Mode.WORKER)
+        .visible(() -> mode.get() == Mode.HUNTER)
         .onChanged(value -> restart())
         .build());
 
@@ -119,7 +119,7 @@ public class SwarmModule extends HunterModule {
     private final Deque<Runnable> clientActions = new ArrayDeque<>();
 
     private SwarmHostServer host;
-    private SwarmWorkerClient worker;
+    private SwarmHunterClient hunter;
     private boolean applying;
     private long lastPing;
 
@@ -143,7 +143,7 @@ public class SwarmModule extends HunterModule {
     }
 
     /**
-     * On emergency stop the host also tells every worker to stop, before the link is torn down.
+     * On emergency stop the host also tells every hunter to stop, before the link is torn down.
      * Stopping the whole fleet is always permitted, so this does not consult the broadcast gate.
      */
     @Override
@@ -172,15 +172,15 @@ public class SwarmModule extends HunterModule {
                     .with(SwarmProtocol.FIELD_TIME, now));
                 host.roster().prune(now, 30000);
             }
-        } else if (worker != null) {
+        } else if (hunter != null) {
             String command;
-            while ((command = worker.pollCommand()) != null) {
-                runWorkerCommand(command);
+            while ((command = hunter.pollCommand()) != null) {
+                runHunterCommand(command);
             }
             long now = System.currentTimeMillis();
-            if (now - lastPing >= 5000 && worker.connected()) {
+            if (now - lastPing >= 5000 && hunter.connected()) {
                 lastPing = now;
-                worker.sendStatus(core().running() ? "running" : "stopped",
+                hunter.sendStatus(core().running() ? "running" : "stopped",
                     core().serverAddress() + " " + core().targets().size() + " targets");
             }
         }
@@ -204,7 +204,7 @@ public class SwarmModule extends HunterModule {
     public void start() {
         stop();
         if (mode.get() == Mode.HOST) startHost();
-        else startWorker();
+        else startHunter();
     }
 
     public void stop() {
@@ -212,9 +212,9 @@ public class SwarmModule extends HunterModule {
             host.stop();
             host = null;
         }
-        if (worker != null) {
-            worker.disconnect();
-            worker = null;
+        if (hunter != null) {
+            hunter.disconnect();
+            hunter = null;
         }
         roster.clear();
     }
@@ -223,8 +223,8 @@ public class SwarmModule extends HunterModule {
         return host != null && host.running();
     }
 
-    public boolean isWorkerConnected() {
-        return worker != null && worker.connected();
+    public boolean isHunterConnected() {
+        return hunter != null && hunter.connected();
     }
 
     public Mode mode() {
@@ -239,14 +239,14 @@ public class SwarmModule extends HunterModule {
         return host != null ? host.boundPort() : hostPort.get();
     }
 
-    public String workerEndpoint() {
-        return workerHost.get() + ":" + workerPort.get();
+    public String hunterEndpoint() {
+        return hunterHost.get() + ":" + hunterPort.get();
     }
 
-    public String workerStatus() {
-        if (worker == null) return "not started";
-        if (worker.connected()) return "connected to " + worker.endpoint();
-        return worker.lastError().isBlank() ? "disconnected" : "disconnected (" + worker.lastError() + ")";
+    public String hunterStatus() {
+        if (hunter == null) return "not started";
+        if (hunter.connected()) return "connected to " + hunter.endpoint();
+        return hunter.lastError().isBlank() ? "disconnected" : "disconnected (" + hunter.lastError() + ")";
     }
 
     /** Sets the mode and restarts the link. */
@@ -257,31 +257,31 @@ public class SwarmModule extends HunterModule {
     /** Sets the shared token on whichever side of the link this client is running. */
     public void setToken(String token) {
         if (mode.get() == Mode.HOST) hostToken.set(token == null ? "" : token);
-        else workerToken.set(token == null ? "" : token);
+        else hunterToken.set(token == null ? "" : token);
     }
 
     /** Sets the listen/connect port and restarts the link. */
     public void setPort(int port) {
         if (mode.get() == Mode.HOST) hostPort.set(port);
-        else workerPort.set(port);
+        else hunterPort.set(port);
     }
 
-    /** Points a worker at a host and restarts the link. */
-    public void setWorkerEndpoint(String host, int port) {
-        workerHost.set(host == null || host.isBlank() ? "127.0.0.1" : host.trim());
-        workerPort.set(port);
+    /** Points a hunter at a host and restarts the link. */
+    public void setHunterEndpoint(String host, int port) {
+        hunterHost.set(host == null || host.isBlank() ? "127.0.0.1" : host.trim());
+        hunterPort.set(port);
     }
 
     // ----------------------------------------------------------- host actions
 
-    /** Sends a command to one worker. Returns {@code null} on success, otherwise an error. */
+    /** Sends a command to one hunter. Returns {@code null} on success, otherwise an error. */
     public String sendTo(String selector, String command) {
         if (host == null) return "the swarm host is not running";
         if (command == null || command.isBlank()) return "empty command";
         var peer = roster.resolve(selector);
-        if (peer == null) return "no worker matches '" + selector + "'";
+        if (peer == null) return "no hunter matches '" + selector + "'";
         if (!allowCombatBroadcast.get() && SwarmCommandGate.armsCombat(command)) {
-            HunterChat.warn("Sending a combat-arming command to one worker: " + command.trim());
+            HunterChat.warn("Sending a combat-arming command to one hunter: " + command.trim());
         }
         String error = roster.send(peer.id(), SwarmMessage.of(SwarmProtocol.COMMAND)
             .with(SwarmProtocol.FIELD_LINE, command.trim())
@@ -291,7 +291,7 @@ public class SwarmModule extends HunterModule {
     }
 
     /**
-     * Sends a command to every worker.
+     * Sends a command to every hunter.
      *
      * @return a human-readable result; the command is refused when the gate rejects it
      */
@@ -303,7 +303,7 @@ public class SwarmModule extends HunterModule {
         int sent = roster.broadcast(SwarmMessage.of(SwarmProtocol.COMMAND)
             .with(SwarmProtocol.FIELD_LINE, command.trim())
             .with(SwarmProtocol.FIELD_TIME, System.currentTimeMillis()));
-        return "sent to " + sent + " worker" + (sent == 1 ? "" : "s");
+        return "sent to " + sent + " hunter" + (sent == 1 ? "" : "s");
     }
 
     public boolean kick(String selector) {
@@ -314,9 +314,9 @@ public class SwarmModule extends HunterModule {
         return roster.describe();
     }
 
-    // --------------------------------------------------------- worker actions
+    // --------------------------------------------------------- hunter actions
 
-    private void runWorkerCommand(String command) {
+    private void runHunterCommand(String command) {
         String output;
         boolean ok = true;
         try {
@@ -326,7 +326,7 @@ public class SwarmModule extends HunterModule {
             ok = false;
             output = "error: " + e.getMessage();
         }
-        if (worker != null) worker.sendResult(command, ok, output == null ? "" : output);
+        if (hunter != null) hunter.sendResult(command, ok, output == null ? "" : output);
         if (announce.get()) HunterChat.info("Host command: " + command + " -> " + (output == null ? "" : output));
     }
 
@@ -351,17 +351,17 @@ public class SwarmModule extends HunterModule {
         }
     }
 
-    private void startWorker() {
-        worker = new SwarmWorkerClient(workerHost.get(), workerPort.get(), workerToken.get(),
+    private void startHunter() {
+        hunter = new SwarmHunterClient(hunterHost.get(), hunterPort.get(), hunterToken.get(),
             core().config().instanceLabel().isBlank() ? playerName() : core().config().instanceLabel(),
             (state, up) -> clientActions.add(() -> {
                 if (announce.get()) {
-                    if (up) HunterChat.info("Swarm: " + state + " to " + workerEndpoint());
+                    if (up) HunterChat.info("Swarm: " + state + " to " + hunterEndpoint());
                     else HunterChat.warn("Swarm: " + state);
                 }
             }));
-        worker.start();
-        HunterChat.info("Swarm worker connecting to " + workerEndpoint() + "...");
+        hunter.start();
+        HunterChat.info("Swarm hunter connecting to " + hunterEndpoint() + "...");
     }
 
     private void handleHostMessage(String id, SwarmMessage message) {
@@ -386,7 +386,7 @@ public class SwarmModule extends HunterModule {
             case SwarmProtocol.PONG -> peer.setLastLatencyMillis(
                 System.currentTimeMillis() - message.number(SwarmProtocol.FIELD_TIME, 0));
             default -> {
-                // ignore unknown types so a newer worker can add fields safely
+                // ignore unknown types so a newer hunter can add fields safely
             }
         }
     }
@@ -407,14 +407,14 @@ public class SwarmModule extends HunterModule {
         applying = true;
         try {
             var config = core().config();
-            mode.set(config.swarmHostMode() ? Mode.HOST : Mode.WORKER);
+            mode.set(config.swarmHostMode() ? Mode.HOST : Mode.HUNTER);
             hostPort.set(config.swarmHostPort());
             hostToken.set(config.swarmHostToken());
             hostAllowRemote.set(config.swarmHostAllowRemote());
-            workerHost.set(config.swarmWorkerHost());
-            workerPort.set(config.swarmWorkerPort());
+            hunterHost.set(config.swarmHunterHost());
+            hunterPort.set(config.swarmHunterPort());
             // The host token is the single shared secret, used on both sides of the link.
-            workerToken.set(config.swarmHostToken());
+            hunterToken.set(config.swarmHostToken());
             allowCombatBroadcast.set(config.swarmAllowCombatBroadcast());
             autoStart.set(config.swarmAutoConnect());
         } finally {
@@ -427,10 +427,10 @@ public class SwarmModule extends HunterModule {
         config.setSwarmHostMode(mode.get() == Mode.HOST);
         config.setSwarmHostPort(hostPort.get());
         // One shared secret: persist whichever side of the link this client is running.
-        config.setSwarmHostToken(mode.get() == Mode.HOST ? hostToken.get() : workerToken.get());
+        config.setSwarmHostToken(mode.get() == Mode.HOST ? hostToken.get() : hunterToken.get());
         config.setSwarmHostAllowRemote(hostAllowRemote.get());
-        config.setSwarmWorkerHost(workerHost.get());
-        config.setSwarmWorkerPort(workerPort.get());
+        config.setSwarmHunterHost(hunterHost.get());
+        config.setSwarmHunterPort(hunterPort.get());
         config.setSwarmAllowCombatBroadcast(allowCombatBroadcast.get());
         config.setSwarmAutoConnect(autoStart.get());
         core().markDirty();
@@ -438,7 +438,7 @@ public class SwarmModule extends HunterModule {
 
     private static String playerName() {
         var player = Minecraft.getInstance().player;
-        return player == null ? "worker" : player.getName().getString();
+        return player == null ? "hunter" : player.getName().getString();
     }
 
     /** A one-line summary for the HUD and the dashboard. */
@@ -446,12 +446,12 @@ public class SwarmModule extends HunterModule {
         if (mode.get() == Mode.HOST) {
             return isHosting() ? "host :" + boundPort() + " - " + roster.summary() : "host stopped";
         }
-        return "worker " + workerStatus();
+        return "hunter " + hunterStatus();
     }
 
     @Override
     public String getInfoString() {
-        return mode.get() == Mode.HOST ? "Host" : "Worker";
+        return mode.get() == Mode.HOST ? "Host" : "Hunter";
     }
 
     /** The status lines shown in the swarm screen. */
@@ -459,9 +459,9 @@ public class SwarmModule extends HunterModule {
         if (mode.get() == Mode.HOST) {
             List<String> lines = new java.util.ArrayList<>();
             lines.add(isHosting() ? "Hosting on port " + boundPort() : "Host is not running");
-            lines.add("Workers: " + roster.size());
+            lines.add("Hunters: " + roster.size());
             return lines;
         }
-        return List.of("Worker mode", workerStatus());
+        return List.of("Hunter mode", hunterStatus());
     }
 }

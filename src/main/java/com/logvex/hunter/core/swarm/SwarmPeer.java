@@ -1,7 +1,7 @@
 package com.logvex.hunter.core.swarm;
 
 /**
- * The live state of one connected swarm worker, as seen by the host.
+ * The live state of one connected swarm hunter, as seen by the host.
  *
  * <p>Only ever mutated from the host's connection threads and read from the GUI thread; every
  * mutable field is therefore {@code volatile} so a repaint never sees a torn value. Nothing here

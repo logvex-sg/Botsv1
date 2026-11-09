@@ -16,8 +16,8 @@ import meteordevelopment.orbit.EventHandler;
 /**
  * The in-game swarm control panel.
  *
- * <p>Shows the mode, the live worker roster and lets the host broadcast a command or target one
- * worker. It is a thin view over {@link SwarmModule}: every button calls a real module method, and
+ * <p>Shows the mode, the live hunter roster and lets the host broadcast a command or target one
+ * hunter. It is a thin view over {@link SwarmModule}: every button calls a real module method, and
  * nothing here re-implements the transport.
  */
 public class SwarmScreen extends HunterScreen {
@@ -50,11 +50,11 @@ public class SwarmScreen extends HunterScreen {
             module.start();
             rebuild();
         };
-        WButton workerButton = modeButtons.add(theme.button("Become worker")).expandX().widget();
-        workerButton.action = () -> {
+        WButton hunterButton = modeButtons.add(theme.button("Become hunter")).expandX().widget();
+        hunterButton.action = () -> {
             SwarmModule module = module();
             if (module == null) return;
-            module.setMode(SwarmModule.Mode.WORKER);
+            module.setMode(SwarmModule.Mode.HUNTER);
             if (!module.isActive()) module.enable();
             module.start();
             rebuild();
@@ -68,11 +68,11 @@ public class SwarmScreen extends HunterScreen {
         };
 
         add(theme.horizontalSeparator()).expandX();
-        add(theme.label("Workers", true)).expandX();
+        add(theme.label("Hunters", true)).expandX();
         rosterTable = add(theme.table()).expandX().widget();
 
         add(theme.horizontalSeparator()).expandX();
-        add(theme.label("Broadcast a command to every worker", true)).expandX();
+        add(theme.label("Broadcast a command to every hunter", true)).expandX();
         var row = add(theme.horizontalList()).expandX().widget();
         commandBox = row.add(theme.textBox("", "e.g. status, target list, hud list")).expandX().widget();
         WButton send = row.add(theme.button("Broadcast")).widget();
@@ -108,7 +108,7 @@ public class SwarmScreen extends HunterScreen {
         }
 
         boolean host = module.mode() == SwarmModule.Mode.HOST;
-        modeLabel.set("Mode: " + (host ? "Host" : "Worker") + "    Active: " + (module.isActive() ? "yes" : "no"));
+        modeLabel.set("Mode: " + (host ? "Host" : "Hunter") + "    Active: " + (module.isActive() ? "yes" : "no"));
 
         if (host) {
             stateLabel.set(module.isHosting()
@@ -116,8 +116,8 @@ public class SwarmScreen extends HunterScreen {
                 : "Host is not running.");
             stateLabel.color = module.isHosting() ? Color.GREEN : Color.GRAY;
         } else {
-            stateLabel.set("Worker: " + module.workerStatus());
-            stateLabel.color = module.isWorkerConnected() ? Color.GREEN : Color.YELLOW;
+            stateLabel.set("Hunter: " + module.hunterStatus());
+            stateLabel.color = module.isHunterConnected() ? Color.GREEN : Color.YELLOW;
         }
 
         rebuildRoster(module, host);
@@ -125,22 +125,22 @@ public class SwarmScreen extends HunterScreen {
 
     private void rebuildRoster(SwarmModule module, boolean host) {
         if (rosterTable == null) return;
-        String signature = host ? rosterSignature(module) : "worker";
+        String signature = host ? rosterSignature(module) : "hunter";
         if (signature.equals(lastRosterSignature)) return;
         lastRosterSignature = signature;
         rosterTable.clear();
         if (!host) {
-            rosterTable.add(theme.label("This client is a worker; the host drives it.")).expandCellX();
+            rosterTable.add(theme.label("This client is a hunter; the host drives it.")).expandCellX();
             rosterTable.row();
             return;
         }
         if (module.roster().isEmpty()) {
-            rosterTable.add(theme.label("No workers connected yet.")).expandCellX();
+            rosterTable.add(theme.label("No hunters connected yet.")).expandCellX();
             rosterTable.row();
             return;
         }
 
-        rosterTable.add(theme.label("Worker")).expandCellX();
+        rosterTable.add(theme.label("Hunter")).expandCellX();
         rosterTable.add(theme.label("Address")).expandCellX();
         rosterTable.add(theme.label("Status")).expandCellX();
         rosterTable.add(theme.label("Latency")).expandCellX();

@@ -18,10 +18,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
- * The host side of the swarm: accepts worker connections, authenticates them and dispatches
+ * The host side of the swarm: accepts hunter connections, authenticates them and dispatches
  * commands to the roster.
  *
- * <p>The accept loop runs on one daemon thread and each worker's I/O on the link's own threads, so
+ * <p>The accept loop runs on one daemon thread and each hunter's I/O on the link's own threads, so
  * the game thread never blocks. Every incoming message is forwarded to a callback that the owning
  * module marshals onto the client thread before it touches game state.
  */
@@ -36,7 +36,7 @@ public final class SwarmHostServer {
 
     private ServerSocket server;
     private Thread acceptThread;
-    private int workerCounter;
+    private int hunterCounter;
 
     public SwarmHostServer(int port, String token, boolean allowRemote, SwarmRoster roster,
                            java.util.function.BiConsumer<String, SwarmMessage> onMessage,
@@ -114,15 +114,15 @@ public final class SwarmHostServer {
             String rejection = SwarmHandshake.check(hello, token);
             if (rejection != null) {
                 writeLine(out, SwarmHandshake.reject(rejection).encode());
-                log("rejected a worker from " + socket.getInetAddress().getHostAddress() + ": " + rejection);
+                log("rejected a hunter from " + socket.getInetAddress().getHostAddress() + ": " + rejection);
                 closeQuietly(socket);
                 return;
             }
 
             String address = socket.getInetAddress().getHostAddress() + ":" + socket.getPort();
-            String id = "w" + (++workerCounter) + "-" + Long.toString(System.currentTimeMillis(), 36);
+            String id = "w" + (++hunterCounter) + "-" + Long.toString(System.currentTimeMillis(), 36);
             String label = hello.string(SwarmProtocol.FIELD_LABEL);
-            if (label.isBlank()) label = "worker-" + workerCounter;
+            if (label.isBlank()) label = "hunter-" + hunterCounter;
 
             writeLine(out, SwarmHandshake.accept(label).encode());
 
@@ -130,7 +130,7 @@ public final class SwarmHostServer {
                 closed -> roster.unregister(id));
             roster.register(id, address, label, link, System.currentTimeMillis());
             link.start();
-            log("worker '" + label + "' connected from " + address);
+            log("hunter '" + label + "' connected from " + address);
         } catch (IOException e) {
             closeQuietly(socket);
         }

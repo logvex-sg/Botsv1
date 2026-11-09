@@ -374,27 +374,27 @@ drives the others, with no external app involved.
 
 | Setting | Meaning |
 | --- | --- |
-| `mode` | `HOST` (accept workers) or `WORKER` (obey a host). |
+| `mode` | `HOST` (drives the fleet) or `HUNTER` (fully controlled by the host). |
 | `auto-start` | Start the link when the client joins a world. |
 | `announce` | Report joins, leaves and results in chat. |
 | `allow-combat-broadcast` | Let a broadcast change combat modules on the whole fleet. Off by default. |
 | `Host → port` | Port the host listens on (default `6969`). |
-| `Host → token` | Shared secret workers must present. Empty accepts anyone on the port. |
-| `Host → allow-remote` | Accept workers from other machines. Off keeps it on loopback. |
-| `Worker → host` / `Worker → port` | Where the worker connects. |
-| `Worker → token` | The token the host expects. |
+| `Host → token` | Shared secret hunters must present. Empty accepts anyone on the port. |
+| `Host → allow-remote` | Accept hunters from other machines. Off keeps it on loopback. |
+| `Hunter → host` / `Hunter → port` | Where the hunter connects. |
+| `Hunter → token` | The token the host expects. |
 
 Quick start:
 
 1. Host: dashboard → **Swarm** → **Become host** (or `.swarm host`).
-2. Workers: `.swarm join <host-ip> <port>` (or the Swarm screen → **Become worker**).
+2. Hunters: `.swarm join <host-ip> <port>` (or the Swarm screen → **Become hunter**).
 3. Host: `.swarm connections` to see who joined; type a command and press **Broadcast**, or use
-   `.swarm send <worker> <command>` for one worker.
+   `.swarm send <hunter> <command>` for one hunter.
 
-A worker applies exactly the command the host sends, through the same control layer as the local
-player, so `.swarm send 1 target add Griefer01` adds a target on worker 1. Only read-only, cosmetic
+A hunter applies exactly the command the host sends, through the same control layer as the local
+player, so `.swarm send 1 target add Griefer01` adds a target on hunter 1. Only read-only, cosmetic
 and non-combat tuning commands may be broadcast; lifecycle and combat changes must be sent to one
-worker at a time, or the host must opt in to `allow-combat-broadcast`. A single-worker send that
+hunter at a time, or the host must opt in to `allow-combat-broadcast`. A single-hunter send that
 would arm combat only warns. `emergency-stop` always broadcasts, and the host sends it to the fleet
 on its own emergency stop.
 
@@ -623,14 +623,14 @@ matching file under `config/logvex-hunter/` to start from it.
 .hunter companion [status|start|stop|token|regenerate|port <n>]
 .hunter save
 
-.swarm                        # swarm status (mode, port, workers)
+.swarm                        # swarm status (mode, port, hunters)
 .swarm host                   # this client becomes the swarm host
-.swarm join <ip> <port>       # this client becomes a worker of that host
+.swarm join <ip> <port>       # this client becomes a hunter of that host
 .swarm stop                   # stop the swarm link
-.swarm connections            # list connected workers
-.swarm send <worker> <command>  # run a hunter command on one worker
-.swarm broadcast <command>    # run a read-only command on every worker
-.swarm kick <worker>          # disconnect a worker
+.swarm connections            # list connected hunters
+.swarm send <hunter> <command>  # run a hunter command on one hunter
+.swarm broadcast <command>    # run a read-only command on every hunter
+.swarm kick <hunter>          # disconnect a hunter
 .swarm token <token>          # set the shared swarm token
 .swarm port <port>            # set the swarm port
 .swarm gui                    # open the Swarm screen
@@ -711,7 +711,7 @@ All modules live under the **Logvex Hunter** Meteor category.
 | `defensive-stasis` | Monitors defensive readiness and danger thresholds. |
 | `notifications` | Sends configurable chat messages for hunter events. |
 | `instance-manager` | Polls and controls other registered client instances. |
-| `swarm` | Host/worker control of other clients, in game. |
+| `swarm` | Host/Hunter control of other clients, in game (one mod, no server). |
 | `companion` | Serves the local HTTP endpoint for the Fleet Manager. |
 | `hunter-statistics` | Tracks session statistics and exports reports. |
 
@@ -731,8 +731,8 @@ status. Enable the ones you want from Meteor's HUD editor.
 | Targets are ignored unexpectedly | Check `protect-friends`, `protect-ignored`, `ignore-naked`, `require-weapon`, `only-tracked` and the `ignore`/`friend` lists. |
 | Chat warnings spam | Raise the relevant cooldown, or disable the specific event in the Messages screen. |
 | A config file looks broken | It is reset to defaults and moved to `backups/`; the reason is printed in chat on next launch. |
-| Workers cannot join the host | The host and worker tokens differ, the port differs, or `allow-remote` is off and the worker is on another machine. Set the same token on both and enable `allow-remote` on the host. |
-| A broadcast is refused | Only read-only commands broadcast by default. Send it to one worker with `.swarm send`, or enable `allow-combat-broadcast` on the host. |
+| Hunters cannot join the host | The host and hunter tokens differ, the port differs, or `allow-remote` is off and the hunter is on another machine. Set the same token on both and enable `allow-remote` on the host. |
+| A broadcast is refused | Only read-only commands broadcast by default. Send it to one hunter with `.swarm send`, or enable `allow-combat-broadcast` on the host. |
 | Stats export is missing | Run `.hstats export`; files are written to `config/logvex-hunter/exports/`. |
 | `./gradlew` says JAVA_HOME is invalid | You exported the literal placeholder. Point `JAVA_HOME` at a real JDK 21+ directory, e.g. `export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(which javac)")")")"`, or install one. |
 | `./gradlew` says a dependency needs JVM 25 / "requires at least JVM runtime version 25" | You are building with a JDK older than 25. Fabric Loom 1.18 needs a Java 25 runtime; install a JDK 25 and point `JAVA_HOME` at it. The mod still runs on Java 21. |

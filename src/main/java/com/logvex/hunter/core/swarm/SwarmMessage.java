@@ -9,7 +9,7 @@ import java.util.Map;
  *
  * <p>A message is a thin wrapper over a JSON object so the encoding and decoding stay in one place.
  * Encoding never emits a newline (the transport frames on lines), and decoding rejects anything that
- * is not a JSON object so a stray byte from a socket cannot crash a worker.
+ * is not a JSON object so a stray byte from a socket cannot crash a hunter.
  */
 public final class SwarmMessage {
     private final Map<String, Object> data;

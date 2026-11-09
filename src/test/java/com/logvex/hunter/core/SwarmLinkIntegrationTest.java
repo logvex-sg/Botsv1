@@ -4,7 +4,7 @@ import com.logvex.hunter.core.swarm.SwarmMessage;
 import com.logvex.hunter.core.swarm.SwarmProtocol;
 import com.logvex.hunter.core.swarm.SwarmRoster;
 import com.logvex.hunter.modules.swarm.SwarmHostServer;
-import com.logvex.hunter.modules.swarm.SwarmWorkerClient;
+import com.logvex.hunter.modules.swarm.SwarmHunterClient;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -17,11 +17,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Exercises the real host and worker over a loopback socket.
+ * Exercises the real host and hunter over a loopback socket.
  *
  * <p>This is the one test that proves the transport actually works, not just the pure logic: it
- * binds a host, connects a worker, verifies the token handshake, sends a command and checks that a
- * result comes back. It uses the production {@code SwarmHostServer}/{@code SwarmWorkerClient}
+ * binds a host, connects a hunter, verifies the token handshake, sends a command and checks that a
+ * result comes back. It uses the production {@code SwarmHostServer}/{@code SwarmHunterClient}
  * classes, so a regression in the socket code fails here.
  */
 class SwarmLinkIntegrationTest {
@@ -46,10 +46,10 @@ class SwarmLinkIntegrationTest {
         return -1;
     }
 
-    private static String pollFor(SwarmWorkerClient worker, long timeoutMillis) {
+    private static String pollFor(SwarmHunterClient hunter, long timeoutMillis) {
         long deadline = System.currentTimeMillis() + timeoutMillis;
         while (System.currentTimeMillis() < deadline) {
-            String command = worker.pollCommand();
+            String command = hunter.pollCommand();
             if (command != null) return command;
             try {
                 Thread.sleep(20);
@@ -62,7 +62,7 @@ class SwarmLinkIntegrationTest {
     }
 
     @Test
-    void workerConnectsSendsStatusReceivesCommandAndReplies() throws IOException {
+    void hunterConnectsSendsStatusReceivesCommandAndReplies() throws IOException {
         int port = freePort();
         SwarmRoster roster = new SwarmRoster();
         ConcurrentLinkedQueue<String[]> hostMessages = new ConcurrentLinkedQueue<>();
@@ -74,70 +74,70 @@ class SwarmLinkIntegrationTest {
             message -> { });
         host.start();
 
-        SwarmWorkerClient worker = new SwarmWorkerClient("127.0.0.1", port, "s3cret", "test-worker",
+        SwarmHunterClient hunter = new SwarmHunterClient("127.0.0.1", port, "s3cret", "test-hunter",
             (state, up) -> { });
-        worker.start();
+        hunter.start();
 
-        assertTrue(waitFor(() -> worker.connected(), 3000) > 0, "the worker should connect");
-        assertTrue(waitFor(() -> roster.size() == 1, 3000) > 0, "the host should register the worker");
+        assertTrue(waitFor(() -> hunter.connected(), 3000) > 0, "the hunter should connect");
+        assertTrue(waitFor(() -> roster.size() == 1, 3000) > 0, "the host should register the hunter");
 
-        // The worker reports its status; the host records it on the peer.
-        worker.sendStatus("running", "test server");
+        // The hunter reports its status; the host records it on the peer.
+        hunter.sendStatus("running", "test server");
         assertTrue(waitFor(() -> !hostMessages.isEmpty(), 3000) > 0, "the host should receive a status");
 
-        // The host sends a command; the worker queues it.
+        // The host sends a command; the hunter queues it.
         String sendError = roster.send(roster.peers().get(0).id(),
             SwarmMessage.of(SwarmProtocol.COMMAND).with(SwarmProtocol.FIELD_LINE, "status"));
         assertEquals(null, sendError);
-        assertEquals("status", pollFor(worker, 3000), "the worker should receive the command");
+        assertEquals("status", pollFor(hunter, 3000), "the hunter should receive the command");
 
-        // The worker replies with a result; the host records it.
-        worker.sendResult("status", true, "State: running");
+        // The hunter replies with a result; the host records it.
+        hunter.sendResult("status", true, "State: running");
         assertTrue(waitFor(() -> hostMessages.stream().anyMatch(m -> SwarmProtocol.RESULT.equals(m[1])), 3000) > 0,
             "the host should receive the result");
 
-        worker.disconnect();
+        hunter.disconnect();
         host.stop();
     }
 
     @Test
-    void aWorkerWithTheWrongTokenIsRejected() throws IOException {
+    void aHunterWithTheWrongTokenIsRejected() throws IOException {
         int port = freePort();
         SwarmRoster roster = new SwarmRoster();
         SwarmHostServer host = new SwarmHostServer(port, "right-token", false, roster,
             (id, message) -> { }, message -> { });
         host.start();
 
-        SwarmWorkerClient worker = new SwarmWorkerClient("127.0.0.1", port, "wrong-token", "intruder",
+        SwarmHunterClient hunter = new SwarmHunterClient("127.0.0.1", port, "wrong-token", "intruder",
             (state, up) -> { });
-        worker.start();
+        hunter.start();
 
-        assertTrue(waitFor(() -> !worker.lastError().isBlank(), 3000) > 0, "the worker should be told why");
-        assertEquals("bad token", worker.lastError());
-        assertFalse(worker.connected());
-        assertTrue(waitFor(() -> roster.size() == 0, 1000) > 0, "a rejected worker must not join the roster");
+        assertTrue(waitFor(() -> !hunter.lastError().isBlank(), 3000) > 0, "the hunter should be told why");
+        assertEquals("bad token", hunter.lastError());
+        assertFalse(hunter.connected());
+        assertTrue(waitFor(() -> roster.size() == 0, 1000) > 0, "a rejected hunter must not join the roster");
 
-        worker.disconnect();
+        hunter.disconnect();
         host.stop();
     }
 
     @Test
-    void aStatusLineFromTheHostReachesTheWorkerAsACommand() throws IOException {
+    void aStatusLineFromTheHostReachesTheHunterAsACommand() throws IOException {
         int port = freePort();
         SwarmRoster roster = new SwarmRoster();
         SwarmHostServer host = new SwarmHostServer(port, "", false, roster,
             (id, message) -> { }, message -> { });
         host.start();
 
-        SwarmWorkerClient worker = new SwarmWorkerClient("127.0.0.1", port, "", "worker-2",
+        SwarmHunterClient hunter = new SwarmHunterClient("127.0.0.1", port, "", "hunter-2",
             (state, up) -> { });
-        worker.start();
-        assertTrue(waitFor(() -> worker.connected() && roster.size() == 1, 3000) > 0);
+        hunter.start();
+        assertTrue(waitFor(() -> hunter.connected() && roster.size() == 1, 3000) > 0);
 
         roster.broadcast(SwarmMessage.of(SwarmProtocol.COMMAND).with(SwarmProtocol.FIELD_LINE, "hud list"));
-        assertEquals("hud list", pollFor(worker, 3000));
+        assertEquals("hud list", pollFor(hunter, 3000));
 
-        worker.disconnect();
+        hunter.disconnect();
         host.stop();
     }
 }

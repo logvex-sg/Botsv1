@@ -16,14 +16,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
 /**
- * The worker side of the swarm link.
+ * The hunter side of the swarm link.
  *
  * <p>Connects to a host, performs the token handshake, then receives {@code command} lines. Commands
  * are never executed on the socket thread: they are queued and drained on the client tick by the
  * owning module, which keeps every game-state change on the client thread. Status and results are
  * sent back over the same socket.
  */
-public final class SwarmWorkerClient {
+public final class SwarmHunterClient {
     private final String host;
     private final int port;
     private final String token;
@@ -39,7 +39,7 @@ public final class SwarmWorkerClient {
     private volatile long lastLatencyMillis = -1;
     private Thread thread;
 
-    public SwarmWorkerClient(String host, int port, String token, String label,
+    public SwarmHunterClient(String host, int port, String token, String label,
                              BiConsumer<String, Boolean> onStateChange) {
         this.host = host;
         this.port = port;
@@ -49,7 +49,7 @@ public final class SwarmWorkerClient {
     }
 
     public void start() {
-        thread = new Thread(this::run, "logvex-swarm-worker");
+        thread = new Thread(this::run, "logvex-swarm-hunter");
         thread.setDaemon(true);
         thread.start();
     }

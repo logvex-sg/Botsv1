@@ -47,19 +47,19 @@ public final class HunterConfig {
     // Swarm (in-game multi-client control, Meteor-Swarm style) -----------------
     /** Port the swarm host listens on when it is started. */
     private int swarmHostPort = 6969;
-    /** Shared token workers must present. Empty accepts anyone on the port. */
+    /** Shared token hunters must present. Empty accepts anyone on the port. */
     private String swarmHostToken = "";
     /** Whether the swarm host accepts connections from other machines. */
     private boolean swarmHostAllowRemote;
-    /** Host address the worker connects to. */
-    private String swarmWorkerHost = "127.0.0.1";
-    /** Port the worker connects to. */
-    private int swarmWorkerPort = 6969;
+    /** Host address the hunter connects to. */
+    private String swarmHunterHost = "127.0.0.1";
+    /** Port the hunter connects to. */
+    private int swarmHunterPort = 6969;
     /** Whether a broadcast may change combat modules on the whole fleet. */
     private boolean swarmAllowCombatBroadcast;
     /** Whether the swarm link is restored when the client joins a world. */
     private boolean swarmAutoConnect = true;
-    /** Whether this client is the host (true) or a worker (false) by default. */
+    /** Whether this client is the host (true) or a hunter (false) by default. */
     private boolean swarmHostMode = true;
 
     public HunterConfig() {
@@ -243,21 +243,21 @@ public final class HunterConfig {
         this.swarmHostAllowRemote = swarmHostAllowRemote;
     }
 
-    public String swarmWorkerHost() {
-        return swarmWorkerHost;
+    public String swarmHunterHost() {
+        return swarmHunterHost;
     }
 
-    public void setSwarmWorkerHost(String swarmWorkerHost) {
-        this.swarmWorkerHost = swarmWorkerHost == null || swarmWorkerHost.isBlank()
-            ? "127.0.0.1" : swarmWorkerHost.trim();
+    public void setSwarmHunterHost(String swarmHunterHost) {
+        this.swarmHunterHost = swarmHunterHost == null || swarmHunterHost.isBlank()
+            ? "127.0.0.1" : swarmHunterHost.trim();
     }
 
-    public int swarmWorkerPort() {
-        return swarmWorkerPort;
+    public int swarmHunterPort() {
+        return swarmHunterPort;
     }
 
-    public void setSwarmWorkerPort(int swarmWorkerPort) {
-        this.swarmWorkerPort = Math.max(1, Math.min(65535, swarmWorkerPort));
+    public void setSwarmHunterPort(int swarmHunterPort) {
+        this.swarmHunterPort = Math.max(1, Math.min(65535, swarmHunterPort));
     }
 
     public boolean swarmAllowCombatBroadcast() {
@@ -306,8 +306,8 @@ public final class HunterConfig {
         root.put("swarmHostPort", swarmHostPort);
         root.put("swarmHostToken", swarmHostToken);
         root.put("swarmHostAllowRemote", swarmHostAllowRemote);
-        root.put("swarmWorkerHost", swarmWorkerHost);
-        root.put("swarmWorkerPort", swarmWorkerPort);
+        root.put("swarmHunterHost", swarmHunterHost);
+        root.put("swarmHunterPort", swarmHunterPort);
         root.put("swarmAllowCombatBroadcast", swarmAllowCombatBroadcast);
         root.put("swarmAutoConnect", swarmAutoConnect);
         root.put("swarmHostMode", swarmHostMode);
@@ -338,8 +338,11 @@ public final class HunterConfig {
         config.setSwarmHostPort(Json.getInt(root, "swarmHostPort", 6969));
         config.swarmHostToken = Json.getString(root, "swarmHostToken", "");
         config.swarmHostAllowRemote = Json.getBoolean(root, "swarmHostAllowRemote", false);
-        config.setSwarmWorkerHost(Json.getString(root, "swarmWorkerHost", "127.0.0.1"));
-        config.setSwarmWorkerPort(Json.getInt(root, "swarmWorkerPort", 6969));
+        // `swarmWorker*` is the pre-rename spelling; read it so an existing config keeps its host.
+        config.setSwarmHunterHost(Json.getString(root, "swarmHunterHost",
+            Json.getString(root, "swarmWorkerHost", "127.0.0.1")));
+        config.setSwarmHunterPort(Json.getInt(root, "swarmHunterPort",
+            Json.getInt(root, "swarmWorkerPort", 6969)));
         config.swarmAllowCombatBroadcast = Json.getBoolean(root, "swarmAllowCombatBroadcast", false);
         config.swarmAutoConnect = Json.getBoolean(root, "swarmAutoConnect", true);
         config.swarmHostMode = Json.getBoolean(root, "swarmHostMode", true);

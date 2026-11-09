@@ -7,9 +7,9 @@ package com.logvex.hunter.core.swarm;
  * directions. It is deliberately trivial to speak, so the same classes are unit-testable without a
  * socket and a hand-written client can be debugged with {@code nc}.
  *
- * <p>Handshake: the worker connects and sends {@code hello} carrying the shared token. The host
+ * <p>Handshake: the hunter connects and sends {@code hello} carrying the shared token. The host
  * answers {@code hello-ack}; a rejected handshake is followed by a disconnect. After that the host
- * sends {@code command} lines and the worker answers {@code result}, while either side may send
+ * sends {@code command} lines and the hunter answers {@code result}, while either side may send
  * {@code ping}/{@code pong} and {@code status}.
  */
 public final class SwarmProtocol {

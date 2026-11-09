@@ -57,16 +57,16 @@ class SwarmProtocolTest {
 
     @Test
     void handshakeAcceptsAMatchingHello() {
-        SwarmMessage hello = SwarmHandshake.hello("s3cret", "worker-1");
+        SwarmMessage hello = SwarmHandshake.hello("s3cret", "hunter-1");
         assertNull(SwarmHandshake.check(hello, "s3cret"));
 
-        SwarmMessage ack = SwarmHandshake.accept("worker-1");
+        SwarmMessage ack = SwarmHandshake.accept("hunter-1");
         assertTrue(SwarmHandshake.accepted(ack));
     }
 
     @Test
     void handshakeRejectsABadToken() {
-        SwarmMessage hello = SwarmHandshake.hello("wrong", "worker-1");
+        SwarmMessage hello = SwarmHandshake.hello("wrong", "hunter-1");
         assertEquals("bad token", SwarmHandshake.check(hello, "s3cret"));
 
         SwarmMessage rejected = SwarmHandshake.reject("bad token");
@@ -87,7 +87,7 @@ class SwarmProtocolTest {
     }
 
     @Test
-    void anEmptyTokenAcceptsAnyWorker() {
+    void anEmptyTokenAcceptsAnyHunter() {
         SwarmMessage hello = SwarmHandshake.hello("anything", "w");
         assertNull(SwarmHandshake.check(hello, ""));
     }
