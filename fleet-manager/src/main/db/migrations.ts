@@ -209,4 +209,93 @@ export const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: '0003_workers',
+    up: (db) => {
+      db.exec(`
+        -- A worker is a Minecraft client running the logvex-worker mod. The live connection lives
+        -- in memory; this row is the durable record so the host remembers a worker across restarts
+        -- (its id, last known state and group).
+        CREATE TABLE IF NOT EXISTS workers (
+          id TEXT PRIMARY KEY,
+          label TEXT NOT NULL DEFAULT '',
+          username TEXT NOT NULL DEFAULT '',
+          minecraft_version TEXT NOT NULL DEFAULT '',
+          server_address TEXT NOT NULL DEFAULT '',
+          protocol_version INTEGER NOT NULL DEFAULT 0,
+          mod_version TEXT NOT NULL DEFAULT '',
+          group_id TEXT REFERENCES worker_groups(id) ON DELETE SET NULL,
+          notes TEXT NOT NULL DEFAULT '',
+          first_seen INTEGER NOT NULL,
+          last_seen INTEGER NOT NULL,
+          last_address TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'OFFLINE',
+          snapshot TEXT NOT NULL DEFAULT '{}'
+        );
+
+        -- Worker groups are separate from bot groups: a bot group labels an account the host
+        -- launches, a worker group labels a client that connected to the host.
+        CREATE TABLE IF NOT EXISTS worker_groups (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT NOT NULL DEFAULT '',
+          color TEXT NOT NULL DEFAULT '#6d5efc',
+          created_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS worker_tasks (
+          id TEXT PRIMARY KEY,
+          worker_id TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          params TEXT NOT NULL DEFAULT '{}',
+          result TEXT,
+          error TEXT,
+          created_at INTEGER NOT NULL,
+          dispatched_at INTEGER,
+          completed_at INTEGER,
+          duration_ms INTEGER,
+          actor TEXT NOT NULL DEFAULT 'host'
+        );
+        CREATE INDEX IF NOT EXISTS idx_worker_tasks_worker ON worker_tasks(worker_id, created_at DESC);
+
+        -- Every command or chat line a worker was asked to send, so an operator can audit exactly
+        -- what the fleet did and when.
+        CREATE TABLE IF NOT EXISTS worker_commands (
+          id TEXT PRIMARY KEY,
+          worker_id TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          line TEXT NOT NULL,
+          ok INTEGER NOT NULL DEFAULT 0,
+          response TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_worker_commands_worker ON worker_commands(worker_id, created_at DESC);
+
+        -- A named equipment loadout the host can assign to a worker or a group.
+        CREATE TABLE IF NOT EXISTS regear_presets (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT NOT NULL DEFAULT '',
+          items TEXT NOT NULL DEFAULT '[]',
+          min_armor_pieces INTEGER NOT NULL DEFAULT 0,
+          min_food INTEGER NOT NULL DEFAULT 0,
+          low_durability_percent INTEGER NOT NULL DEFAULT 10,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- The latest inventory a worker reported, kept so the host can count items and diff
+        -- inventories without asking again. Clearly a *reported* snapshot, never a live view.
+        CREATE TABLE IF NOT EXISTS worker_inventory (
+          worker_id TEXT PRIMARY KEY,
+          captured_at INTEGER NOT NULL,
+          carried TEXT NOT NULL DEFAULT '[]',
+          accessible TEXT NOT NULL DEFAULT '[]',
+          armor TEXT NOT NULL DEFAULT '[]',
+          container_open INTEGER NOT NULL DEFAULT 0
+        );
+      `);
+    },
+  },
 ];

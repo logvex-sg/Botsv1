@@ -14,3 +14,8 @@ plugins {
 }
 
 rootProject.name = "logvex-hunter"
+
+// The Meteor addon (Hunter) is the root project. The standalone worker mod is a subproject so the
+// two ship as separate jars with separate metadata.
+include("worker-mod")
+

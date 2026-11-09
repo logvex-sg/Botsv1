@@ -5,11 +5,14 @@ Two cooperating products live in this repository:
 | Product | What it is | Where |
 | --- | --- | --- |
 | **LogVex Hunter** | A Meteor Client addon for Minecraft 1.21.11 (Fabric). Target tracking, combat coordination, equipment and stasis monitoring, statistics, and a local companion API. | repository root (`src/main/java/com/logvex/hunter`) |
-| **Logvex Fleet Manager** | An Electron + React + TypeScript desktop app that manages many Minecraft bot instances, and reads/controls one or more LogVex Hunter clients over the companion API. | `fleet-manager/` |
+| **Logvex Fleet Manager** | An Electron + React + TypeScript desktop app that manages many Minecraft bot instances, reads/controls one or more LogVex Hunter clients over the companion API, and drives a fleet of **Logvex Worker** clients over a WebSocket. | `fleet-manager/` |
+| **Logvex Worker** | A small Fabric client mod for Minecraft 1.21.11 that connects a client to the Fleet Manager and answers a closed set of named tasks (status, inventory, count, search, equipment, regear, command, chat, position). | `worker-mod/` |
 
-The two halves are designed to work together: the Hunter addon serves an authenticated local
-HTTP endpoint, and the Fleet Manager connects to it. See
-[Companion API](#companion-api-the-hunter--fleet-manager-bridge) below.
+The three parts are designed to work together. The Hunter addon serves an authenticated local HTTP
+endpoint that the Fleet Manager reads and controls (the *inbound* direction); the Worker mod
+connects out to the Fleet Manager's own WebSocket server and answers tasks (the *outbound*
+direction). See [Companion API](#companion-api-the-hunter--fleet-manager-bridge) and the
+[Worker fleet](#worker-fleet-the-fleet-manager--worker-mod-bridge) below.
 
 > **Scope note.** The Hunter addon is a *monitoring and coordination* tool. It observes players,
 > records statistics, and coordinates Meteor's own combat modules around a manually or
@@ -252,6 +255,34 @@ The end-to-end walkthrough for both halves is in [`USAGE.md`](USAGE.md).
 
 ---
 
+## Worker fleet (the Fleet Manager ↔ Worker mod bridge)
+
+The **Logvex Worker** mod (`worker-mod/`) is a Fabric client mod that connects *out* to the Fleet
+Manager's own WebSocket server. It is the outbound direction of the ecosystem: Hunter lets the app
+read a client over an inbound HTTP endpoint, while the worker mod lets the app ask a client to do a
+bounded, named task. The Fleet Manager's **Fleet** section (dashboard, workers, groups, tasks,
+inventory, commands, regear) is the UI for it.
+
+The protocol is a closed set of message types and task kinds declared in
+`worker-mod/src/main/java/com/logvex/worker/core/Protocol.java` and mirrored in
+`fleet-manager/src/shared/workers.ts`. The host never sends code, a class name or a shell command,
+so a compromised host cannot turn a worker into remote code execution. A protocol-version mismatch
+is refused at the handshake. Commands are additionally checked against an allow-list by the worker
+itself.
+
+| Direction | Types |
+| --- | --- |
+| worker → host | `hello`, `register`, `status`, `inventory`, `equipment`, `result`, `progress`, `pong`, `error`, `log` |
+| host → worker | `hello-ack`, `command`, `task`, `ping`, `kick` |
+| task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position` |
+
+The worker authenticates with a shared token from **Settings → Worker server** in the Fleet Manager
+and connects to the default address `127.0.0.1:8721`. See
+[`worker-mod/README.md`](worker-mod/README.md) and the
+[Fleet section of the Fleet Manager README](fleet-manager/README.md#fleet-worker-management).
+
+---
+
 ## Repository layout
 
 ```
@@ -266,7 +297,12 @@ The end-to-end walkthrough for both halves is in [`USAGE.md`](USAGE.md).
 │   ├── hud/             HUD elements
 │   └── companion/       game-layer companion API + command handling
 ├── src/test/java/com/logvex/hunter/                 # addon unit tests
+├── worker-mod/                                      # the standalone worker Fabric mod
+│   ├── src/main/java/com/logvex/worker/core/        # Minecraft-free protocol + task logic
+│   ├── src/main/java/com/logvex/worker/mc/          # game bridge (inventory, containers, commands)
+│   └── src/test/java/com/logvex/worker/             # worker unit tests
 └── fleet-manager/                                   # the Electron desktop application
+    └── src/main/workers/                            # worker WebSocket server + WorkerService
 ```
 
 ## Testing
@@ -283,8 +319,11 @@ npm test
 ```
 
 The addon's Minecraft-free core is covered by JUnit tests (targets, statistics, messages, stasis,
-configuration, the companion router and a real-socket companion server test). The Fleet Manager has
-unit and integration tests run with Vitest.
+configuration, the companion router and a real-socket companion server test). The worker mod's
+Minecraft-free core (envelope, command validator, item query, inventory summary, equipment report
+and `WorkerLink` against a real loopback WebSocket server) is covered the same way. The Fleet
+Manager has unit and integration tests run with Vitest, including host-side worker tests that drive
+a real worker-shaped WebSocket client against the real server.
 
 ## License
 

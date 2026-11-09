@@ -1,12 +1,31 @@
 # Changelog
 
-All notable changes to **LogVex Hunter** (the Meteor Client addon) are documented here.
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
+All notable changes to the products in this repository are documented here: **LogVex Hunter** (the
+Meteor Client addon) and **Logvex Worker** (the standalone Fabric worker mod). The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Added
+- **Logvex Worker mod (`worker-mod/`): a Fabric client that answers the Fleet Manager's fleet
+  tasks.** A new subproject, built as its own jar, so the Hunter addon and the worker can be
+  installed independently.
+  - A closed protocol (`com.logvex.worker.core.Protocol`): a newline-framed JSON envelope
+    (`Envelope`) with a version that is checked at the handshake, a fixed set of message types and a
+    fixed set of task kinds. The host never sends code, a class name or a shell command.
+  - Transport: `WebSocketClient` + `WorkerLink` connect out to the host, authenticate with a shared
+    token, heartbeat a status snapshot and reconnect on their own; sockets run on daemon threads so
+    the game thread never blocks.
+  - Task handling: `TaskDispatcher`/`MinecraftTaskDispatcher` answer `status`, `inventory`, `count`,
+    `search`, `equipment`, `regear`, `command`, `chat` and `position` against the live client.
+  - `CommandValidator` allow-lists the verbs a remote host may run and rejects control characters,
+    so a chat line can never smuggle a second line.
+  - Config (`config/logvex-worker.json`) with usable defaults; the default host is
+    `127.0.0.1:8721`, matching the Fleet Manager's worker server.
+  - Unit tests for the Minecraft-free core (`Envelope`, `CommandValidator`, `ItemQuery`,
+    `InventorySummary`, `EquipmentReport`, and `WorkerLink` against a real loopback WebSocket
+    server).
 - **In-game swarm: control many LogVex Hunter clients from one host, in the game.** A new `swarm`
   module makes one client the host and the rest workers, in the spirit of Meteor's own Swarm, with
   no external app involved.

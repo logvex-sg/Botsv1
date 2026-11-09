@@ -47,6 +47,8 @@ Navigation is deliberately small — seven sections, each with a clear job:
 - **Activity** — the event feed, notification inbox, statistics and live per-bot logs.
 - **Settings** — grouped, plain-language options with tooltips, an optional Advanced section and a
   **Restore defaults** button.
+- **Fleet** — the worker fleet: a live dashboard, the worker roster, groups, tasks, inventory,
+  commands and regear. See [Fleet (worker management)](#fleet-worker-management) below.
 - **Help** — a short guide, a glossary and answers to common questions.
 
 ### Cross-cutting
@@ -68,14 +70,18 @@ Navigation is deliberately small — seven sections, each with a clear job:
 
 | | |
 | --- | --- |
-| ![Dashboard](docs/screenshots/01-dashboard.png) | ![Features](docs/screenshots/02-features-hunter.png) |
-| Dashboard | Main Features |
-| ![Tasks](docs/screenshots/03-tasks.png) | ![Accounts](docs/screenshots/04-accounts.png) |
-| Tasks | Accounts & Profiles |
-| ![Activity](docs/screenshots/05-activity.png) | ![Settings](docs/screenshots/06-settings.png) |
-| Activity | Settings |
-| ![Help](docs/screenshots/07-help.png) | |
-| Help | |
+| ![Dashboard](docs/screenshots/01-dashboard.png) | ![Fleet dashboard](docs/screenshots/02-fleet-dashboard.png) |
+| Dashboard | Fleet dashboard |
+| ![Workers](docs/screenshots/03-fleet-workers.png) | ![Tasks](docs/screenshots/04-fleet-tasks.png) |
+| Workers | Fleet tasks |
+| ![Inventory](docs/screenshots/05-fleet-inventory.png) | ![Regear](docs/screenshots/06-fleet-regear.png) |
+| Inventory | Regear |
+| ![Features](docs/screenshots/07-features-hunter.png) | ![Tasks](docs/screenshots/08-tasks.png) |
+| Main Features | Tasks |
+| ![Accounts](docs/screenshots/09-accounts.png) | ![Activity](docs/screenshots/10-activity.png) |
+| Accounts & Profiles | Activity |
+| ![Settings](docs/screenshots/11-settings.png) | ![Help](docs/screenshots/12-help.png) |
+| Settings | Help |
 
 The screenshots are captured from the renderer in demo mode (`?demo`), so they render without a
 live backend. To regenerate them:
@@ -86,10 +92,10 @@ npm run screenshots                                   # in another
 ```
 
 The script (`scripts/capture-screenshots.mjs`) drives headless Chromium over the DevTools
-Protocol, visiting each page via `?demo&page=<id>` at 1600x1000. Old page ids (such as
-`?page=overview` or `?page=deployment`) are still accepted and redirect to the matching new
-section. Set `CHROME` if Chromium is not on the default path, or `BASE_URL` to point at a different
-dev server.
+Protocol, visiting each page via `?demo&page=<id>` at 1600x1000, and the Fleet sub-tabs via
+`?demo&page=fleet&fleet=<tab>`. Old page ids (such as `?page=overview` or `?page=deployment`) are
+still accepted and redirect to the matching new section. Set `CHROME` if Chromium is not on the
+default path, or `BASE_URL` to point at a different dev server.
 
 ---
 
@@ -151,7 +157,8 @@ src/
 │   ├── security/      Credential vault (keytar or encrypted-file fallback).
 │   ├── services/      Domain services: accounts, groups, instances, deployment, roles,
 │   │                  hunter client + target sync, stasis, equipment, events, diagnostics.
-│   └── mineflayer/    Worker supervisor, bot worker, collectors and role task scripts.
+│   ├── workers/       Worker fleet: WebSocket server, the protocol mirror and WorkerService.
+│   └── mineflayer/    Bot supervisor, bot worker, collectors and role task scripts.
 └── renderer/          React UI (Vite).
     ├── App.tsx        Shell: sidebar navigation, top bar, toasts.
     ├── lib/           Typed API bridge, state store, demo backend.
@@ -169,6 +176,88 @@ src/
   over WebSocket, so both see the same events.
 - **Safe credentials.** Passwords never live in the database; the vault stores them and the
   database only holds a reference.
+
+---
+
+## Fleet (worker management)
+
+The **Fleet** section manages the *Logvex Worker* mod — a small Fabric companion that runs inside a
+separate Minecraft client and connects back to the Fleet Manager over a WebSocket. It is the
+outbound direction of the same ecosystem the Hunter companion covers inbound: Hunter lets the app
+*read* a client, the worker mod lets the app *ask* a client to do a bounded, named task.
+
+The worker protocol is a closed set of message types and task kinds — the host never sends code,
+a class name or a shell command, so a compromised host cannot turn a worker into remote code
+execution. Both sides refuse to talk to a different protocol version.
+
+### What each tab does
+
+- **Dashboard** — fleet totals (online/offline/degraded), active tasks, tracked items, a per-group
+  breakdown and the recent worker events.
+- **Workers** — every client that has connected, with live state (world, coordinates, health, gear,
+  heartbeat age), a per-worker inspector, and controls: refresh status, pull inventory, ask position,
+  send a command, send chat, socket ping, kick and forget. Label, group and notes are host-side only.
+- **Groups** — named, coloured groups used for bulk actions and item counting.
+- **Tasks** — dispatch a task kind to one worker or many, with a live history (status, duration,
+  result/error).
+- **Inventory** — a worker's last *reported* inventory (with its capture time) and a fleet-wide item
+  count for a friendly query such as `totem`, `gapple` or `diamond`, scoped to a group.
+- **Commands** — send a server command or a chat line to many workers at once, with the audit log of
+  what was sent and what each worker answered.
+- **Regear** — loadout presets and a per-worker comparison between the preset and the last reported
+  inventory, plus a fleet sweep. Moves are **off** by default (a dry run that only reports).
+
+### Two ideas that are kept apart
+
+- A worker's **reported** inventory is the last snapshot it sent. It may be seconds or minutes old,
+  so every view labels it with when it was captured and flags it stale after a minute.
+- A worker's **accessible** inventory is only what is inside a container screen it currently has
+  open. The app never claims the two are the same, and it never opens a container for you.
+
+### Protocol
+
+The envelope is JSON: `{ v, type, id, payload }`. The message types mirror
+`worker-mod/src/main/java/com/logvex/worker/core/Protocol.java` and are re-declared in
+`src/shared/workers.ts`; a drift between the two fails the integration tests.
+
+| Direction | Types |
+| --- | --- |
+| worker → host | `hello`, `register`, `status`, `inventory`, `equipment`, `result`, `progress`, `pong`, `error`, `log` |
+| host → worker | `hello-ack`, `command`, `task`, `ping`, `kick` |
+| task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position` |
+
+A worker authenticates with the shared token from **Settings → Worker server**; the host assigns a
+stable id and tracks the last snapshot and online state. Task results are whatever the worker
+actually reported — a task that timed out or was refused raises, so the UI can never mistake
+"asked" for "done".
+
+### Connecting a worker
+
+In the worker client's config, set the host address and the shared token:
+
+```
+.host  <fleet-manager-host>:8721
+.token <token from Settings → Worker server>
+```
+
+The token is generated once and shown in Settings (with a reveal and a regenerate button).
+
+### HTTP API
+
+The worker endpoints are also available on the local API:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/workers` | the roster with live state |
+| GET | `/api/v1/workers/overview` | fleet totals |
+| POST | `/api/v1/workers/{id}/task` | run a task (`{ "kind": "...", "params": {} }`) |
+| POST | `/api/v1/workers/{id}/line` | send a command or chat line (`{ "kind": "command", "line": "..." }`) |
+| GET | `/api/v1/workers/{id}/inventory` | the last reported inventory |
+| GET | `/api/v1/workers/count?item=totem` | a fleet-wide item count |
+| GET | `/api/v1/workers/groups` | worker groups |
+| GET | `/api/v1/workers/tasks` | recent task history |
+| GET | `/api/v1/workers/commands` | the command audit log |
+| GET | `/api/v1/workers/presets` | regear presets |
 
 ---
 

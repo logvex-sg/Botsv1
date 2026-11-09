@@ -9,7 +9,9 @@
 import type { FleetApi, DeploymentPreview, DeploymentMonitor } from '../../shared/ipc';
 import type {
   Account, AppSettings, DeploymentConfig, DeploymentQueueItem, EquipmentProfileRecord, FleetEvent,
-  Group, HealthReport, NotificationItem, ServerProfile, StasisLocation, TargetEntry,
+  Group, HealthReport, ItemCountReport, NotificationItem, RegearComparison, RegearPreset, ServerProfile,
+  StasisLocation, TargetEntry, WorkerCommandRecord, WorkerGroup, WorkerInventorySnapshot, WorkerOverview,
+  WorkerTaskRecord, WorkerView,
 } from '../../shared/types';
 import type { AccountView } from '../../main/services/accounts/account-manager';
 import type { RuntimeInstance } from '../../main/services/instances/instance-manager';
@@ -21,6 +23,7 @@ const settings: AppSettings = {
   apiEnabled: true, apiHost: '127.0.0.1', apiPort: 8791, hunterAddonUrl: 'http://127.0.0.1:8720',
   hunterAddonToken: '', autosave: true, notify: true, maxMemoryMb: 4096, backupIntervalMinutes: 60,
   logLevel: 'info', theme: 'dark', uiMode: 'beginner',
+  workerServerEnabled: true, workerServerPort: 8721, workerServerHost: '127.0.0.1',
 };
 
 const health: HealthReport = {
@@ -105,6 +108,130 @@ const queueItems: DeploymentQueueItem[] = deployments[0].entries.map((entry, ind
   attempts: index === 3 ? 3 : 0, error: index === 3 ? 'connection timed out after 15000ms' : null,
   startedAt: now - 100_000 + index * 1000, finishedAt: index < 3 ? now - 60_000 : null,
 }));
+
+const workerGroups: WorkerGroup[] = [
+  { id: 'wg-1', name: 'miners', description: 'Branch mining crew', color: '#22c55e', createdAt: now - 900_000 },
+  { id: 'wg-2', name: 'guards', description: 'Base defence', color: '#ef4444', createdAt: now - 800_000 },
+];
+
+const workerSnapshot = (id: string, over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  workerId: id, label: '', username: 'bot', minecraftVersion: '1.21.11', serverAddress: '6b6t.org',
+  dimension: 'minecraft:overworld', gameMode: 'survival', inWorld: true, x: 128, y: 64, z: -512,
+  health: 20, maxHealth: 20, food: 20, saturation: 5, armorPieces: 4, totems: 3, foodItems: 24,
+  heldItem: 'Netherite Sword', offhandItem: 'Shield', currentTask: '', lastActivity: '', lastActivityAt: 0,
+  lastError: '', totalItems: 412, distinctItems: 18, freeSlots: 12,
+  capabilities: ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position'],
+  ...over,
+});
+
+const workers: WorkerView[] = [
+  {
+    id: 'w-1', label: 'miner-1', username: 'Digger', minecraftVersion: '1.21.11', serverAddress: '6b6t.org',
+    protocolVersion: 1, modVersion: '1.0.0', groupId: 'wg-1', notes: 'main branch miner',
+    firstSeen: now - 3_600_000, lastSeen: now - 2_000, lastAddress: '10.0.0.21', status: 'ONLINE',
+    online: true, lastHeartbeatAgeSeconds: 2, connectedAt: now - 1_200_000,
+    snapshot: workerSnapshot('w-1', { username: 'Digger', health: 18, totems: 4, x: 128, z: -512 }) as never,
+    currentTask: '',
+    capabilities: ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position'],
+  },
+  {
+    id: 'w-2', label: 'guard-1', username: 'Sentinel', minecraftVersion: '1.21.11', serverAddress: '6b6t.org',
+    protocolVersion: 1, modVersion: '1.0.0', groupId: 'wg-2', notes: '',
+    firstSeen: now - 2_400_000, lastSeen: now - 1_000, lastAddress: '10.0.0.22', status: 'ONLINE',
+    online: true, lastHeartbeatAgeSeconds: 1, connectedAt: now - 900_000,
+    snapshot: workerSnapshot('w-2', { username: 'Sentinel', heldItem: 'Netherite Axe', totems: 1 }) as never,
+    currentTask: '',
+    capabilities: ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position'],
+  },
+  {
+    id: 'w-3', label: 'farm-1', username: 'Harvester', minecraftVersion: '1.21.11', serverAddress: '6b6t.org',
+    protocolVersion: 1, modVersion: '1.0.0', groupId: null, notes: 'needs regearing',
+    firstSeen: now - 7_200_000, lastSeen: now - 480_000, lastAddress: '10.0.0.23', status: 'DEGRADED',
+    online: false, lastHeartbeatAgeSeconds: null, connectedAt: null,
+    snapshot: workerSnapshot('w-3', { username: 'Harvester', inWorld: false, totems: 0, health: 6, armorPieces: 1, dimension: 'unknown' }) as never,
+    currentTask: '',
+    capabilities: ['status', 'inventory', 'count'],
+  },
+];
+
+const workerOverview: WorkerOverview = {
+  total: 3, online: 2, offline: 1, degraded: 1, activeTasks: 1, trackedItems: 1234,
+  groups: [
+    { group: workerGroups[0], workers: 1, online: 1 },
+    { group: workerGroups[1], workers: 1, online: 1 },
+  ],
+  recent: [
+    { id: 'we-1', type: 'WORKER_REGISTERED', source: 'fleet', severity: 'info', instanceId: null, accountId: null, targetUuid: null, message: 'Worker Digger connected', payload: {}, timestamp: now - 1_200_000 },
+    { id: 'we-2', type: 'WORKER_INVENTORY', source: 'fleet', severity: 'info', instanceId: null, accountId: null, targetUuid: null, message: 'Inventory reported by w-2', payload: {}, timestamp: now - 40_000 },
+    { id: 'we-3', type: 'WORKER_TASK_FINISHED', source: 'fleet', severity: 'success', instanceId: null, accountId: null, targetUuid: null, message: 'count finished on w-1: 64 diamond', payload: {}, timestamp: now - 20_000 },
+  ],
+};
+
+const workerInventory: WorkerInventorySnapshot[] = [
+  {
+    workerId: 'w-1', capturedAt: now - 30_000, containerOpen: false,
+    carried: [
+      { id: 'minecraft:diamond', name: 'Diamond', count: 64, slot: 0, damage: 0, maxDamage: 0, damageable: false },
+      { id: 'minecraft:totem_of_undying', name: 'Totem of Undying', count: 4, slot: 1, damage: 0, maxDamage: 0, damageable: false },
+      { id: 'minecraft:golden_apple', name: 'Golden Apple', count: 24, slot: 2, damage: 0, maxDamage: 0, damageable: false },
+    ],
+    accessible: [],
+    armor: [
+      { id: 'minecraft:netherite_helmet', name: 'Netherite Helmet', count: 1, slot: 39, damage: 30, maxDamage: 407, damageable: true },
+      { id: 'minecraft:netherite_chestplate', name: 'Netherite Chestplate', count: 1, slot: 38, damage: 120, maxDamage: 592, damageable: true },
+    ],
+  },
+  {
+    workerId: 'w-2', capturedAt: now - 12_000, containerOpen: false,
+    carried: [
+      { id: 'minecraft:totem_of_undying', name: 'Totem of Undying', count: 1, slot: 0, damage: 0, maxDamage: 0, damageable: false },
+      { id: 'minecraft:ender_pearl', name: 'Ender Pearl', count: 16, slot: 1, damage: 0, maxDamage: 0, damageable: false },
+    ],
+    accessible: [], armor: [],
+  },
+];
+
+const workerTasks: WorkerTaskRecord[] = [
+  { id: 'wt-1', workerId: 'w-1', kind: 'count', status: 'SUCCEEDED', params: { query: 'diamond' }, result: { message: '64 diamond' }, error: null, createdAt: now - 20_000, dispatchedAt: now - 20_000, completedAt: now - 19_800, durationMs: 180, actor: 'host' },
+  { id: 'wt-2', workerId: 'w-2', kind: 'inventory', status: 'SUCCEEDED', params: {}, result: { message: 'inventory reported' }, error: null, createdAt: now - 12_000, dispatchedAt: now - 12_000, completedAt: now - 11_900, durationMs: 110, actor: 'host' },
+  { id: 'wt-3', workerId: 'w-3', kind: 'regear', status: 'TIMEOUT', params: { allowMoves: true }, result: null, error: 'no result within 15000ms', createdAt: now - 480_000, dispatchedAt: now - 480_000, completedAt: now - 465_000, durationMs: 15000, actor: 'host' },
+];
+
+const workerCommands: WorkerCommandRecord[] = [
+  { id: 'wc-1', workerId: 'w-1', kind: 'command', line: '/spawn', ok: true, response: 'Teleported to spawn', createdAt: now - 60_000 },
+  { id: 'wc-2', workerId: 'w-3', kind: 'chat', line: 'regearing now', ok: false, response: 'command not on the allow-list', createdAt: now - 120_000 },
+];
+
+const regearPresets: RegearPreset[] = [
+  {
+    id: 'rp-1', name: 'standard pvp', description: 'Front-line loadout',
+    items: [
+      { query: 'totem', count: 2, label: 'Totem of Undying' },
+      { query: 'gapple', count: 16, label: 'Golden apples' },
+      { query: 'diamond_sword', count: 1, label: 'Sword' },
+    ],
+    minArmorPieces: 4, minFood: 8, lowDurabilityPercent: 15, createdAt: now - 600_000, updatedAt: now - 600_000,
+  },
+];
+
+const itemCountReport: ItemCountReport = {
+  query: 'diamond', total: 64, stale: false, oldestCapture: now - 30_000,
+  rows: [
+    { workerId: 'w-1', label: 'miner-1', username: 'Digger', online: true, count: 64, capturedAt: now - 30_000 },
+    { workerId: 'w-2', label: 'guard-1', username: 'Sentinel', online: true, count: 0, capturedAt: now - 12_000 },
+    { workerId: 'w-3', label: 'farm-1', username: 'Harvester', online: false, count: 0, capturedAt: 0 },
+  ],
+};
+
+const regearComparison: RegearComparison = {
+  workerId: 'w-1', presetId: 'rp-1', presetName: 'standard pvp', ready: false,
+  gaps: [
+    { query: 'totem', label: 'Totem of Undying', required: 2, found: 4, missing: 0 },
+    { query: 'gapple', label: 'Golden apples', required: 16, found: 24, missing: 0 },
+    { query: 'diamond_sword', label: 'Sword', required: 1, found: 0, missing: 1 },
+  ],
+  armorPieces: 4, minArmorPieces: 4, food: 24, minFood: 8, damaged: [], capturedAt: now - 30_000,
+};
 
 const events: FleetEvent[] = [
   { id: 'e-1', type: 'TARGET_DETECTED', source: 'meteor', severity: 'info', instanceId: 'inst-1', accountId: 'acc-1', targetUuid: 'aaaaaaaa-1111-2222-3333-444444444444', message: 'Target Steve detected (24m)', payload: {}, timestamp: now - 24_000 },
@@ -259,6 +386,51 @@ export function createDemoApi(): FleetApi {
     listNotifications: async () => clone(notifications),
     markNotificationRead: async () => true,
     markAllNotificationsRead: async () => true,
+
+    listWorkers: async () => clone(workers),
+    getWorker: async (workerId: string) => clone(workers.find((w) => w.id === workerId)),
+    getWorkerOverview: async () => clone(workerOverview),
+    resolveWorkers: async (selector: string) => clone(workers.filter((w) => w.id === selector || w.username === selector || w.label === selector)),
+    setWorkerLabel: async () => true,
+    setWorkerNotes: async () => true,
+    forgetWorker: async () => true,
+    pingWorker: async () => true,
+    kickWorker: async () => true,
+    getWorkerServer: async () => ({ enabled: true, host: '127.0.0.1', port: 8721, bound: true, token: 'demo-worker-token' }),
+    regenerateWorkerToken: async () => 'demo-worker-token-new',
+
+    listWorkerGroups: async () => clone(workerGroups),
+    createWorkerGroup: async (name: string, description?: string, color?: string) => ({ id: `wg-${Date.now()}`, name, description: description ?? '', color: color ?? '#6d5efc', createdAt: Date.now() }),
+    updateWorkerGroup: async (id: string, patch: Partial<WorkerGroup>) => ({ ...clone(workerGroups[0]), id, ...patch } as WorkerGroup),
+    deleteWorkerGroup: async () => true,
+    assignWorkerGroup: async () => true,
+    assignWorkerGroupBulk: async (ids: string[]) => ids.length,
+
+    runWorkerTask: async (workerId: string, kind: string) => ({ ok: true, taskId: `wt-${Date.now()}`, kind, message: `did ${kind}`, data: {} }),
+    runWorkerTaskMany: async (ids: string[], kind: string) => ids.map((workerId) => ({ workerId, ok: true, result: { ok: true, taskId: `wt-${Date.now()}`, kind, message: `did ${kind}`, data: {} } })),
+    listWorkerTasks: async () => clone(workerTasks),
+    getWorkerTaskKinds: async () => ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position'],
+
+    sendWorkerLine: async (workerId: string, kind: 'command' | 'chat', line: string) => ({ id: `wc-${Date.now()}`, workerId, kind, line, ok: true, response: 'ok', createdAt: Date.now() }),
+    sendWorkerLineMany: async (ids: string[], _kind: 'command' | 'chat', _line: string) => ids.map((workerId) => ({ workerId, ok: true, response: 'ok' })),
+    listWorkerCommands: async () => clone(workerCommands),
+
+    getWorkerInventory: async (workerId: string) => clone(workerInventory.find((s) => s.workerId === workerId)),
+    countWorkerItem: async (query: string) => ({ ...clone(itemCountReport), query }),
+    getCombinedTotals: async () => [
+      { id: 'minecraft:diamond', name: 'Diamond', count: 64 },
+      { id: 'minecraft:totem_of_undying', name: 'Totem of Undying', count: 5 },
+      { id: 'minecraft:golden_apple', name: 'Golden Apple', count: 24 },
+    ],
+    exportWorkerReport: async () => ({ path: '/tmp/logvex-workers.json' }),
+
+    listRegearPresets: async () => clone(regearPresets),
+    createRegearPreset: async (input: Omit<RegearPreset, 'id' | 'createdAt' | 'updatedAt'>) => ({ ...input, id: `rp-${Date.now()}`, createdAt: Date.now(), updatedAt: Date.now() }),
+    updateRegearPreset: async (id: string, patch: Partial<RegearPreset>) => ({ ...clone(regearPresets[0]), id, ...patch } as RegearPreset),
+    deleteRegearPreset: async () => true,
+    compareRegearPreset: async (workerId: string, presetId: string) => ({ ...clone(regearComparison), workerId, presetId }),
+    regearWorker: async (_workerId: string, _presetId: string, allowMoves?: boolean) => ({ ok: true, taskId: `wt-${Date.now()}`, kind: 'regear', message: allowMoves ? 'withdrew 1 item' : 'dry run: 1 item missing', data: {} }),
+    regearWorkers: async (ids: string[]) => ids.map((workerId) => ({ workerId, ok: true, message: 'dry run complete' })),
 
     emergencyStop: async () => { for (const l of listeners) l({ id: `e-${Date.now()}`, type: 'SYSTEM', source: 'fleet', severity: 'error', instanceId: null, accountId: null, targetUuid: null, message: 'EMERGENCY STOP engaged', payload: {}, timestamp: Date.now() }); return true; },
     clearEmergencyStop: async () => true,

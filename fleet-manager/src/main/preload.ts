@@ -115,6 +115,48 @@ const api = {
   markNotificationRead: (id: string) => invoke('notifications:read', id),
   markAllNotificationsRead: () => invoke('notifications:read-all'),
 
+  // workers
+  listWorkers: () => invoke('workers:list'),
+  getWorker: (workerId: string) => invoke('workers:get', workerId),
+  getWorkerOverview: () => invoke('workers:overview'),
+  resolveWorkers: (selector: string) => invoke('workers:resolve', selector),
+  setWorkerLabel: (workerId: string, label: string) => invoke('workers:label', workerId, label),
+  setWorkerNotes: (workerId: string, notes: string) => invoke('workers:notes', workerId, notes),
+  forgetWorker: (workerId: string) => invoke('workers:forget', workerId),
+  pingWorker: (workerId: string) => invoke('workers:ping', workerId),
+  kickWorker: (workerId: string, reason: string) => invoke('workers:kick', workerId, reason),
+  getWorkerServer: () => invoke('workers:server:get'),
+  regenerateWorkerToken: () => invoke('workers:server:token'),
+
+  listWorkerGroups: () => invoke('worker-groups:list'),
+  createWorkerGroup: (name: string, description?: string, color?: string) => invoke('worker-groups:create', name, description, color),
+  updateWorkerGroup: (id: string, patch: unknown) => invoke('worker-groups:update', id, patch),
+  deleteWorkerGroup: (id: string) => invoke('worker-groups:delete', id),
+  assignWorkerGroup: (workerId: string, groupId: string | null) => invoke('worker-groups:assign', workerId, groupId),
+  assignWorkerGroupBulk: (workerIds: string[], groupId: string | null) => invoke('worker-groups:assign-bulk', workerIds, groupId),
+
+  runWorkerTask: (workerId: string, kind: string, params?: unknown) => invoke('worker-tasks:run', workerId, kind, params),
+  runWorkerTaskMany: (workerIds: string[], kind: string, params?: unknown) => invoke('worker-tasks:run-many', workerIds, kind, params),
+  listWorkerTasks: (limit?: number, workerId?: string) => invoke('worker-tasks:list', limit, workerId),
+  getWorkerTaskKinds: () => invoke('worker-tasks:kinds'),
+
+  sendWorkerLine: (workerId: string, kind: string, line: string) => invoke('worker-commands:send', workerId, kind, line),
+  sendWorkerLineMany: (workerIds: string[], kind: string, line: string) => invoke('worker-commands:send-many', workerIds, kind, line),
+  listWorkerCommands: (limit?: number, workerId?: string) => invoke('worker-commands:list', limit, workerId),
+
+  getWorkerInventory: (workerId: string) => invoke('worker-inventory:get', workerId),
+  countWorkerItem: (query: string, workerIds?: string[]) => invoke('worker-inventory:count', query, workerIds),
+  getCombinedTotals: (workerIds?: string[]) => invoke('worker-inventory:totals', workerIds),
+  exportWorkerReport: (format: string) => invoke('worker-inventory:export', format),
+
+  listRegearPresets: () => invoke('regear:list'),
+  createRegearPreset: (input: unknown) => invoke('regear:create', input),
+  updateRegearPreset: (id: string, patch: unknown) => invoke('regear:update', id, patch),
+  deleteRegearPreset: (id: string) => invoke('regear:delete', id),
+  compareRegearPreset: (workerId: string, presetId: string) => invoke('regear:compare', workerId, presetId),
+  regearWorker: (workerId: string, presetId: string, allowMoves?: boolean) => invoke('regear:run', workerId, presetId, allowMoves),
+  regearWorkers: (workerIds: string[], presetId: string, allowMoves?: boolean) => invoke('regear:run-many', workerIds, presetId, allowMoves),
+
   // emergency
   emergencyStop: () => invoke('emergency:stop'),
   clearEmergencyStop: () => invoke('emergency:clear'),

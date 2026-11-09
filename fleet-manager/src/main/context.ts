@@ -22,6 +22,12 @@ import {
   SettingsRepository,
   StasisRepository,
   TargetRepository,
+  WorkerRepository,
+  WorkerGroupRepository,
+  WorkerTaskRepository,
+  WorkerCommandRepository,
+  RegearPresetRepository,
+  WorkerInventoryRepository,
 } from './db/repositories';
 import { EventBus } from './services/events/event-bus';
 import { RoleCoordinator } from './services/roles/coordinator';
@@ -34,6 +40,7 @@ import { TargetSync } from './services/hunter/target-sync';
 import { StasisManager } from './services/stasis/stasis-manager';
 import { EquipmentManager } from './services/equipment/equipment-manager';
 import { WorkerSupervisor } from './mineflayer/worker-supervisor';
+import { WorkerService } from './workers/worker-service';
 import { createCredentialVault, type CredentialVault } from './security/credential-vault';
 import { ROLE_DEFINITIONS, roleDefinition } from './services/roles/roles';
 import { buildSetupReport, type SetupSnapshot } from './services/setup/setup-advisor';
@@ -47,6 +54,12 @@ export interface AppContextOptions {
   /** Overrides used by tests to avoid spawning real workers. */
   supervisor?: WorkerSupervisor;
   waitForRunning?: (instanceId: string, timeoutMs: number) => Promise<boolean>;
+  /** When false the worker WebSocket server is not started (used by tests). */
+  startWorkerServer?: boolean;
+  /** A fixed worker token, so a test can connect without reading the generated one. */
+  workerToken?: string;
+  /** Overrides the configured worker port; 0 binds an ephemeral port (used by tests). */
+  workerServerPort?: number;
 }
 
 export class AppContext {
@@ -65,6 +78,13 @@ export class AppContext {
   readonly settingsRepo: SettingsRepository;
   readonly configVersions: ConfigVersionRepository;
 
+  readonly workerRepo: WorkerRepository;
+  readonly workerGroups: WorkerGroupRepository;
+  readonly workerTasks: WorkerTaskRepository;
+  readonly workerCommands: WorkerCommandRepository;
+  readonly regearPresets: RegearPresetRepository;
+  readonly workerInventory: WorkerInventoryRepository;
+
   readonly bus: EventBus;
   readonly coordinator: RoleCoordinator;
   readonly vault: CredentialVault;
@@ -77,10 +97,12 @@ export class AppContext {
   readonly targetSync: TargetSync;
   readonly stasisManager: StasisManager;
   readonly equipmentManager: EquipmentManager;
+  readonly workers: WorkerService;
 
   private readonly startedAt = Date.now();
   private settings: AppSettings;
   private healthTimer: NodeJS.Timeout | null = null;
+  private readonly startWorkerServer: boolean;
 
   private constructor(options: AppContextOptions, vault: CredentialVault) {
     const databasePath = options.databasePath ?? ':memory:';
@@ -100,6 +122,13 @@ export class AppContext {
     this.queues = new QueueRepository(this.db);
     this.settingsRepo = new SettingsRepository(this.db);
     this.configVersions = new ConfigVersionRepository(this.db);
+
+    this.workerRepo = new WorkerRepository(this.db);
+    this.workerGroups = new WorkerGroupRepository(this.db);
+    this.workerTasks = new WorkerTaskRepository(this.db);
+    this.workerCommands = new WorkerCommandRepository(this.db);
+    this.regearPresets = new RegearPresetRepository(this.db);
+    this.workerInventory = new WorkerInventoryRepository(this.db);
 
     this.bus = new EventBus(this.events, this.notifications);
     this.coordinator = new RoleCoordinator(this.bus);
@@ -132,6 +161,28 @@ export class AppContext {
     this.stasisManager = new StasisManager(this.stasis);
     this.equipmentManager = new EquipmentManager(this.equipment);
 
+    // A test-supplied token must be in place before the service reads it, so it is written first.
+    if (options.workerToken) this.settingsRepo.set('workerToken', options.workerToken);
+
+    this.workers = new WorkerService(
+      {
+        workers: this.workerRepo,
+        groups: this.workerGroups,
+        tasks: this.workerTasks,
+        commands: this.workerCommands,
+        presets: this.regearPresets,
+        inventory: this.workerInventory,
+        events: this.events,
+        emit: (type, message, payload) => this.emitEvent(type, message, payload),
+      },
+      {
+        host: this.settings.workerServerHost,
+        port: options.workerServerPort ?? this.settings.workerServerPort,
+        token: this.getWorkerToken(),
+      },
+    );
+    this.startWorkerServer = options.startWorkerServer !== false;
+
     this.instances.load();
   }
 
@@ -141,8 +192,9 @@ export class AppContext {
     return new AppContext(options, vault);
   }
 
-  /** Starts periodic health sampling. Safe to call once. */
+  /** Starts the worker server and periodic health sampling. Safe to call once. */
   start(): void {
+    if (this.startWorkerServer) void this.startWorkerServerNow();
     if (this.healthTimer) return;
     this.healthTimer = setInterval(() => {
       for (const instance of this.instances.list()) {
@@ -165,6 +217,7 @@ export class AppContext {
   async shutdown(): Promise<void> {
     if (this.healthTimer) clearInterval(this.healthTimer);
     this.healthTimer = null;
+    await this.workers.server.stop();
     this.engine.cancel();
     this.instances.stopAll();
     this.supervisor.stopAll();
@@ -197,6 +250,9 @@ export class AppContext {
       baseUrl: this.settings.hunterAddonUrl,
       token: this.settings.hunterAddonToken,
     });
+    // A bind-address change needs the listener restarted; the port and token are picked up on
+    // restart too. This is intentionally not awaited so the settings save stays synchronous.
+    void this.reconfigureWorkerServer();
     return this.getSettings();
   }
 
@@ -375,6 +431,40 @@ export class AppContext {
     return randomUUID();
   }
 
+  /** Starts (or restarts) the worker server so a settings change takes effect without a restart. */
+  async startWorkerServerNow(): Promise<number> {
+    try {
+      return await this.workers.server.start();
+    } catch (error) {
+      this.emitEvent('WORKER_ERROR', `Worker server could not start: ${(error as Error).message}`);
+      return 0;
+    }
+  }
+
+  /** Applies worker server settings, restarting the listener when the bind address changed. */
+  async reconfigureWorkerServer(): Promise<void> {
+    await this.workers.server.stop();
+    this.workers.server.setToken(this.getWorkerToken());
+    if (this.settings.workerServerEnabled) await this.startWorkerServerNow();
+  }
+
+  /** The shared token a worker must present. Stored like the API token: generated once, never logged. */
+  getWorkerToken(): string {
+    const stored = this.settingsRepo.get('workerToken');
+    if (stored && stored.length > 0) return stored;
+    const token = randomUUID().replace(/-/g, '');
+    this.settingsRepo.set('workerToken', token);
+    return token;
+  }
+
+  regenerateWorkerToken(): string {
+    const token = randomUUID().replace(/-/g, '');
+    this.settingsRepo.set('workerToken', token);
+    this.workers.server.setToken(token);
+    this.emitEvent('WORKER_ERROR', 'Worker token regenerated; connected workers must be updated.');
+    return token;
+  }
+
   // ------------------------------------------------------------ api token
   private apiToken: string | null = null;
 
@@ -412,6 +502,8 @@ export class AppContext {
       targets: this.targets.list(),
       stasis: this.stasis.list(),
       equipment: this.equipment.list(),
+      workerGroups: this.workerGroups.list(),
+      regearPresets: this.regearPresets.list(),
     };
   }
 

@@ -60,7 +60,15 @@ export interface TestContext {
   vault: MemoryVault;
 }
 
-export async function createTestContext(options: { waitForRunning?: (id: string, timeout: number) => Promise<boolean> } = {}): Promise<TestContext> {
+export async function createTestContext(options: {
+  waitForRunning?: (id: string, timeout: number) => Promise<boolean>;
+  /** Set to false to leave the worker WebSocket server stopped (it binds a real port otherwise). */
+  startWorkerServer?: boolean;
+  /** A fixed worker token so tests can connect without reading the generated one. */
+  workerToken?: string;
+  /** Worker server port; 0 (the default here) binds an ephemeral port so test files never collide. */
+  workerServerPort?: number;
+} = {}): Promise<TestContext> {
   const supervisor = new FakeSupervisor();
   const vault = new MemoryVault();
   const context = await AppContext.create({
@@ -69,6 +77,9 @@ export async function createTestContext(options: { waitForRunning?: (id: string,
     vault,
     supervisor: supervisor as unknown as WorkerSupervisor,
     waitForRunning: options.waitForRunning,
+    startWorkerServer: options.startWorkerServer,
+    workerToken: options.workerToken,
+    workerServerPort: options.workerServerPort ?? 0,
   });
   return { context, supervisor, vault };
 }

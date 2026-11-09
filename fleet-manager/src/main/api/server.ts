@@ -112,7 +112,8 @@ export class ApiServer {
 
     try {
       const body = await this.readBody(req);
-      const result = await this.route(method, url.split('?')[0], body);
+      const [path, queryString] = url.split('?');
+      const result = await this.route(method, path, body, new URLSearchParams(queryString ?? ''));
       if (result === undefined) return this.json(res, 404, { error: 'not found' });
       return this.json(res, result.status ?? 200, result.body);
     } catch (error) {
@@ -124,6 +125,7 @@ export class ApiServer {
     method: string,
     path: string,
     body: Record<string, unknown>,
+    query: URLSearchParams,
   ): Promise<{ status?: number; body: unknown } | undefined> {
     const ctx = this.context;
 
@@ -139,6 +141,43 @@ export class ApiServer {
     if (path === '/api/v1/settings' && method === 'GET') return { body: ctx.getSettings() };
     if (path === '/api/v1/stasis' && method === 'GET') return { body: { locations: ctx.stasisManager.list() } };
     if (path === '/api/v1/equipment' && method === 'GET') return { body: { profiles: ctx.equipmentManager.list() } };
+
+    // ---------------------------------------------------------------- workers
+    if (path === '/api/v1/workers' && method === 'GET') return { body: { workers: ctx.workers.list() } };
+    if (path === '/api/v1/workers/overview' && method === 'GET') return { body: ctx.workers.overview() };
+    if (path === '/api/v1/workers/groups' && method === 'GET') return { body: { groups: ctx.workers.listGroups() } };
+    if (path === '/api/v1/workers/tasks' && method === 'GET') return { body: { tasks: ctx.workers.listTasks(100) } };
+    if (path === '/api/v1/workers/commands' && method === 'GET') return { body: { commands: ctx.workers.listCommands(100) } };
+    if (path === '/api/v1/workers/presets' && method === 'GET') return { body: { presets: ctx.workers.listPresets() } };
+    if (path === '/api/v1/workers/count' && method === 'GET') {
+      return { body: ctx.workers.countItem(query.get('item') ?? '') };
+    }
+
+    const workerInventoryMatch = /^\/api\/v1\/workers\/([^/]+)\/inventory$/.exec(path);
+    if (workerInventoryMatch && method === 'GET') {
+      const snapshot = ctx.workers.inventory(workerInventoryMatch[1]);
+      if (!snapshot) return { status: 404, body: { error: 'no inventory reported for that worker' } };
+      return { body: snapshot };
+    }
+
+    const workerTaskMatch = /^\/api\/v1\/workers\/([^/]+)\/task$/.exec(path);
+    if (workerTaskMatch && method === 'POST') {
+      const workerId = workerTaskMatch[1];
+      const kind = String(body.kind ?? '');
+      const params = (body.params as Record<string, unknown>) ?? {};
+      const result = await ctx.workers.runTask(workerId, kind as never, params);
+      return { status: result.ok ? 200 : 400, body: result };
+    }
+
+    const workerCommandMatch = /^\/api\/v1\/workers\/([^/]+)\/line$/.exec(path);
+    if (workerCommandMatch && method === 'POST') {
+      const record = await ctx.workers.sendLine(
+        workerCommandMatch[1],
+        body.kind === 'chat' ? 'chat' : 'command',
+        String(body.line ?? ''),
+      );
+      return { status: record.ok ? 200 : 400, body: record };
+    }
 
     if (path === '/api/v1/targets' && method === 'POST') {
       const target = ctx.targets.upsert(body as { username: string });

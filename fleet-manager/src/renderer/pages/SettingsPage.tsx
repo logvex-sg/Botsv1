@@ -22,6 +22,9 @@ export function SettingsPage({ push, uiMode }: Props) {
   const [draft, setDraft] = useState<AppSettings | null>(null);
   const [token, setToken] = useState('');
   const [revealToken, setRevealToken] = useState(false);
+  const [revealWorkerToken, setRevealWorkerToken] = useState(false);
+  const [workerToken, setWorkerToken] = useState('');
+  const [confirmWorkerRegen, setConfirmWorkerRegen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +35,7 @@ export function SettingsPage({ push, uiMode }: Props) {
 
   useEffect(() => {
     void fleet.getApiToken().then(setToken).catch(() => setToken(''));
+    void fleet.getWorkerServer().then((info) => setWorkerToken(info.token)).catch(() => setWorkerToken(''));
   }, []);
 
   const save = async (): Promise<void> => {
@@ -192,6 +196,37 @@ export function SettingsPage({ push, uiMode }: Props) {
             </Field>
           </Card>
 
+          <Card title="Fleet worker server" sub="Where Minecraft clients running the worker mod connect.">
+            <label className="row" style={{ gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={draft.workerServerEnabled}
+                onChange={(e) => setDraft({ ...draft, workerServerEnabled: e.target.checked })}
+              />
+              <span className="card-sub">Accept worker connections</span>
+            </label>
+            <div className="grid cols-2" style={{ marginTop: 12 }}>
+              <Field label="Bind address" hint="Use 127.0.0.1 for clients on this PC; your LAN address to reach clients on other machines.">
+                <input type="text" value={draft.workerServerHost} onChange={(e) => setDraft({ ...draft, workerServerHost: e.target.value })} />
+              </Field>
+              <Field label="Port">
+                <input type="number" value={draft.workerServerPort} onChange={(e) => setDraft({ ...draft, workerServerPort: Number(e.target.value) })} />
+              </Field>
+            </div>
+            <Field label="Worker token" hint="Workers must present this token to connect. It is stored on this computer only.">
+              <div className="row" style={{ gap: 8 }}>
+                <input
+                  type="text"
+                  value={revealWorkerToken ? workerToken : '•'.repeat(Math.min(32, workerToken.length))}
+                  readOnly
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <Button small onClick={() => setRevealWorkerToken((v) => !v)}>{revealWorkerToken ? 'Hide' : 'Show'}</Button>
+                <Button small onClick={() => setConfirmWorkerRegen(true)}>New token</Button>
+              </div>
+            </Field>
+          </Card>
+
           <Card title="Performance & maintenance" sub="Fine tuning — the defaults work well for most people.">
             <div className="grid cols-3">
               <Field label="Max memory (MB)">
@@ -239,6 +274,26 @@ export function SettingsPage({ push, uiMode }: Props) {
           message="Any tool already connected with the old key will be disconnected until you update it with the new one."
           onCancel={() => setConfirmRegen(false)}
           onConfirm={regenerate}
+        />
+      )}
+
+      {confirmWorkerRegen && (
+        <ConfirmDialog
+          title="Generate a new worker token?"
+          danger
+          confirmLabel="Generate new token"
+          message="Every worker must be given the new token before it can connect again. Workers already connected stay connected until they drop."
+          onCancel={() => setConfirmWorkerRegen(false)}
+          onConfirm={async () => {
+            setConfirmWorkerRegen(false);
+            try {
+              const next = await fleet.regenerateWorkerToken();
+              setWorkerToken(next);
+              push('Worker token regenerated', 'warning');
+            } catch (err) {
+              setError((err as Error).message);
+            }
+          }}
         />
       )}
     </div>

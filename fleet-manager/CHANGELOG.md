@@ -56,6 +56,59 @@ less effort, and the app explains itself.
   behaviour, including the combat-safety guarantee) and `tests/unit/renderer-errors.test.ts`
   (friendly error mapping). Suite: **132 tests**.
 
+## [Unreleased] — Worker fleet management
+
+Adds a **Fleet** section: the app can now host a worker WebSocket server and drive a fleet of
+**Logvex Worker** client mods (see `worker-mod/`). The worker protocol is a closed set of message
+types and task kinds; the host never sends code, and a protocol-version or token mismatch is refused
+at the handshake.
+
+### Added
+- **Worker WebSocket server** (`src/main/workers/worker-server.ts`) — binds loopback by default,
+  authenticates workers with a shared token, assigns a stable id, tracks the last snapshot and
+  online state, and answers tasks with a per-task timeout. `WorkerService` is the single code path
+  for every fleet operation.
+- **Worker protocol mirror** (`src/shared/workers.ts`) — the TypeScript counterpart of
+  `worker-mod/.../Protocol.java`, with a defensive envelope decoder that drops malformed frames
+  instead of throwing.
+- **Worker persistence** (`worker_groups`, `worker_tasks`, `worker_commands`, `worker_inventory`,
+  `regear_presets`, plus the `workers` table) and typed repositories.
+- **Fleet UI** — a new top-level **Fleet** section with seven tabs: Dashboard, Workers, Groups,
+  Tasks, Inventory, Commands and Regear. The Workers tab has a per-worker inspector with live state
+  and controls (refresh, pull inventory, ask position, command, chat, ping, kick, forget). Label,
+  group and notes are host-side only.
+- **Item counting across the fleet** with the same forgiving query matching the worker uses
+  (`totem`, `gapple`, `diamond`, …), scoped to a group, with a staleness flag based on the capture
+  time.
+- **Regear presets and comparison** — a per-worker gap report against a preset, and a fleet sweep.
+  Moves are **off** by default (a dry run that only reports).
+- **HTTP worker routes** — `/api/v1/workers`, `/api/v1/workers/overview`,
+  `/api/v1/workers/{id}/task`, `/api/v1/workers/{id}/line`, `/api/v1/workers/{id}/inventory`,
+  `/api/v1/workers/count`, and the groups/tasks/commands/presets lists.
+- **Settings → Worker server** — enable/disable, host, port, and the shared token with a reveal and
+  a regenerate button.
+
+### Fixed
+- **Stale-connection teardown.** When a worker reconnected with the same id, the replaced socket's
+  `close` handler could delete the *fresh* connection from the live map, leaving the worker
+  permanently offline. The close handler now only cleans up the socket that still owns the entry.
+- **Heartbeat no longer clobbers inventory.** A `STATUS` frame used to fall through into the
+  `INVENTORY` branch, overwriting the stored inventory with an empty snapshot on every heartbeat.
+- **Deterministic history order.** Task and command lists now break same-millisecond ties by
+  `rowid`, so the newest row is always first for a burst of activity.
+- The envelope decoder now rejects a non-object payload (such as an array) instead of trusting it.
+
+### Tests
+- `tests/support/fake-worker.ts` — a worker-shaped WebSocket client that speaks the same protocol
+  as the mod, so protocol drift fails the build.
+- `tests/integration/workers.test.ts` — 25 tests driving that client against the real server:
+  handshake accept/refuse, reconnect replacement, task round-trip, timeout, refusal propagation,
+  conflicting-task rejection, inventory caching, group-scoped counting, command audit, regear gaps,
+  malformed-frame robustness, disconnect handling and selector resolution.
+- `tests/unit/worker-protocol.test.ts` and `tests/unit/worker-repositories.test.ts`.
+- Worker HTTP route tests in `tests/integration/api-server.test.ts`.
+- Suite: **178 tests**.
+
 ## [1.0.0] - 2026-11-08
 
 Initial release. Logvex Fleet Manager is an Electron + React + TypeScript desktop application for

@@ -135,3 +135,46 @@ describe('API server', () => {
     expect(received.some((m) => (m as { type: string }).type === 'TEST_EVENT')).toBe(true);
   });
 });
+
+describe('worker API routes', () => {
+  it('lists workers and returns an overview', async () => {
+    const roster = await (await fetch(url('/api/v1/workers'), { headers: authHeaders() })).json();
+    expect(Array.isArray(roster.workers)).toBe(true);
+    const overview = await (await fetch(url('/api/v1/workers/overview'), { headers: authHeaders() })).json();
+    expect(overview).toHaveProperty('total');
+    expect(overview).toHaveProperty('online');
+  });
+
+  it('returns 404 for a worker with no reported inventory', async () => {
+    const response = await fetch(url('/api/v1/workers/ghost/inventory'), { headers: authHeaders() });
+    expect(response.status).toBe(404);
+  });
+
+  it('counts an item across the fleet from a query parameter', async () => {
+    const response = await fetch(url('/api/v1/workers/count?item=totem'), { headers: authHeaders() });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.query).toBe('totem');
+    expect(body.total).toBe(0);
+  });
+
+  it('reports an error for a task sent to an unknown worker', async () => {
+    const response = await fetch(url('/api/v1/workers/ghost/task'), {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'status', params: {} }),
+    });
+    // The worker is not connected, so the request fails rather than pretending to queue.
+    expect(response.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('rejects an empty command line', async () => {
+    const response = await fetch(url('/api/v1/workers/ghost/line'), {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'command', line: '   ' }),
+    });
+    expect(response.status).toBeGreaterThanOrEqual(400);
+  });
+});
+

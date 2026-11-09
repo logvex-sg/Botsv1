@@ -23,7 +23,17 @@ import type {
   StasisLocation,
   TargetEntry,
   ValidationReport,
+  ItemCountReport,
+  RegearComparison,
+  RegearPreset,
+  WorkerCommandRecord,
+  WorkerGroup,
+  WorkerInventorySnapshot,
+  WorkerOverview,
+  WorkerTaskRecord,
+  WorkerView,
 } from './types';
+import type { TaskKind, WorkerTaskResult } from './workers';
 import type { AccountView } from '../main/services/accounts/account-manager';
 import type { RuntimeInstance } from '../main/services/instances/instance-manager';
 import type { StasisChange } from '../main/services/stasis/stasis-manager';
@@ -154,6 +164,48 @@ export interface FleetApi {
   markNotificationRead(id: string): Promise<boolean>;
   markAllNotificationsRead(): Promise<boolean>;
 
+  // workers (real Minecraft clients running the logvex-worker mod)
+  listWorkers(): Promise<WorkerView[]>;
+  getWorker(workerId: string): Promise<WorkerView | undefined>;
+  getWorkerOverview(): Promise<WorkerOverview>;
+  resolveWorkers(selector: string): Promise<WorkerView[]>;
+  setWorkerLabel(workerId: string, label: string): Promise<boolean>;
+  setWorkerNotes(workerId: string, notes: string): Promise<boolean>;
+  forgetWorker(workerId: string): Promise<boolean>;
+  pingWorker(workerId: string): Promise<boolean>;
+  kickWorker(workerId: string, reason: string): Promise<boolean>;
+  getWorkerServer(): Promise<{ enabled: boolean; host: string; port: number; bound: boolean; token: string }>;
+  regenerateWorkerToken(): Promise<string>;
+
+  listWorkerGroups(): Promise<WorkerGroup[]>;
+  createWorkerGroup(name: string, description?: string, color?: string): Promise<WorkerGroup>;
+  updateWorkerGroup(id: string, patch: { name?: string; description?: string; color?: string }): Promise<WorkerGroup | undefined>;
+  deleteWorkerGroup(id: string): Promise<boolean>;
+  assignWorkerGroup(workerId: string, groupId: string | null): Promise<boolean>;
+  assignWorkerGroupBulk(workerIds: string[], groupId: string | null): Promise<number>;
+
+  runWorkerTask(workerId: string, kind: TaskKind, params?: Record<string, unknown>): Promise<WorkerTaskResult>;
+  runWorkerTaskMany(workerIds: string[], kind: TaskKind, params?: Record<string, unknown>): Promise<{ workerId: string; ok: boolean; result?: WorkerTaskResult; error?: string }[]>;
+  listWorkerTasks(limit?: number, workerId?: string): Promise<WorkerTaskRecord[]>;
+  getWorkerTaskKinds(): Promise<string[]>;
+
+  sendWorkerLine(workerId: string, kind: 'command' | 'chat', line: string): Promise<WorkerCommandRecord>;
+  sendWorkerLineMany(workerIds: string[], kind: 'command' | 'chat', line: string): Promise<{ workerId: string; ok: boolean; response: string }[]>;
+  listWorkerCommands(limit?: number, workerId?: string): Promise<WorkerCommandRecord[]>;
+
+  getWorkerInventory(workerId: string): Promise<WorkerInventorySnapshot | undefined>;
+  countWorkerItem(query: string, workerIds?: string[]): Promise<ItemCountReport>;
+  getCombinedTotals(workerIds?: string[]): Promise<{ id: string; name: string; count: number }[]>;
+  exportWorkerReport(format: 'json' | 'csv'): Promise<{ path: string } | null>;
+
+  listRegearPresets(): Promise<RegearPreset[]>;
+  createRegearPreset(input: Omit<RegearPreset, 'id' | 'createdAt' | 'updatedAt'>): Promise<RegearPreset>;
+  updateRegearPreset(id: string, patch: Partial<Omit<RegearPreset, 'id' | 'createdAt'>>): Promise<RegearPreset | undefined>;
+  deleteRegearPreset(id: string): Promise<boolean>;
+  compareRegearPreset(workerId: string, presetId: string): Promise<RegearComparison>;
+  regearWorker(workerId: string, presetId: string, allowMoves?: boolean): Promise<WorkerTaskResult>;
+  regearWorkers(workerIds: string[], presetId: string, allowMoves?: boolean): Promise<{ workerId: string; ok: boolean; message: string }[]>;
+
   // emergency
   emergencyStop(): Promise<boolean>;
   clearEmergencyStop(): Promise<boolean>;
@@ -172,4 +224,46 @@ export const IPC = {
   exportConfig: 'system:export',
   importConfig: 'system:import',
   backupDatabase: 'system:backup',
+
+  // workers
+  listWorkers: 'workers:list',
+  getWorker: 'workers:get',
+  getWorkerOverview: 'workers:overview',
+  resolveWorkers: 'workers:resolve',
+  setWorkerLabel: 'workers:label',
+  setWorkerNotes: 'workers:notes',
+  forgetWorker: 'workers:forget',
+  pingWorker: 'workers:ping',
+  kickWorker: 'workers:kick',
+  getWorkerServer: 'workers:server:get',
+  regenerateWorkerToken: 'workers:server:token',
+
+  listWorkerGroups: 'worker-groups:list',
+  createWorkerGroup: 'worker-groups:create',
+  updateWorkerGroup: 'worker-groups:update',
+  deleteWorkerGroup: 'worker-groups:delete',
+  assignWorkerGroup: 'worker-groups:assign',
+  assignWorkerGroupBulk: 'worker-groups:assign-bulk',
+
+  runWorkerTask: 'worker-tasks:run',
+  runWorkerTaskMany: 'worker-tasks:run-many',
+  listWorkerTasks: 'worker-tasks:list',
+  getWorkerTaskKinds: 'worker-tasks:kinds',
+
+  sendWorkerLine: 'worker-commands:send',
+  sendWorkerLineMany: 'worker-commands:send-many',
+  listWorkerCommands: 'worker-commands:list',
+
+  getWorkerInventory: 'worker-inventory:get',
+  countWorkerItem: 'worker-inventory:count',
+  getCombinedTotals: 'worker-inventory:totals',
+  exportWorkerReport: 'worker-inventory:export',
+
+  listRegearPresets: 'regear:list',
+  createRegearPreset: 'regear:create',
+  updateRegearPreset: 'regear:update',
+  deleteRegearPreset: 'regear:delete',
+  compareRegearPreset: 'regear:compare',
+  regearWorker: 'regear:run',
+  regearWorkers: 'regear:run-many',
 } as const;

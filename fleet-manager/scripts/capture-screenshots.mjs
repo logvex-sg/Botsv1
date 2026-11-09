@@ -14,7 +14,8 @@
  *   OUT_DIR    Output directory (default docs/screenshots)
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
@@ -26,12 +27,17 @@ const PORT = Number(process.env.DEBUG_PORT ?? 9333);
 
 const PAGES = [
   ['01-dashboard', 'dashboard'],
-  ['02-features-hunter', 'features'],
-  ['03-tasks', 'tasks'],
-  ['04-accounts', 'accounts'],
-  ['05-activity', 'activity'],
-  ['06-settings', 'settings'],
-  ['07-help', 'help'],
+  ['02-fleet-dashboard', 'fleet&fleet=dashboard'],
+  ['03-fleet-workers', 'fleet&fleet=workers'],
+  ['04-fleet-tasks', 'fleet&fleet=tasks'],
+  ['05-fleet-inventory', 'fleet&fleet=inventory'],
+  ['06-fleet-regear', 'fleet&fleet=regear'],
+  ['07-features-hunter', 'features'],
+  ['08-tasks', 'tasks'],
+  ['09-accounts', 'accounts'],
+  ['10-activity', 'activity'],
+  ['11-settings', 'settings'],
+  ['12-help', 'help'],
 ];
 
 function findChrome() {
@@ -95,7 +101,8 @@ async function main() {
   mkdirSync(OUT_DIR, { recursive: true });
 
   const chrome = findChrome();
-  const userDataDir = join(OUT_DIR, '.chrome-profile');
+  // A profile under /tmp avoids permission and leftover-lock problems in the output directory.
+  const userDataDir = join(tmpdir(), `logvex-shots-${process.pid}`);
   const child = spawn(chrome, [
     '--headless=new',
     '--disable-gpu',
@@ -111,7 +118,7 @@ async function main() {
   try {
     // Wait for the debugging endpoint.
     let version = null;
-    for (let i = 0; i < 50 && !version; i++) {
+    for (let i = 0; i < 150 && !version; i++) {
       try {
         version = await fetchJson(`http://127.0.0.1:${PORT}/json/version`);
       } catch {

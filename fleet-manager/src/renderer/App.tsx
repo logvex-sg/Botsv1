@@ -12,6 +12,7 @@ import { StoreProvider, useStore } from './lib/store';
 import { fleet } from './lib/api';
 import { Button, ConfirmDialog, Dot, Segmented, ToastStack, useToasts } from './components/ui';
 import { DashboardPage } from './pages/DashboardPage';
+import { FleetPage } from './pages/FleetPage';
 import { FeaturesPage } from './pages/FeaturesPage';
 import type { FeatureTab } from './pages/FeaturesPage';
 import { TasksPage } from './pages/TasksPage';
@@ -22,10 +23,11 @@ import { HelpPage } from './pages/HelpPage';
 import type { UiMode } from '../shared/types';
 
 export type PageId =
-  | 'dashboard' | 'features' | 'tasks' | 'accounts' | 'activity' | 'settings' | 'help';
+  | 'dashboard' | 'fleet' | 'features' | 'tasks' | 'accounts' | 'activity' | 'settings' | 'help';
 
 const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '◉' },
+  { id: 'fleet', label: 'Fleet', icon: '⛭' },
   { id: 'features', label: 'Main Features', icon: '◈' },
   { id: 'tasks', label: 'Tasks', icon: '▤' },
   { id: 'accounts', label: 'Accounts', icon: '◐' },
@@ -36,6 +38,7 @@ const NAV: { id: PageId; label: string; icon: string }[] = [
 
 const TITLES: Record<PageId, string> = {
   dashboard: 'Dashboard',
+  fleet: 'Fleet',
   features: 'Main Features',
   tasks: 'Tasks',
   accounts: 'Accounts & Profiles',
@@ -44,11 +47,14 @@ const TITLES: Record<PageId, string> = {
   help: 'Help',
 };
 
-const PAGE_IDS: PageId[] = ['dashboard', 'features', 'tasks', 'accounts', 'activity', 'settings', 'help'];
+const PAGE_IDS: PageId[] = ['dashboard', 'fleet', 'features', 'tasks', 'accounts', 'activity', 'settings', 'help'];
 
 /** Old ids from earlier versions map onto the new simplified sections. */
 const ALIASES: Record<string, PageId> = {
   overview: 'dashboard',
+  workers: 'fleet',
+  swarm: 'fleet',
+  fleetv2: 'fleet',
   deployment: 'tasks',
   instances: 'tasks',
   gearer: 'features',
@@ -103,6 +109,7 @@ function Shell() {
   };
 
   const running = store.instances.filter((i) => i.state === 'RUNNING').length;
+  const connectedWorkers = store.workers.filter((w) => w.online).length;
 
   return (
     <div className="app">
@@ -150,6 +157,10 @@ function Shell() {
               <Dot state={running > 0 ? 'ONLINE' : 'OFFLINE'} />
               {running}/{store.instances.length} running
             </span>
+            <span className="row" style={{ gap: 6 }} title="Minecraft clients connected to the fleet host">
+              <Dot state={connectedWorkers > 0 ? 'ONLINE' : 'OFFLINE'} />
+              {connectedWorkers} worker{connectedWorkers === 1 ? '' : 's'}
+            </span>
             <Button small variant="ghost" onClick={toggleTheme} title="Switch light/dark theme">
               {theme === 'dark' ? '☀' : '☾'}
             </Button>
@@ -170,6 +181,7 @@ function Shell() {
           )}
           {!store.ready && <div className="empty">Starting up…</div>}
           {store.ready && page === 'dashboard' && <DashboardPage onNavigate={navigate} push={push} />}
+          {store.ready && page === 'fleet' && <FleetPage push={push} />}
           {store.ready && page === 'features' && <FeaturesPage push={push} uiMode={uiMode} initialTab={featureTab} />}
           {store.ready && page === 'tasks' && <TasksPage push={push} uiMode={uiMode} />}
           {store.ready && page === 'accounts' && <AccountsPage push={push} />}

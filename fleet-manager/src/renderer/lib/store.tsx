@@ -10,6 +10,7 @@ import { fleet } from './api';
 import type {
   Account, AppSettings, DeploymentConfig, EquipmentProfileRecord, FleetEvent, Group,
   HealthReport, InstanceRecord, NotificationItem, ServerProfile, SetupReport, StasisLocation, TargetEntry,
+  RegearPreset, WorkerGroup, WorkerOverview, WorkerTaskRecord, WorkerView,
 } from '../../shared/types';
 import type { AccountView } from '../../main/services/accounts/account-manager';
 import type { RuntimeInstance } from '../../main/services/instances/instance-manager';
@@ -31,6 +32,11 @@ export interface AppState {
   notifications: NotificationItem[];
   hunterConnected: boolean;
   setup: SetupReport | null;
+  workers: WorkerView[];
+  workerGroups: WorkerGroup[];
+  workerOverview: WorkerOverview | null;
+  workerTasks: WorkerTaskRecord[];
+  regearPresets: RegearPreset[];
 }
 
 const initialState: AppState = {
@@ -50,6 +56,11 @@ const initialState: AppState = {
   notifications: [],
   hunterConnected: false,
   setup: null,
+  workers: [],
+  workerGroups: [],
+  workerOverview: null,
+  workerTasks: [],
+  regearPresets: [],
 };
 
 interface StoreValue extends AppState {
@@ -60,6 +71,9 @@ interface StoreValue extends AppState {
   refreshDeployments: () => Promise<void>;
   refreshEvents: () => Promise<void>;
   refreshSetup: () => Promise<void>;
+  refreshWorkers: () => Promise<void>;
+  refreshWorkerTasks: () => Promise<void>;
+  refreshRegearPresets: () => Promise<void>;
   emergencyStop: () => Promise<void>;
   clearEmergency: () => Promise<void>;
 }
@@ -89,11 +103,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           fleet.hunterStatus().catch(() => ({ connected: false, url: '', lastSync: null })),
           fleet.getSetupReport().catch(() => null),
         ]);
+      // Workers are loaded separately so a worker-server problem cannot block the whole app.
+      const [workers, workerGroups, workerOverview, workerTasks, regearPresets] = await Promise.all([
+        fleet.listWorkers().catch(() => []),
+        fleet.listWorkerGroups().catch(() => []),
+        fleet.getWorkerOverview().catch(() => null),
+        fleet.listWorkerTasks(100).catch(() => []),
+        fleet.listRegearPresets().catch(() => []),
+      ]);
       if (!mounted.current) return;
       setState({
         ready: true, error: null, health, settings, accounts, servers, groups, instances,
         targets, stasis, equipment, deployments, events, notifications, hunterConnected: hunter.connected,
-        setup,
+        setup, workers, workerGroups, workerOverview, workerTasks, regearPresets,
       });
     } catch (error) {
       if (!mounted.current) return;
@@ -127,6 +149,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (mounted.current) setState((prev) => ({ ...prev, setup }));
   }, []);
 
+  const refreshWorkers = useCallback(async () => {
+    const [workers, workerGroups, workerOverview] = await Promise.all([
+      fleet.listWorkers().catch(() => []),
+      fleet.listWorkerGroups().catch(() => []),
+      fleet.getWorkerOverview().catch(() => null),
+    ]);
+    if (mounted.current) setState((prev) => ({ ...prev, workers, workerGroups, workerOverview }));
+  }, []);
+
+  const refreshWorkerTasks = useCallback(async () => {
+    const workerTasks = await fleet.listWorkerTasks(100).catch(() => []);
+    if (mounted.current) setState((prev) => ({ ...prev, workerTasks }));
+  }, []);
+
+  const refreshRegearPresets = useCallback(async () => {
+    const regearPresets = await fleet.listRegearPresets().catch(() => []);
+    if (mounted.current) setState((prev) => ({ ...prev, regearPresets }));
+  }, []);
+
   const emergencyStop = useCallback(async () => {
     await fleet.emergencyStop();
     await refreshInstances();
@@ -152,6 +193,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (['TARGET_DETECTED', 'TARGET_UPDATED', 'TARGET_DISAPPEARED', 'TARGET_REAPPEARED'].includes((event as FleetEvent).type)) {
         void fleet.listTargets().then((targets) => mounted.current && setState((prev) => ({ ...prev, targets })));
       }
+      // Worker events arrive at heartbeat cadence; a refresh here keeps the roster live without
+      // the renderer having to poll the main process on a timer.
+      if ((event as FleetEvent).type.startsWith('WORKER_')) {
+        void Promise.all([
+          fleet.listWorkers().catch(() => []),
+          fleet.listWorkerGroups().catch(() => []),
+          fleet.getWorkerOverview().catch(() => null),
+          fleet.listWorkerTasks(100).catch(() => []),
+        ]).then(([workers, workerGroups, workerOverview, workerTasks]) => {
+          if (mounted.current) setState((prev) => ({ ...prev, workers, workerGroups, workerOverview, workerTasks }));
+        });
+      }
     });
 
     const poll = setInterval(() => {
@@ -167,8 +220,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const value = useMemo<StoreValue>(
-    () => ({ ...state, refresh, refreshInstances, refreshAccounts, refreshTargets, refreshDeployments, refreshEvents, refreshSetup, emergencyStop, clearEmergency }),
-    [state, refresh, refreshInstances, refreshAccounts, refreshTargets, refreshDeployments, refreshEvents, refreshSetup, emergencyStop, clearEmergency],
+    () => ({
+      ...state, refresh, refreshInstances, refreshAccounts, refreshTargets, refreshDeployments,
+      refreshEvents, refreshSetup, refreshWorkers, refreshWorkerTasks, refreshRegearPresets,
+      emergencyStop, clearEmergency,
+    }),
+    [state, refresh, refreshInstances, refreshAccounts, refreshTargets, refreshDeployments,
+      refreshEvents, refreshSetup, refreshWorkers, refreshWorkerTasks, refreshRegearPresets,
+      emergencyStop, clearEmergency],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

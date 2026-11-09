@@ -21,10 +21,13 @@ describe('FleetDatabase migrations', () => {
   });
 
   it('is idempotent when migrated twice', () => {
+    const before = db.all<{ id: string }>('SELECT id FROM schema_migrations').length;
     db.migrate();
     db.migrate();
     const applied = db.all<{ id: string }>('SELECT id FROM schema_migrations');
-    expect(applied.length).toBe(2);
+    // Re-running must not record anything new; the exact count grows as migrations are added.
+    expect(applied.length).toBe(before);
+    expect(applied.length).toBeGreaterThanOrEqual(3);
   });
 });
 
