@@ -74,6 +74,8 @@ The remapped, release-ready jar is written to `build/libs/logvex-hunter-1.0.0.ja
 
 ### Commands
 
+See [`USAGE.md`](USAGE.md) for the full use guide. The command reference:
+
 ```
 .hunter                       # status summary
 .hunter status
@@ -170,6 +172,7 @@ Node worker process, so a crash or hang in one never takes down the app.
 
 See [`fleet-manager/README.md`](fleet-manager/README.md) for the full feature list, architecture,
 build and packaging instructions, and screenshots in `fleet-manager/docs/screenshots/`.
+The end-to-end walkthrough for both halves is in [`USAGE.md`](USAGE.md).
 
 ---
 
