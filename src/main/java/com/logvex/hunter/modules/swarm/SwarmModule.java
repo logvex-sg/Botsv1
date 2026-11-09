@@ -259,6 +259,9 @@ public class SwarmModule extends HunterModule {
         if (command == null || command.isBlank()) return "empty command";
         var peer = roster.resolve(selector);
         if (peer == null) return "no worker matches '" + selector + "'";
+        if (!allowCombatBroadcast.get() && SwarmCommandGate.armsCombat(command)) {
+            HunterChat.warn("Sending a combat-arming command to one worker: " + command.trim());
+        }
         String error = roster.send(peer.id(), SwarmMessage.of(SwarmProtocol.COMMAND)
             .with(SwarmProtocol.FIELD_LINE, command.trim())
             .with(SwarmProtocol.FIELD_TIME, System.currentTimeMillis()));

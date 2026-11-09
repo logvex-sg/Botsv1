@@ -21,6 +21,13 @@ class SwarmCommandGateTest {
     }
 
     @Test
+    void nonCombatSettingsMayBeBroadcastButCombatSettingsMayNot() {
+        assertTrue(SwarmCommandGate.inspect("set equipment-manager min-durability 20", false).allowed());
+        assertFalse(SwarmCommandGate.inspect("set auto-totem threshold 2", false).allowed());
+        assertFalse(SwarmCommandGate.inspect("set combat-coordinator protect-friends true", false).allowed());
+    }
+
+    @Test
     void emergencyStopIsAlwaysBroadcastable() {
         assertTrue(SwarmCommandGate.inspect("emergency-stop", false).allowed());
         assertTrue(SwarmCommandGate.inspect("estop", false).allowed());

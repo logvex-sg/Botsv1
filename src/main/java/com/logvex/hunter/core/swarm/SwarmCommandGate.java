@@ -34,9 +34,9 @@ public final class SwarmCommandGate {
     private static final Set<String> COMBAT_SETTINGS = Set.of(
         "auto-enable-modules", "protect-friends", "protect-ignored", "friend-protection");
 
-    /** Verbs that are safe to send to the whole fleet: they read or annotate, they do not act. */
+    /** Verbs that are safe to send to the whole fleet: they read, annotate or retune, not act. */
     private static final Set<String> BROADCAST_VERBS = Set.of(
-        "status", "save", "settings", "setting", "profile", "hud",
+        "status", "save", "settings", "setting", "set", "profile", "hud",
         "focus", "clear-target", "target", "notify");
 
     /** Verbs that always run on the whole fleet, because stopping everything is never the danger. */
