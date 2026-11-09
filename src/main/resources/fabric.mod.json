@@ -3,7 +3,7 @@
   "id": "logvex-hunter",
   "version": "${version}",
   "name": "Logvex Hunter",
-  "description": "A modular hunter dashboard, player tracker, combat coordinator, equipment manager and defensive stasis system for Meteor Client.",
+  "description": "A modular hunter dashboard, player tracker, combat coordinator, equipment manager, defensive stasis system and in-game swarm control for Meteor Client.",
   "authors": [
     "Logvex"
   ],
