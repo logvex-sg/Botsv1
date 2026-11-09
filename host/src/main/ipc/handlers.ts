@@ -138,6 +138,60 @@ export function registerIpc(context: AppContext, api: ApiServer, getWindow: () =
     context.notifications.markAllRead();
     return true;
   });
+
+  // ------------------------------------------------------------ multiverse
+  const mv = context.multiverse;
+
+  // server profiles
+  handle('mv:servers:list', (includeArchived?: boolean) => mv.listServers(includeArchived === true));
+  handle('mv:servers:get', (id: string) => mv.getServer(id));
+  handle('mv:servers:create', (input: Parameters<typeof mv.createServer>[0]) => mv.createServer(input));
+  handle('mv:servers:update', (id: string, patch: Parameters<typeof mv.updateServer>[1]) => mv.updateServer(id, patch));
+  handle('mv:servers:delete', (id: string) => mv.removeServer(id));
+  handle('mv:servers:assign', (workerIds: string[], profileId: string | null) => mv.assignServer(workerIds, profileId));
+
+  // group templates
+  handle('mv:templates:list', () => mv.listGroupTemplates());
+  handle('mv:templates:create', (input: Parameters<typeof mv.createGroupTemplate>[0]) => mv.createGroupTemplate(input));
+  handle('mv:templates:delete', (id: string) => mv.removeGroupTemplate(id));
+  handle('mv:templates:apply', (templateId: string, groupName: string) => mv.createGroupFromTemplate(templateId, groupName));
+
+  // task presets
+  handle('mv:presets:list', () => mv.listTaskPresets());
+  handle('mv:presets:create', (input: Parameters<typeof mv.createTaskPreset>[0]) => mv.createTaskPreset(input));
+  handle('mv:presets:update', (id: string, patch: Parameters<typeof mv.updateTaskPreset>[1]) => mv.updateTaskPreset(id, patch));
+  handle('mv:presets:delete', (id: string) => mv.removeTaskPreset(id));
+  handle('mv:presets:run', (id: string) => mv.runTaskPreset(id));
+
+  // schedules
+  handle('mv:schedules:list', () => mv.listSchedules().map((schedule) => ({ ...schedule, missed: mv.missedFor(schedule) })));
+  handle('mv:schedules:create', (input: Parameters<typeof mv.createSchedule>[0]) => mv.createSchedule(input));
+  handle('mv:schedules:update', (id: string, patch: Parameters<typeof mv.updateSchedule>[1]) => mv.updateSchedule(id, patch));
+  handle('mv:schedules:delete', (id: string) => mv.removeSchedule(id));
+  handle('mv:schedules:tick', () => mv.tick());
+
+  // automation rules
+  handle('mv:rules:list', () => mv.listRules());
+  handle('mv:rules:create', (input: Parameters<typeof mv.createRule>[0]) => mv.createRule(input));
+  handle('mv:rules:update', (id: string, patch: Parameters<typeof mv.updateRule>[1]) => mv.updateRule(id, patch));
+  handle('mv:rules:delete', (id: string) => mv.removeRule(id));
+
+  // containers
+  handle('mv:containers:list', (workerId?: string) => mv.listContainers(workerId));
+  handle('mv:containers:delete', (id: string) => mv.removeContainer(id));
+
+  // inventory history
+  handle('mv:history:trend', (workerId: string, itemId: string, limit?: number) => mv.inventoryTrend(workerId, itemId, limit));
+  handle('mv:history:captures', (workerId: string, limit?: number) => mv.inventoryCaptures(workerId, limit));
+
+  // worker tags
+  handle('mv:tags:add', (workerId: string, tag: string) => context.workers.addTag(workerId, tag));
+  handle('mv:tags:remove', (workerId: string, tag: string) => context.workers.removeTag(workerId, tag));
+  handle('mv:tags:set', (workerId: string, tags: string[]) => context.workers.setTags(workerId, tags));
+  handle('mv:tags:all', () => context.workers.allTags());
+
+  // audit
+  handle('mv:audit:list', (limit?: number) => mv.listAudit(limit ?? 200));
 }
 
 function exportConfig(context: AppContext, win: BrowserWindow | null): { path: string } | null {

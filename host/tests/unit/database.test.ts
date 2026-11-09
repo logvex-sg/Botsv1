@@ -20,9 +20,21 @@ describe('FleetDatabase migrations', () => {
     expect(applied.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('creates the Multiverse tables (servers, presets, schedules, rules, history)', () => {
+    const tables = db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'").map((t) => t.name);
+    for (const expected of [
+      'server_profiles', 'group_templates', 'task_presets', 'schedules',
+      'automation_rules', 'inventory_history', 'containers', 'audit_log',
+    ]) {
+      expect(tables).toContain(expected);
+    }
+  });
+
   it('drops the retired mineflayer tables', () => {
     const tables = db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'").map((t) => t.name);
-    for (const gone of ['accounts', 'server_profiles', 'instances', 'targets', 'deployment_configs', 'stasis_locations']) {
+    // These belonged to the mineflayer-era fleet and were removed for good. `server_profiles` is
+    // deliberately NOT in this list: it was reintroduced as an organisational record in v5.
+    for (const gone of ['accounts', 'instances', 'targets', 'deployment_configs', 'stasis_locations']) {
       expect(tables).not.toContain(gone);
     }
   });

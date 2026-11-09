@@ -16,6 +16,7 @@ let window: BrowserWindow | null = null;
 let context: AppContext | null = null;
 let api: ApiServer | null = null;
 let unsubscribe: (() => void) | null = null;
+let scheduleTimer: NodeJS.Timeout | null = null;
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -75,6 +76,10 @@ async function bootstrap(): Promise<void> {
     api?.broadcast({ type: event.type, message: event.message, payload: event.payload });
   });
 
+  // Schedules are evaluated on a one-second tick. `tickSchedules` is a no-op unless something is
+  // actually due, so an idle Host with many schedules costs a few comparisons per tick.
+  scheduleTimer = setInterval(() => void context?.tickSchedules(), 1_000);
+
   await createWindow();
 }
 
@@ -97,6 +102,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   unsubscribe?.();
+  if (scheduleTimer) clearInterval(scheduleTimer);
   void context?.shutdown();
   void api?.stop();
 });

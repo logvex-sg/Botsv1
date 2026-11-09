@@ -108,6 +108,136 @@ export interface WorkerGroup {
   description: string;
   color: string;
   createdAt: number;
+  /** Task preset ids this group runs by default. */
+  defaultTaskPresetIds: string[];
+  /** Equipment preset ids this group uses by default. */
+  defaultEquipmentPresetIds: string[];
+  /** Permission keys granted to the group. */
+  permissions: string[];
+  archived: boolean;
+}
+
+/** A reusable set of group defaults. Applying one never touches existing workers. */
+export interface GroupTemplate {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  defaultTaskPresetIds: string[];
+  defaultEquipmentPresetIds: string[];
+  permissions: string[];
+  createdAt: number;
+}
+
+/**
+ * A server profile: an *organisational record*, not proof the server is reachable.
+ *
+ * It groups workers by the environment they are meant to run in. Actual connection state always
+ * comes from what a worker reports, never from this row.
+ */
+export interface ServerProfile {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  /** The Minecraft version this profile targets, for the compatibility matrix. */
+  version: string;
+  environment: 'production' | 'testing' | 'staging' | 'development';
+  notes: string;
+  tags: string[];
+  archived: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A server profile plus the live counts the UI shows beside it. */
+export interface ServerProfileView extends ServerProfile {
+  workers: number;
+  online: number;
+  /** How many assigned workers report this address as the server they are on. */
+  connectedToIt: number;
+}
+
+/** A reusable task configuration. */
+export interface TaskPreset {
+  id: string;
+  name: string;
+  description: string;
+  kind: string;
+  params: Record<string, unknown>;
+  targetWorkerIds: string[];
+  targetGroupIds: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A scheduled task. `lastFiredAt`/`fireCount` give duplicate-run protection across restarts. */
+export interface ScheduleRecord {
+  id: string;
+  name: string;
+  presetId: string | null;
+  kind: string;
+  params: Record<string, unknown>;
+  targetWorkerIds: string[];
+  targetGroupIds: string[];
+  scheduleKind: 'once' | 'interval' | 'daily';
+  startAt: number;
+  intervalMs: number | null;
+  timeOfDay: string | null;
+  stopAt: number | null;
+  enabled: boolean;
+  lastFiredAt: number | null;
+  fireCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** One WHEN/AND/THEN automation rule. */
+export interface AutomationRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** The event that triggers the rule, e.g. `WORKER_REGISTERED`. */
+  event: string;
+  conditions: RuleCondition[];
+  /** The task kind the rule dispatches. */
+  action: string;
+  cooldownMs: number;
+  maxRuns: number | null;
+  runCount: number;
+  lastRunAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A simple, inspectable condition. No scripting language; a fixed set of comparisons. */
+export interface RuleCondition {
+  field: string;
+  operator: 'eq' | 'neq' | 'contains' | 'gt' | 'lt';
+  value: string;
+}
+
+/** A container a worker reported, tracked separately from player inventories. */
+export interface ContainerRecord {
+  id: string;
+  workerId: string;
+  label: string;
+  x: number;
+  y: number;
+  z: number;
+  dimension: string;
+  items: import('./workers').WorkerItem[];
+  inspectedAt: number;
+}
+
+/** One audit-trail entry: an action the Host took. */
+export interface AuditEntry {
+  id: string;
+  at: number;
+  actor: string;
+  action: string;
+  target: string;
+  detail: string;
 }
 
 export interface WorkerRecord {
@@ -124,6 +254,15 @@ export interface WorkerRecord {
   lastSeen: number;
   lastAddress: string;
   status: WorkerStatus;
+  /** Additional labels beyond the primary group. */
+  tags: string[];
+  /** The server profile this worker is assigned to, if any. */
+  serverProfileId: string | null;
+  fabricVersion: string;
+  meteorVersion: string;
+  /** Capability names the worker last advertised. */
+  capabilities: string[];
+  archived: boolean;
 }
 
 /** The durable row plus the live connection state, which is what the UI actually renders. */

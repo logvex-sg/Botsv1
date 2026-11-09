@@ -64,6 +64,8 @@ export interface WorkerServiceDeps {
   inventory: WorkerInventoryRepository;
   events: EventRepository;
   emit: EmitEvent;
+  /** Called when a worker reports an inventory, so history can be recorded. */
+  onInventory?: (workerId: string, snapshot: WorkerInventorySnapshot) => void;
 }
 
 export class WorkerService {
@@ -81,6 +83,7 @@ export class WorkerService {
         inventory: deps.inventory,
         emit: deps.emit,
         onSnapshot: (workerId, snapshot) => this.rememberSnapshot(workerId, snapshot),
+        onInventory: (workerId, snapshot) => this.deps.onInventory?.(workerId, snapshot),
       },
       serverOptions,
     );
@@ -301,6 +304,44 @@ export class WorkerService {
 
   setNotes(workerId: string, notes: string): boolean {
     return Boolean(this.deps.workers.update(workerId, { notes }));
+  }
+
+  // --------------------------------------------------------------------- tags
+
+  /** Adds a tag to a worker, if not already present. */
+  addTag(workerId: string, tag: string): boolean {
+    const record = this.deps.workers.get(workerId);
+    if (!record) return false;
+    const normalized = tag.trim();
+    if (!normalized || record.tags.includes(normalized)) return false;
+    const updated = this.deps.workers.update(workerId, { tags: [...record.tags, normalized] });
+    if (updated) this.deps.emit('WORKER_TAGS_CHANGED', `Tag "${normalized}" added to ${updated.username || workerId}`, { workerId });
+    return Boolean(updated);
+  }
+
+  removeTag(workerId: string, tag: string): boolean {
+    const record = this.deps.workers.get(workerId);
+    if (!record) return false;
+    const next = record.tags.filter((existing) => existing !== tag);
+    if (next.length === record.tags.length) return false;
+    const updated = this.deps.workers.update(workerId, { tags: next });
+    if (updated) this.deps.emit('WORKER_TAGS_CHANGED', `Tag "${tag}" removed from ${updated.username || workerId}`, { workerId });
+    return Boolean(updated);
+  }
+
+  /** Replaces a worker's whole tag list, de-duplicated and trimmed. */
+  setTags(workerId: string, tags: string[]): boolean {
+    const clean = [...new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0))];
+    const updated = this.deps.workers.update(workerId, { tags: clean });
+    if (updated) this.deps.emit('WORKER_TAGS_CHANGED', `Tags updated for ${updated.username || workerId}`, { workerId });
+    return Boolean(updated);
+  }
+
+  /** Every tag currently in use, for the filter UI. */
+  allTags(): string[] {
+    const tags = new Set<string>();
+    for (const worker of this.deps.workers.list()) for (const tag of worker.tags) tags.add(tag);
+    return [...tags].sort();
   }
 
   /** Removes a worker's durable record and cached inventory. */

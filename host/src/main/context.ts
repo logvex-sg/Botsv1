@@ -12,10 +12,18 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { FleetDatabase } from './db/database';
 import {
+  AuditRepository,
+  AutomationRuleRepository,
+  ContainerRepository,
   EventRepository,
+  GroupTemplateRepository,
+  InventoryHistoryRepository,
   NotificationRepository,
   RegearPresetRepository,
+  ScheduleRepository,
+  ServerProfileRepository,
   SettingsRepository,
+  TaskPresetRepository,
   WorkerCommandRepository,
   WorkerGroupRepository,
   WorkerInventoryRepository,
@@ -25,6 +33,8 @@ import {
 import { EventBus } from './services/events/event-bus';
 import { WorkerService } from './workers/worker-service';
 import { WorkerModeService } from './worker-mode/worker-mode-service';
+import { MultiverseService } from './services/multiverse/multiverse-service';
+import { aggregate } from './packages/inventory-engine';
 import { DEFAULT_SETTINGS, type AppSettings, type HealthReport, type PairingCode } from '../shared/types';
 
 export interface AppContextOptions {
@@ -54,9 +64,20 @@ export class AppContext {
   readonly regearPresets: RegearPresetRepository;
   readonly workerInventory: WorkerInventoryRepository;
 
+  // Multiverse layer
+  readonly servers: ServerProfileRepository;
+  readonly groupTemplates: GroupTemplateRepository;
+  readonly taskPresets: TaskPresetRepository;
+  readonly schedules: ScheduleRepository;
+  readonly rules: AutomationRuleRepository;
+  readonly containers: ContainerRepository;
+  readonly inventoryHistory: InventoryHistoryRepository;
+  readonly audit: AuditRepository;
+
   readonly bus: EventBus;
   readonly workers: WorkerService;
   readonly workerMode: WorkerModeService;
+  readonly multiverse: MultiverseService;
 
   private readonly startedAt = Date.now();
   private settings: AppSettings;
@@ -79,6 +100,15 @@ export class AppContext {
     this.regearPresets = new RegearPresetRepository(this.db);
     this.workerInventory = new WorkerInventoryRepository(this.db);
 
+    this.servers = new ServerProfileRepository(this.db);
+    this.groupTemplates = new GroupTemplateRepository(this.db);
+    this.taskPresets = new TaskPresetRepository(this.db);
+    this.schedules = new ScheduleRepository(this.db);
+    this.rules = new AutomationRuleRepository(this.db);
+    this.containers = new ContainerRepository(this.db);
+    this.inventoryHistory = new InventoryHistoryRepository(this.db);
+    this.audit = new AuditRepository(this.db);
+
     this.bus = new EventBus(this.events, this.notifications);
     this.settings = this.loadSettings();
 
@@ -95,6 +125,12 @@ export class AppContext {
         inventory: this.workerInventory,
         events: this.events,
         emit: (type, message, payload) => this.emitEvent(type, message, payload),
+        // Recording history here means every reported inventory becomes a trend point, whether it
+        // arrived from a hand-run task or a schedule.
+        onInventory: (workerId, snapshot) => {
+          this.inventoryHistory.record(workerId, snapshot.capturedAt, aggregate([snapshot.carried]));
+          this.inventoryHistory.prune(200);
+        },
       },
       {
         host: this.settings.workerServerHost,
@@ -104,6 +140,39 @@ export class AppContext {
       },
     );
     this.startWorkerServer = options.startWorkerServer !== false;
+
+    // The Multiverse layer reads the same worker rows and dispatches through the same task path as
+    // the UI, so a scheduled run and a hand-clicked run are the same operation.
+    this.multiverse = new MultiverseService({
+      servers: this.servers,
+      groupTemplates: this.groupTemplates,
+      groups: this.workerGroups,
+      taskPresets: this.taskPresets,
+      schedules: this.schedules,
+      rules: this.rules,
+      containers: this.containers,
+      history: this.inventoryHistory,
+      audit: this.audit,
+      workers: this.workerRepo,
+      emit: (type, message, payload) => this.emitEvent(type, message, payload),
+      runTask: async (workerId, kind, params) => {
+        try {
+          const result = await this.workers.runTask(workerId, kind as never, params);
+          return { ok: result.ok, error: result.ok ? undefined : result.message };
+        } catch (error) {
+          return { ok: false, error: (error as Error).message };
+        }
+      },
+      isOnline: (workerId) => this.workers.server.isOnline(workerId),
+    });
+
+    // Every worker event is offered to the rule engine exactly once, here, so a rule fires from the
+    // same event stream the Activity view shows.
+    this.bus.subscribe((event) => {
+      void this.multiverse
+        .onEvent({ type: event.type, workerId: event.workerId, payload: event.payload })
+        .catch((error) => this.emitEvent('SYSTEM', `Automation rule failed: ${(error as Error).message}`));
+    });
 
     // Worker Mode keeps its own settings key and its own connection; it never reads the host's
     // `app` settings, so the two modes cannot blend.
@@ -135,6 +204,20 @@ export class AppContext {
 
   emitEvent(type: string, message: string, payload?: Record<string, unknown>): void {
     this.bus.publish({ type, source: 'host', message, payload, severity: severityFor(type) });
+  }
+
+  /**
+   * Runs due schedules once. Called on an interval from the main process.
+   *
+   * This is deliberately a no-op when nothing is due, so an idle Host with many schedules costs a
+   * few timestamp comparisons per tick and nothing else.
+   */
+  async tickSchedules(now = Date.now()): Promise<void> {
+    try {
+      await this.multiverse.tick(now);
+    } catch (error) {
+      this.emitEvent('SYSTEM', `Schedule tick failed: ${(error as Error).message}`);
+    }
   }
 
   private loadSettings(): AppSettings {

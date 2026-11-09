@@ -151,6 +151,12 @@ export interface WorkerSnapshot {
   distinctItems: number;
   freeSlots: number;
   capabilities: string[];
+  /** The Fabric Loader version the worker reported, for the compatibility matrix. */
+  fabricVersion: string;
+  /** The Meteor version the worker reported, when the integration is present. */
+  meteorVersion: string;
+  /** The mod version the worker reported. */
+  modVersion: string;
 }
 
 /** One reported item stack. */
@@ -208,6 +214,9 @@ export function emptySnapshot(workerId: string): WorkerSnapshot {
     distinctItems: 0,
     freeSlots: 0,
     capabilities: [],
+    fabricVersion: '',
+    meteorVersion: '',
+    modVersion: '',
   };
 }
 

@@ -346,4 +346,146 @@ export const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: '0005_multiverse',
+    up: (db) => {
+      // The Multiverse layer: server profiles, worker tags, reusable task presets, schedules,
+      // automation rules, inventory history and an audit trail. These are the durable records the
+      // new engines (task-engine, scheduler, inventory-engine, group-engine) read and write.
+      db.exec(`
+        -- A server profile is an *organisational record*: a name, an address and notes. It is NOT
+        -- proof the server is reachable. Reachability comes from what a worker reports.
+        CREATE TABLE IF NOT EXISTS server_profiles (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          host TEXT NOT NULL DEFAULT '',
+          port INTEGER NOT NULL DEFAULT 25565,
+          version TEXT NOT NULL DEFAULT '',
+          environment TEXT NOT NULL DEFAULT 'production',
+          notes TEXT NOT NULL DEFAULT '',
+          tags TEXT NOT NULL DEFAULT '[]',
+          archived INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- A worker may have one primary group and any number of tags. Tags are a JSON array on the
+        -- worker row so membership needs no join; group_id stays the single primary group.
+        ALTER TABLE workers ADD COLUMN tags TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE workers ADD COLUMN server_profile_id TEXT;
+        ALTER TABLE workers ADD COLUMN fabric_version TEXT NOT NULL DEFAULT '';
+        ALTER TABLE workers ADD COLUMN meteor_version TEXT NOT NULL DEFAULT '';
+        ALTER TABLE workers ADD COLUMN capabilities TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE workers ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+
+        -- Group templates: reusable defaults a new group can be created from. Applying one never
+        -- touches existing workers.
+        CREATE TABLE IF NOT EXISTS group_templates (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT NOT NULL DEFAULT '',
+          color TEXT NOT NULL DEFAULT '#6d5efc',
+          default_task_preset_ids TEXT NOT NULL DEFAULT '[]',
+          default_equipment_preset_ids TEXT NOT NULL DEFAULT '[]',
+          permissions TEXT NOT NULL DEFAULT '[]',
+          created_at INTEGER NOT NULL
+        );
+
+        -- Group-level defaults and permissions (the template's applied result).
+        ALTER TABLE worker_groups ADD COLUMN default_task_preset_ids TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE worker_groups ADD COLUMN default_equipment_preset_ids TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE worker_groups ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE worker_groups ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+
+        -- Reusable task configurations.
+        CREATE TABLE IF NOT EXISTS task_presets (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT NOT NULL DEFAULT '',
+          kind TEXT NOT NULL,
+          params TEXT NOT NULL DEFAULT '{}',
+          target_worker_ids TEXT NOT NULL DEFAULT '[]',
+          target_group_ids TEXT NOT NULL DEFAULT '[]',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- Schedules. The state columns implement duplicate-run protection across restarts.
+        CREATE TABLE IF NOT EXISTS schedules (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          preset_id TEXT,
+          kind TEXT NOT NULL,
+          task_kind TEXT NOT NULL,
+          params TEXT NOT NULL DEFAULT '{}',
+          target_worker_ids TEXT NOT NULL DEFAULT '[]',
+          target_group_ids TEXT NOT NULL DEFAULT '[]',
+          schedule_kind TEXT NOT NULL,
+          start_at INTEGER NOT NULL,
+          interval_ms INTEGER,
+          time_of_day TEXT,
+          stop_at INTEGER,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          last_fired_at INTEGER,
+          fire_count INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled);
+
+        -- Automation rules: WHEN <event> AND <conditions> THEN <action>.
+        CREATE TABLE IF NOT EXISTS automation_rules (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          event TEXT NOT NULL,
+          conditions TEXT NOT NULL DEFAULT '[]',
+          action TEXT NOT NULL,
+          cooldown_ms INTEGER NOT NULL DEFAULT 0,
+          max_runs INTEGER,
+          run_count INTEGER NOT NULL DEFAULT 0,
+          last_run_at INTEGER,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- Inventory history: one row per (worker, capture), so trends and diffs are real.
+        CREATE TABLE IF NOT EXISTS inventory_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          worker_id TEXT NOT NULL,
+          captured_at INTEGER NOT NULL,
+          item_id TEXT NOT NULL,
+          item_name TEXT NOT NULL DEFAULT '',
+          count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_inventory_history ON inventory_history(worker_id, captured_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_inventory_history_item ON inventory_history(item_id, captured_at DESC);
+
+        -- Accessible containers a worker has reported, kept separately from player inventories.
+        CREATE TABLE IF NOT EXISTS containers (
+          id TEXT PRIMARY KEY,
+          worker_id TEXT NOT NULL,
+          label TEXT NOT NULL DEFAULT '',
+          x INTEGER NOT NULL DEFAULT 0,
+          y INTEGER NOT NULL DEFAULT 0,
+          z INTEGER NOT NULL DEFAULT 0,
+          dimension TEXT NOT NULL DEFAULT '',
+          items TEXT NOT NULL DEFAULT '[]',
+          inspected_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_containers_worker ON containers(worker_id, inspected_at DESC);
+
+        -- An audit trail of every action the Host took, separate from the worker-scoped events.
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id TEXT PRIMARY KEY,
+          at INTEGER NOT NULL,
+          actor TEXT NOT NULL DEFAULT 'operator',
+          action TEXT NOT NULL,
+          target TEXT NOT NULL DEFAULT '',
+          detail TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_log(at DESC);
+      `);
+    },
+  },
 ];

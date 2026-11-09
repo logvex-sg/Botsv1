@@ -19,6 +19,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Server } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { WorkerCommandRepository, WorkerInventoryRepository, WorkerRepository, WorkerTaskRepository } from '../db/repositories';
+import type { WorkerInventorySnapshot } from '../../shared/types';
 import type { FleetEventTypeName } from '../../shared/events';
 import {
   WORKER_PATH,
@@ -102,6 +103,8 @@ export class WorkerServer {
       emit: EmitEvent;
       /** Called whenever a worker reports a new snapshot, so the service can remember it. */
       onSnapshot?: (workerId: string, snapshot: WorkerSnapshot) => void;
+      /** Called whenever a worker reports an inventory, so history can be recorded. */
+      onInventory?: (workerId: string, snapshot: WorkerInventorySnapshot) => void;
     },
     private options: WorkerServerOptions,
   ) {
@@ -449,10 +452,13 @@ export class WorkerServer {
           minecraftVersion: snapshot.minecraftVersion,
           serverAddress: snapshot.serverAddress,
           protocolVersion: worker.protocolVersion,
-          modVersion: worker.modVersion,
+          modVersion: worker.modVersion || snapshot.modVersion,
           lastAddress: worker.address,
           status: 'ONLINE',
           snapshot: snapshot as unknown as Record<string, unknown>,
+          fabricVersion: snapshot.fabricVersion,
+          meteorVersion: snapshot.meteorVersion,
+          capabilities: snapshot.capabilities,
         });
         if (envelope.type === WorkerInbound.REGISTER) {
           this.deps.emit('WORKER_REGISTERED', `Worker ${snapshot.username || workerId} connected`, {
@@ -568,14 +574,16 @@ export class WorkerServer {
         .filter((item) => item.id.length > 0);
     };
 
-    this.deps.inventory.save({
+    const snapshot: WorkerInventorySnapshot = {
       workerId,
       capturedAt: Date.now(),
       carried: toItems(data.carried),
       accessible: toItems(data.accessible),
       armor: toItems(data.armor),
       containerOpen: data.containerOpen === true,
-    });
+    };
+    this.deps.inventory.save(snapshot);
+    this.deps.onInventory?.(workerId, snapshot);
   }
 
   private onDisconnect(workerId: string): void {
@@ -663,6 +671,9 @@ export class WorkerServer {
       capabilities: Array.isArray(payload.capabilities)
         ? (payload.capabilities as unknown[]).filter((c): c is string => typeof c === 'string')
         : [],
+      fabricVersion: text('fabricVersion', ''),
+      meteorVersion: text('meteorVersion', ''),
+      modVersion: text('modVersion', ''),
     };
   }
 
