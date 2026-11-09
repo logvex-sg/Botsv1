@@ -54,7 +54,7 @@ HTTP endpoint, and the Fleet Manager connects to it. See
 - Minecraft 1.21.11 with Fabric Loader 0.19.5
 - [Meteor Client](https://meteorclient.com/) 1.21.11-SNAPSHOT
 - Java 21 runtime (the mod targets Java 21, so it loads on a stock 1.21.11 install)
-- JDK 21 or newer to build the addon (any JDK 21+ works; CI uses 25)
+- **JDK 25** to build the addon — Fabric Loom 1.18 requires a Java 25 runtime (the mod itself is compiled to Java 21 bytecode)
 
 ### Installation
 
@@ -66,8 +66,9 @@ HTTP endpoint, and the Fleet Manager connects to it. See
 ### Building
 
 ```bash
-# Any JDK 21 or newer builds the mod; it is always compiled to Java 21 bytecode.
-export JAVA_HOME=/path/to/jdk-21-or-newer
+# The build must run on JDK 25 (Fabric Loom 1.18 requires a Java 25 runtime).
+# The mod itself is compiled to Java 21 bytecode and runs on Java 21.
+export JAVA_HOME=/path/to/jdk-25
 ./gradlew clean test build
 ```
 
@@ -198,7 +199,7 @@ The end-to-end walkthrough for both halves is in [`USAGE.md`](USAGE.md).
 
 ```bash
 # Addon (from the repository root)
-export JAVA_HOME=/path/to/jdk-21-or-newer
+export JAVA_HOME=/path/to/jdk-25
 ./gradlew clean test build
 
 # Fleet Manager

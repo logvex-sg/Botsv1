@@ -11,8 +11,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   1.21.11-SNAPSHOT run on Java 21, so the previous jar (Java 25 bytecode, `"java": ">=25"` in
   `fabric.mod.json`) would have been rejected by Fabric Loader and could never load. The mod is now
   compiled with `--release 21` and declares `"java": ">=21"`.
-- The build no longer requires a JDK 25 toolchain; any JDK 21 or newer builds the identical Java 21
-  bytecode. An explicit, readable error is raised if the build JDK is older than 21.
+- The build now runs directly on JDK 25 instead of a Gradle toolchain, and fails early with a
+  readable message if the JDK is older than 25. JDK 25 is required *to build* because Fabric Loom
+  1.18 needs a Java 25 runtime (resolved in the JVM that runs Gradle); the mod itself is still
+  compiled to Java 21 bytecode.
 
 ## [1.0.0] - 2026-11-08
 

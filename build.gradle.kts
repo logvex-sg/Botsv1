@@ -5,11 +5,15 @@ plugins {
 val archivesBaseName = providers.gradleProperty("archives_base_name").get()
 val mavenGroup = providers.gradleProperty("maven_group").get()
 
-// Fail with a clear message instead of a confusing javac error if the JDK running Gradle is too
-// old. Any JDK 21 or newer works; the mod is always compiled to Java 21 bytecode.
-require(JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {
-    "Logvex Hunter must be built with Java 21 or newer (found ${JavaVersion.current()}). " +
-        "Point JAVA_HOME at a JDK 21+ installation and re-run ./gradlew."
+// Fabric Loom 1.18 requires a Java 25 runtime, and the Gradle daemon resolves the Loom plugin in
+// the JVM that runs Gradle — a toolchain does not help here. So the *build* must run on JDK 25.
+// The *mod* is separately compiled to Java 21 bytecode (see options.release below), which is the
+// runtime Minecraft 1.21.11 and Meteor 1.21.11-SNAPSHOT use.
+require(JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_25)) {
+    "Logvex Hunter must be built with JDK 25 or newer: Fabric Loom 1.18 requires a Java 25 " +
+        "runtime, resolved in the JVM that runs Gradle. Point JAVA_HOME at a JDK 25 installation " +
+        "and re-run ./gradlew (found ${JavaVersion.current()}). The mod itself is compiled to " +
+        "Java 21 bytecode and runs on Java 21."
 }
 
 base {
@@ -50,11 +54,9 @@ dependencies {
 }
 
 java {
-    // No fixed toolchain: the build runs on whatever JDK Gradle itself is running on, as long as
-    // it is Java 21 or newer. The mod is compiled *for* Java 21 (see options.release below), which
-    // is the runtime Minecraft 1.21.11 and Meteor 1.21.11-SNAPSHOT use, so the resulting jar loads
-    // on a stock Java 21 game install. Building with a newer JDK (e.g. 25) is fine and is what CI
-    // uses; a Java 21 JDK builds the identical bytecode.
+    // No toolchain: the build runs on the JDK that runs Gradle (must be 25+, see the require()
+    // above, because Loom 1.18 needs a Java 25 runtime). The mod is compiled *for* Java 21 via
+    // options.release below, so the produced jar loads on a stock Java 21 Minecraft 1.21.11.
 }
 
 loom {
