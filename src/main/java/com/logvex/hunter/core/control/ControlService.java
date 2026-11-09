@@ -36,6 +36,7 @@ public final class ControlService {
             case ControlAction.Hud hud -> target.hud(hud.element(), hud.list());
             case ControlAction.Focus focus -> target.focus(focus.player());
             case ControlAction.Target t -> target.target(t);
+            case ControlAction.TargetList list -> target.listTargets(list.category());
             case ControlAction.Data data -> target.data(data.kind());
             case ControlAction.Notify notify -> {
                 target.notify(notify.message());

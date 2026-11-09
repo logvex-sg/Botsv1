@@ -44,6 +44,9 @@ public interface ControlTarget {
     /** Applies a target-list edit. */
     String target(ControlAction.Target action);
 
+    /** Lists the targets in one category (or the default category when {@code category} is null). */
+    String listTargets(String category);
+
     /** Reloads state from disk, or exports it. */
     String data(ControlAction.Data.Kind kind);
 

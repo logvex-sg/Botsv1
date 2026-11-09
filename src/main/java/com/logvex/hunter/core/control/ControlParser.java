@@ -21,9 +21,10 @@ import java.util.Locale;
  *   profile list | profile use|create|delete|save &lt;name&gt;
  *   hud list | hud &lt;element&gt;
  *   focus &lt;player&gt; | clear-target
- *   target add &lt;name&gt; [category] | target remove &lt;name&gt;
+ *   target list [category] | target add &lt;name&gt; [category] | target remove &lt;name&gt;
  *   target category &lt;name&gt; &lt;category&gt; | target priority &lt;name&gt; &lt;1-10&gt;
  *   target notes &lt;name&gt; &lt;text...&gt;
+ *   bot status | bot pause | bot resume | bot stop   (legacy alias)
  *   reload | export
  *   notify &lt;message...&gt;
  * </pre>
@@ -61,6 +62,7 @@ public final class ControlParser {
             case "hud" -> hud(parts);
             case "focus" -> parts.length >= 2 ? new ControlAction.Focus(parts[parts.length - 1]) : null;
             case "clear-target" -> new ControlAction.Focus(null);
+            case "bot" -> bot(parts);
             case "target" -> target(parts, trimmed);
             case "reload" -> new ControlAction.Data(ControlAction.Data.Kind.RELOAD);
             case "export" -> new ControlAction.Data(ControlAction.Data.Kind.EXPORT);
@@ -127,6 +129,8 @@ public final class ControlParser {
         if (parts.length < 2) return null;
         String action = lower(parts[1]);
         return switch (action) {
+            case "list", "ls" -> new ControlAction.TargetList(parts.length >= 3 ? lower(parts[2]) : null);
+            case "focus" -> parts.length < 3 ? null : new ControlAction.Focus(parts[2]);
             case "add" -> {
                 if (parts.length < 3) yield null;
                 String category = parts.length >= 4 ? lower(parts[3]) : "priority";
@@ -150,6 +154,19 @@ public final class ControlParser {
                 if (notes == null) yield null;
                 yield new ControlAction.Target(ControlAction.Target.Op.SET_NOTES, parts[2], null, null, notes);
             }
+            default -> null;
+        };
+    }
+
+    /** The legacy {@code bot <status|pause|resume|stop>} alias, kept for API compatibility. */
+    private static ControlAction bot(String[] parts) {
+        if (parts.length < 2) return null;
+        return switch (lower(parts[1])) {
+            case "status" -> new ControlAction.Lifecycle(ControlAction.Lifecycle.Kind.STATUS);
+            case "pause" -> new ControlAction.Lifecycle(ControlAction.Lifecycle.Kind.PAUSE);
+            case "resume" -> new ControlAction.Lifecycle(ControlAction.Lifecycle.Kind.RESUME);
+            case "stop", "emergency-stop" -> new ControlAction.Lifecycle(ControlAction.Lifecycle.Kind.EMERGENCY_STOP);
+            case "start" -> new ControlAction.Lifecycle(ControlAction.Lifecycle.Kind.START);
             default -> null;
         };
     }

@@ -239,6 +239,20 @@ public final class MinecraftControlTarget implements ControlTarget {
     }
 
     @Override
+    public String listTargets(String categoryKey) {
+        HunterCore core = core();
+        TargetCategory category = TargetCategory.fromKey(categoryKey);
+        var entries = core.targets().byCategory(category);
+        if (entries.isEmpty()) return category.displayName() + ": empty";
+        StringBuilder sb = new StringBuilder(category.displayName()).append(" (")
+            .append(entries.size()).append("): ");
+        for (TargetEntry entry : entries) {
+            sb.append(entry.effectiveName()).append("(prio ").append(entry.priority()).append(") ");
+        }
+        return sb.toString().trim();
+    }
+
+    @Override
     public String data(ControlAction.Data.Kind kind) {
         return switch (kind) {
             case RELOAD -> {

@@ -38,6 +38,9 @@ public sealed interface ControlAction {
         public enum Op { ADD, REMOVE, SET_CATEGORY, SET_PRIORITY, SET_NOTES }
     }
 
+    /** List the targets in one category, or the default category when {@code category} is null. */
+    record TargetList(String category) implements ControlAction {}
+
     /** Reload state from disk, or export it. */
     record Data(Kind kind) implements ControlAction {
         public enum Kind { RELOAD, EXPORT }

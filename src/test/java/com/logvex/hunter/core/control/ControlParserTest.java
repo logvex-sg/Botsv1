@@ -132,6 +132,20 @@ class ControlParserTest {
     }
 
     @Test
+    void legacyBotAliasAndTargetListParse() {
+        assertEquals(ControlAction.Lifecycle.Kind.PAUSE, lifecycle("bot pause"));
+        assertEquals(ControlAction.Lifecycle.Kind.RESUME, lifecycle("bot resume"));
+        assertEquals(ControlAction.Lifecycle.Kind.EMERGENCY_STOP, lifecycle("bot stop"));
+        assertEquals(ControlAction.Lifecycle.Kind.STATUS, lifecycle("bot status"));
+
+        ControlAction.TargetList list = (ControlAction.TargetList) ControlParser.parse("target list");
+        assertNull(list.category());
+        assertEquals("bot", ((ControlAction.TargetList) ControlParser.parse("target list bot")).category());
+
+        assertEquals("Steve", ((ControlAction.Focus) ControlParser.parse("target focus Steve")).player());
+    }
+
+    @Test
     void dataVerbsParse() {
         assertEquals(ControlAction.Data.Kind.RELOAD, ((ControlAction.Data) ControlParser.parse("reload")).kind());
         assertEquals(ControlAction.Data.Kind.EXPORT, ((ControlAction.Data) ControlParser.parse("export")).kind());

@@ -67,6 +67,11 @@ class ControlServiceTest {
             return "target " + action.op();
         }
 
+        @Override public String listTargets(String category) {
+            calls.add("targets:" + category);
+            return "priority: Griefer(prio 1)";
+        }
+
         @Override public String data(ControlAction.Data.Kind kind) {
             calls.add("data:" + kind);
             return "data " + kind;
@@ -129,6 +134,18 @@ class ControlServiceTest {
             "data:RELOAD",
             "notify:hello"
         ), target.calls);
+    }
+
+    @Test
+    void targetListDispatches() {
+        assertEquals("priority: Griefer(prio 1)", service.run("target list"));
+        assertEquals(List.of("targets:null"), target.calls);
+    }
+
+    @Test
+    void legacyBotAliasDispatches() {
+        assertEquals("lifecycle PAUSE", service.run("bot pause"));
+        assertEquals(List.of("lifecycle:PAUSE"), target.calls);
     }
 
     @Test
