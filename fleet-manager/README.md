@@ -182,7 +182,7 @@ the addon:
 .hunter companion token     # copy this token
 ```
 
-Then in the Fleet Manager's Configuration page set the Hunter base URL (e.g.
+Then in the Fleet Manager's **Settings** page set the Hunter base URL (e.g.
 `http://127.0.0.1:8720`) and the token. The client calls:
 
 | Method | Path | Purpose |

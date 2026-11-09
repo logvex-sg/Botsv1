@@ -534,10 +534,11 @@ In the addon:
 
 In the Fleet Manager:
 
-1. Open the **Configuration** page.
+1. Open the **Settings** page.
 2. Set **Hunter base URL** to `http://127.0.0.1:8720` (the addon's default port).
 3. Paste the token.
-4. Open the **Hunter** page — the client should show as connected with its version and last sync.
+4. Open **Main Features → Hunter** — the client should show as connected with its version and last
+   sync. (The Dashboard checklist also links straight there.)
 
 The Fleet Manager calls `/health`, `/api/v1/snapshot`, `/api/v1/modules`, `/api/v1/players`,
 `/api/v1/command` and `/api/v1/notify`. A client that is offline, misconfigured or not running
@@ -677,7 +678,7 @@ Enable the ones you want from Meteor's HUD editor.
 
 | Symptom | Cause / fix |
 | --- | --- |
-| The Fleet Manager shows the Hunter as disconnected | The companion module is not started, the port differs, or the token is wrong. Run `.hunter companion start` and `.hunter companion token`, and check the URL/port in Configuration. |
+| The Fleet Manager shows the Hunter as disconnected | The companion module is not started, the port differs, or the token is wrong. Run `.hunter companion start` and `.hunter companion token`, and check the URL/port on the Settings page. |
 | `/api/v1/*` returns 401 | The token is empty or does not match. The addon rejects all API calls when its configured token is blank. |
 | `curl` to the companion port is refused | The endpoint only listens while the companion module is running, and binds to loopback unless `allow-remote` is on. |
 | A module does nothing | Most modules only act while connected to a world; check the dashboard's state line. |
