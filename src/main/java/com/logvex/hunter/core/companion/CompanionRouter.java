@@ -1,6 +1,9 @@
 package com.logvex.hunter.core.companion;
 
 import com.logvex.hunter.core.HunterCore;
+import com.logvex.hunter.core.control.HudView;
+import com.logvex.hunter.core.control.ModuleView;
+import com.logvex.hunter.core.control.ProfileView;
 import com.logvex.hunter.core.model.TargetEntry;
 import com.logvex.hunter.core.stats.CombatEvent;
 import com.logvex.hunter.core.stats.SessionRecord;
@@ -62,12 +65,44 @@ public final class CompanionRouter {
             case "/api/v1/stats" -> Response.of(200, stats());
             case "/api/v1/events", "/api/v1/chat" -> Response.of(200, events(query));
             case "/api/v1/tasks" -> Response.of(200, tasks());
+            case "/api/v1/profiles" -> Response.of(200, profiles(verb, body));
+            case "/api/v1/hud" -> Response.of(200, Json.write(Map.of("hud", hudViews())));
+            case "/api/v1/settings" -> verb.equals("POST") ? setSetting(body) : Response.of(405, error("method not allowed"));
             case "/api/v1/command" -> verb.equals("POST") ? command(body) : Response.of(405, error("method not allowed"));
             case "/api/v1/notify" -> verb.equals("POST") ? notify(body) : Response.of(405, error("method not allowed"));
             default -> route.startsWith("/api/v1/bot")
                 ? bot(verb, route, body)
-                : Response.of(404, error("not found"));
+                : controlRoute(verb, route, body);
         };
+    }
+
+    // --------------------------------------------------------- control routes
+
+    /** Handles the parameterised control routes (module detail, profile switch, HUD toggle, hunter). */
+    private Response controlRoute(String verb, String route, String body) {
+        if (route.startsWith("/api/v1/modules/")) {
+            if (!verb.equals("GET")) return Response.of(405, error("method not allowed"));
+            String name = route.substring("/api/v1/modules/".length());
+            List<ModuleView> modules = api.modules(name);
+            if (modules.isEmpty()) return Response.of(404, error("unknown module: " + name));
+            return Response.of(200, Json.write(Map.of("module", modules.get(0).toJson())));
+        }
+        if (route.startsWith("/api/v1/profiles/")) {
+            if (!verb.equals("POST")) return Response.of(405, error("method not allowed"));
+            String name = route.substring("/api/v1/profiles/".length());
+            return Response.of(200, result("profile", name, api.switchProfile(name)));
+        }
+        if (route.startsWith("/api/v1/hud/")) {
+            if (!verb.equals("POST")) return Response.of(405, error("method not allowed"));
+            String name = route.substring("/api/v1/hud/".length());
+            return Response.of(200, result("hud", name, api.toggleHud(name)));
+        }
+        if (route.startsWith("/api/v1/hunter/")) {
+            if (!verb.equals("POST")) return Response.of(405, error("method not allowed"));
+            String action = route.substring("/api/v1/hunter/".length());
+            return Response.of(200, result("hunter", action, api.handleCommand(action)));
+        }
+        return Response.of(404, error("not found"));
     }
 
     // ---------------------------------------------------------------- routes
@@ -193,6 +228,42 @@ public final class CompanionRouter {
         if (message == null || message.isBlank()) return Response.of(400, error("message is required"));
         api.notify(message.trim());
         return Response.of(200, Json.write(Map.of("ok", true, "message", message.trim())));
+    }
+
+    private String profiles(String verb, String body) {
+        if (verb.equals("POST")) {
+            String name = readString(body, "name");
+            if (name == null || name.isBlank()) return Json.write(Map.of("error", "name is required"));
+            return result("profile", name.trim(), api.switchProfile(name.trim()));
+        }
+        List<Object> list = new ArrayList<>();
+        for (ProfileView profile : api.profiles()) list.add(profile.toJson());
+        return Json.write(Map.of("profiles", list));
+    }
+
+    private List<Object> hudViews() {
+        List<Object> list = new ArrayList<>();
+        for (HudView view : api.hudViews()) list.add(view.toJson());
+        return list;
+    }
+
+    private Response setSetting(String body) {
+        String module = readString(body, "module");
+        String setting = readString(body, "setting");
+        String value = readString(body, "value");
+        if (module == null || setting == null || value == null) {
+            return Response.of(400, error("module, setting and value are required"));
+        }
+        return Response.of(200, result("setting", module + "." + setting,
+            api.setSetting(module.trim(), setting.trim(), value)));
+    }
+
+    private static String result(String kind, String name, String result) {
+        Map<String, Object> map = Json.object();
+        map.put("ok", true);
+        map.put(kind, name);
+        map.put("result", result == null ? "" : result);
+        return Json.write(map);
     }
 
     private Response bot(String verb, String route, String body) {

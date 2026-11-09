@@ -48,6 +48,39 @@ class CompanionRouterTest {
             return List.of(Map.of("name", "player-tracker", "enabled", true));
         }
 
+        @Override public List<com.logvex.hunter.core.control.ModuleView> modules(String name) {
+            if (name != null && !name.equalsIgnoreCase("player-tracker")) return List.of();
+            var settings = List.of(new com.logvex.hunter.core.control.SettingView(
+                "range", "Range", "", "double", "64.0", "64.0", false, 1, 256, List.of()));
+            return List.of(new com.logvex.hunter.core.control.ModuleView(
+                "player-tracker", "Player Tracker", "", "Logvex Hunter", true, true, settings));
+        }
+
+        @Override public String setSetting(String module, String setting, String value) {
+            commands.add("set " + module + " " + setting + " " + value);
+            return module + "." + setting + " = " + value;
+        }
+
+        @Override public List<com.logvex.hunter.core.control.ProfileView> profiles() {
+            return List.of(new com.logvex.hunter.core.control.ProfileView(
+                "default", true, 64, 10, "priority", true, true, true));
+        }
+
+        @Override public String switchProfile(String name) {
+            commands.add("profile " + name);
+            return "active profile is now " + name;
+        }
+
+        @Override public List<com.logvex.hunter.core.control.HudView> hudViews() {
+            return List.of(new com.logvex.hunter.core.control.HudView(
+                "logvex-target", "Logvex Target", "Meteor", true, true));
+        }
+
+        @Override public String toggleHud(String element) {
+            commands.add("hud " + element);
+            return element + " is now off";
+        }
+
         @Override public String handleCommand(String command) {
             commands.add(command);
             return "ok:" + command;
@@ -204,5 +237,106 @@ class CompanionRouterTest {
 
         assertEquals(200, response.status());
         assertTrue(response.json().contains("Logvex Hunter"));
+    }
+
+    @Test
+    void moduleDetailRouteReturnsSettings(@TempDir Path dir) {
+        CompanionRouter router = new CompanionRouter(api(dir));
+        CompanionRouter.Response response = router.route("GET", "/api/v1/modules/player-tracker",
+            Map.of(), null, true);
+
+        assertEquals(200, response.status());
+        Map<String, Object> body = Json.parseObject(response.json());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> module = (Map<String, Object>) body.get("module");
+        assertEquals("player-tracker", module.get("name"));
+        @SuppressWarnings("unchecked")
+        List<Object> settings = (List<Object>) module.get("settings");
+        assertEquals(1, settings.size());
+    }
+
+    @Test
+    void unknownModuleDetailIsNotFound(@TempDir Path dir) {
+        CompanionRouter router = new CompanionRouter(api(dir));
+        CompanionRouter.Response response = router.route("GET", "/api/v1/modules/nope", Map.of(), null, true);
+        assertEquals(404, response.status());
+    }
+
+    @Test
+    void settingRouteAppliesTheChange(@TempDir Path dir) {
+        StubApi api = api(dir);
+        CompanionRouter router = new CompanionRouter(api);
+
+        CompanionRouter.Response response = router.route("POST", "/api/v1/settings", Map.of(),
+            "{\"module\":\"player-tracker\",\"setting\":\"range\",\"value\":\"96\"}", true);
+
+        assertEquals(200, response.status());
+        assertEquals(List.of("set player-tracker range 96"), api.commands);
+        assertTrue(response.json().contains("player-tracker.range = 96"));
+    }
+
+    @Test
+    void settingRouteRequiresAllFields(@TempDir Path dir) {
+        CompanionRouter router = new CompanionRouter(api(dir));
+        CompanionRouter.Response response = router.route("POST", "/api/v1/settings", Map.of(),
+            "{\"module\":\"player-tracker\"}", true);
+        assertEquals(400, response.status());
+    }
+
+    @Test
+    void profilesRouteListsAndSwitches(@TempDir Path dir) {
+        StubApi api = api(dir);
+        CompanionRouter router = new CompanionRouter(api);
+
+        CompanionRouter.Response list = router.route("GET", "/api/v1/profiles", Map.of(), null, true);
+        assertEquals(200, list.status());
+        assertTrue(list.json().contains("default"));
+
+        CompanionRouter.Response use = router.route("POST", "/api/v1/profiles/pvp", Map.of(), "{}", true);
+        assertEquals(200, use.status());
+        assertEquals(List.of("profile pvp"), api.commands);
+    }
+
+    @Test
+    void hudRouteListsAndToggles(@TempDir Path dir) {
+        StubApi api = api(dir);
+        CompanionRouter router = new CompanionRouter(api);
+
+        CompanionRouter.Response list = router.route("GET", "/api/v1/hud", Map.of(), null, true);
+        assertEquals(200, list.status());
+        assertTrue(list.json().contains("logvex-target"));
+
+        CompanionRouter.Response toggle = router.route("POST", "/api/v1/hud/logvex-target", Map.of(), "{}", true);
+        assertEquals(200, toggle.status());
+        assertEquals(List.of("hud logvex-target"), api.commands);
+    }
+
+    @Test
+    void hunterActionRouteRunsTheCommand(@TempDir Path dir) {
+        StubApi api = api(dir);
+        CompanionRouter router = new CompanionRouter(api);
+
+        CompanionRouter.Response response = router.route("POST", "/api/v1/hunter/emergency-stop",
+            Map.of(), "{}", true);
+
+        assertEquals(200, response.status());
+        assertEquals(List.of("emergency-stop"), api.commands);
+    }
+
+    @Test
+    void controlRoutesRequirePostWhereTheyMutate(@TempDir Path dir) {
+        CompanionRouter router = new CompanionRouter(api(dir));
+        assertEquals(405, router.route("GET", "/api/v1/profiles/pvp", Map.of(), null, true).status());
+        assertEquals(405, router.route("GET", "/api/v1/hud/logvex-target", Map.of(), null, true).status());
+        assertEquals(405, router.route("GET", "/api/v1/hunter/start", Map.of(), null, true).status());
+        assertEquals(405, router.route("GET", "/api/v1/settings", Map.of(), null, true).status());
+    }
+
+    @Test
+    void controlRoutesRequireAuthorization(@TempDir Path dir) {
+        CompanionRouter router = new CompanionRouter(api(dir));
+        assertEquals(401, router.route("GET", "/api/v1/profiles", Map.of(), null, false).status());
+        assertEquals(401, router.route("GET", "/api/v1/hud", Map.of(), null, false).status());
+        assertEquals(401, router.route("GET", "/api/v1/modules/player-tracker", Map.of(), null, false).status());
     }
 }

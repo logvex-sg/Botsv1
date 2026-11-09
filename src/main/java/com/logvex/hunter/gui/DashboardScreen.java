@@ -21,6 +21,7 @@ import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.tabs.TabScreen;
 import meteordevelopment.meteorclient.gui.widgets.WLabel;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.input.WDropdown;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WCheckbox;
 import meteordevelopment.meteorclient.utils.render.color.Color;
@@ -85,12 +86,37 @@ public class DashboardScreen extends TabScreen {
         navButton(nav, "Messages", () -> mc.setScreen(new MessagesScreen(theme, this)));
 
         var nav2 = controls.add(theme.horizontalList()).expandX().widget();
+        navButton(nav2, "Control", () -> mc.setScreen(new com.logvex.hunter.gui.control.ControlScreen(theme, this)));
         navButton(nav2, "Instances", () -> mc.setScreen(new InstancesScreen(theme, this)));
         navButton(nav2, "Companion", () -> mc.setScreen(new com.logvex.hunter.gui.instances.CompanionScreen(theme, this)));
         navButton(nav2, "Statistics", () -> mc.setScreen(new StatisticsScreen(theme, this)));
         navButton(nav2, "Profiles", () -> mc.setScreen(new ProfilesScreen(theme, this)));
         WButton save = nav2.add(theme.button("Save all")).widget();
         save.action = this::saveAll;
+
+        // Quick control: profile switcher and one-tap emergency tools, mirrored from the control layer.
+        var quick = controls.add(theme.horizontalList()).expandX().widget();
+        quick.add(theme.label("Profile")).widget();
+        WDropdown<String> profileDropdown = quick.add(
+            theme.dropdown(core().config().profiles().keySet().toArray(new String[0]),
+                core().config().activeProfileName())).expandX().widget();
+        profileDropdown.action = () -> {
+            new com.logvex.hunter.companion.MinecraftControlTarget().profile(
+                com.logvex.hunter.core.control.ControlAction.Profile.Kind.USE, profileDropdown.get());
+            refresh();
+        };
+        WButton saveProfile = quick.add(theme.button("Save profile")).widget();
+        saveProfile.action = () -> {
+            new com.logvex.hunter.companion.MinecraftControlTarget().profile(
+                com.logvex.hunter.core.control.ControlAction.Profile.Kind.SAVE, null);
+            refresh();
+        };
+        WButton reload = quick.add(theme.button("Reload")).widget();
+        reload.action = () -> {
+            new com.logvex.hunter.companion.MinecraftControlTarget().data(
+                com.logvex.hunter.core.control.ControlAction.Data.Kind.RELOAD);
+            refresh();
+        };
 
         // Modules
         var modules = add(theme.section("Modules", true)).expandX().widget();

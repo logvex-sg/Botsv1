@@ -1,6 +1,8 @@
 package com.logvex.hunter.command;
 
+import com.logvex.hunter.companion.MinecraftControlTarget;
 import com.logvex.hunter.core.HunterCore;
+import com.logvex.hunter.core.control.ControlAction;
 import com.logvex.hunter.core.model.TargetCategory;
 import com.logvex.hunter.core.model.TargetEntry;
 import com.logvex.hunter.core.target.TargetCandidate;
@@ -82,6 +84,37 @@ public class TargetCommand extends Command {
             return SINGLE_SUCCESS;
         }));
 
+        builder.then(literal("note")
+            .then(argument("player", StringArgumentType.word())
+                .then(argument("text", StringArgumentType.greedyString()).executes(context -> {
+                    info(control().target(new ControlAction.Target(ControlAction.Target.Op.SET_NOTES,
+                        StringArgumentType.getString(context, "player"), null, null,
+                        StringArgumentType.getString(context, "text"))));
+                    return SINGLE_SUCCESS;
+                })))
+        );
+
+        builder.then(literal("priority")
+            .then(argument("player", StringArgumentType.word())
+                .then(argument("value", com.mojang.brigadier.arguments.IntegerArgumentType.integer(1, 10))
+                    .executes(context -> {
+                        info(control().target(new ControlAction.Target(ControlAction.Target.Op.SET_PRIORITY,
+                            StringArgumentType.getString(context, "player"), null,
+                            com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(context, "value"), null)));
+                        return SINGLE_SUCCESS;
+                    })))
+        );
+
+        builder.then(literal("category")
+            .then(argument("player", StringArgumentType.word())
+                .then(argument("category", StringArgumentType.word()).executes(context -> {
+                    info(control().target(new ControlAction.Target(ControlAction.Target.Op.SET_CATEGORY,
+                        StringArgumentType.getString(context, "player"),
+                        StringArgumentType.getString(context, "category"), null, null)));
+                    return SINGLE_SUCCESS;
+                })))
+        );
+
         builder.then(literal("current").executes(context -> {
             TargetCandidate target = core().currentTarget();
             if (target == null) info("No current target.");
@@ -131,5 +164,9 @@ public class TargetCommand extends Command {
 
     private HunterCore core() {
         return HunterRuntime.get().core();
+    }
+
+    private MinecraftControlTarget control() {
+        return new MinecraftControlTarget();
     }
 }

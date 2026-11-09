@@ -1,6 +1,10 @@
 package com.logvex.hunter.command;
 
+import com.logvex.hunter.companion.MinecraftControlTarget;
 import com.logvex.hunter.core.HunterCore;
+import com.logvex.hunter.core.control.ControlAction;
+import com.logvex.hunter.core.control.ModuleView;
+import com.logvex.hunter.core.control.SettingView;
 import com.logvex.hunter.core.util.Time;
 import com.logvex.hunter.gui.DashboardScreen;
 import com.logvex.hunter.mc.HunterRuntime;
@@ -57,6 +61,11 @@ public class HunterCommand extends Command {
             return SINGLE_SUCCESS;
         }));
 
+        builder.then(literal("control").executes(context -> {
+            mc.setScreen(new com.logvex.hunter.gui.control.ControlScreen(GuiThemes.get(), null));
+            return SINGLE_SUCCESS;
+        }));
+
         builder.then(literal("save").executes(context -> {
             String error = core().saveAll();
             if (error != null) error("Save failed: %s", error);
@@ -83,6 +92,84 @@ public class HunterCommand extends Command {
         builder.then(literal("profile").executes(context -> {
             info("Active profile: %s", core().config().activeProfileName());
             for (String name : core().config().profiles().keySet()) info(" - %s", name);
+            return SINGLE_SUCCESS;
+        })
+            .then(literal("use")
+                .then(argument("name", com.mojang.brigadier.arguments.StringArgumentType.word())
+                    .executes(context -> {
+                        info(control().profile(ControlAction.Profile.Kind.USE,
+                            com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name")));
+                        return SINGLE_SUCCESS;
+                    })))
+            .then(literal("create")
+                .then(argument("name", com.mojang.brigadier.arguments.StringArgumentType.word())
+                    .executes(context -> {
+                        info(control().profile(ControlAction.Profile.Kind.CREATE,
+                            com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name")));
+                        return SINGLE_SUCCESS;
+                    })))
+            .then(literal("delete")
+                .then(argument("name", com.mojang.brigadier.arguments.StringArgumentType.word())
+                    .executes(context -> {
+                        info(control().profile(ControlAction.Profile.Kind.DELETE,
+                            com.mojang.brigadier.arguments.StringArgumentType.getString(context, "name")));
+                        return SINGLE_SUCCESS;
+                    })))
+            .then(literal("save").executes(context -> {
+                info(control().profile(ControlAction.Profile.Kind.SAVE, null));
+                return SINGLE_SUCCESS;
+            }))
+        );
+
+        builder.then(literal("set")
+            .then(argument("module", com.mojang.brigadier.arguments.StringArgumentType.word())
+                .then(argument("setting", com.mojang.brigadier.arguments.StringArgumentType.word())
+                    .then(argument("value", com.mojang.brigadier.arguments.StringArgumentType.greedyString())
+                        .executes(context -> {
+                            String module = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "module");
+                            String setting = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "setting");
+                            String value = com.mojang.brigadier.arguments.StringArgumentType.getString(context, "value");
+                            info(control().setSetting(module, setting, value));
+                            return SINGLE_SUCCESS;
+                        }))))
+        );
+
+        builder.then(literal("get")
+            .executes(context -> {
+                printModules(control().modules(null));
+                return SINGLE_SUCCESS;
+            })
+            .then(argument("module", com.mojang.brigadier.arguments.StringArgumentType.word())
+                .executes(context -> {
+                    printModules(control().modules(
+                        com.mojang.brigadier.arguments.StringArgumentType.getString(context, "module")));
+                    return SINGLE_SUCCESS;
+                }))
+        );
+
+        builder.then(literal("hud").executes(context -> {
+            info(control().hud(null, true));
+            return SINGLE_SUCCESS;
+        })
+            .then(literal("list").executes(context -> {
+                info(control().hud(null, true));
+                return SINGLE_SUCCESS;
+            }))
+            .then(argument("element", com.mojang.brigadier.arguments.StringArgumentType.word())
+                .executes(context -> {
+                    info(control().hud(
+                        com.mojang.brigadier.arguments.StringArgumentType.getString(context, "element"), false));
+                    return SINGLE_SUCCESS;
+                }))
+        );
+
+        builder.then(literal("export").executes(context -> {
+            info(control().data(ControlAction.Data.Kind.EXPORT));
+            return SINGLE_SUCCESS;
+        }));
+
+        builder.then(literal("reload").executes(context -> {
+            info(control().data(ControlAction.Data.Kind.RELOAD));
             return SINGLE_SUCCESS;
         }));
 
@@ -160,6 +247,23 @@ public class HunterCommand extends Command {
 
     private HunterCore core() {
         return HunterRuntime.get().core();
+    }
+
+    private MinecraftControlTarget control() {
+        return new MinecraftControlTarget();
+    }
+
+    private void printModules(java.util.List<ModuleView> modules) {
+        if (modules == null || modules.isEmpty()) {
+            info("No matching modules.");
+            return;
+        }
+        for (ModuleView module : modules) {
+            info("%s [%s] %s", module.name(), module.enabled() ? "on" : "off", module.title());
+            for (SettingView setting : module.settings()) {
+                info("  %s = %s%s", setting.name(), setting.value(), setting.modified() ? " *" : "");
+            }
+        }
     }
 
     private void status() {

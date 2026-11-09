@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- **Full remote control surface for the Hunter, shared by chat and the Fleet Manager.** A new
+  Minecraft-free control layer (`com.logvex.hunter.core.control`) parses a single text grammar into
+  typed actions and dispatches them through a `ControlTarget`. The in-game chat commands, the
+  companion HTTP API and the Control screen all run through this one layer, so they can never drift
+  apart.
+  - Read and change **any module setting** remotely: `.hunter get [module]` lists every setting,
+    `.hunter set <module> <setting> <value>` changes one. Over HTTP:
+    `GET /api/v1/modules/{name}` and `POST /api/v1/settings`.
+  - Switch, create, delete and save **profiles**: `.hunter profile use|create|delete|save`.
+    Over HTTP: `GET /api/v1/profiles` and `POST /api/v1/profiles/{name}`.
+  - List and toggle **HUD elements**: `.hunter hud [list|<element>]`. Over HTTP: `GET /api/v1/hud`
+    and `POST /api/v1/hud/{name}`.
+  - **Hunter lifecycle** over HTTP: `POST /api/v1/hunter/{start|stop|emergency-stop|clear-stop|pause|resume|save|status}`.
+  - Richer **target control**: `.target note|priority|category`.
+- **Control screen** (`com.logvex.hunter.gui.control.ControlScreen`, opened with `.hunter control` or
+  the dashboard's Control button). It edits any module's settings by type (checkboxes for booleans,
+  dropdowns for enums, text boxes otherwise), switches and saves profiles, and toggles HUD elements —
+  all through the same control layer the API uses.
+- Dashboard quick-control row: an active-profile dropdown, Save profile and Reload buttons.
+
 ### Fixed
 - **The built jar now targets Java 21 instead of Java 25.** Minecraft 1.21.11 and Meteor
   1.21.11-SNAPSHOT run on Java 21, so the previous jar (Java 25 bytecode, `"java": ">=25"` in

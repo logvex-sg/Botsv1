@@ -41,6 +41,48 @@ export interface HunterModuleStatus {
   category?: string;
 }
 
+export interface HunterSetting {
+  name: string;
+  title: string;
+  description?: string;
+  type: 'boolean' | 'integer' | 'double' | 'enum' | 'string' | 'other';
+  value: string;
+  default: string;
+  modified: boolean;
+  min?: number;
+  max?: number;
+  suggestions?: string[];
+}
+
+export interface HunterModuleDetail {
+  name: string;
+  title: string;
+  description?: string;
+  category?: string;
+  enabled: boolean;
+  hunter: boolean;
+  settings: HunterSetting[];
+}
+
+export interface HunterProfile {
+  name: string;
+  active: boolean;
+  range: number;
+  scanInterval: number;
+  sortMode: string;
+  autoSelect: boolean;
+  protectFriends: boolean;
+  protectIgnored: boolean;
+}
+
+export interface HunterHudElement {
+  name: string;
+  title: string;
+  group: string;
+  active: boolean;
+  hunter: boolean;
+}
+
 export interface HunterSnapshot {
   players?: unknown[];
   targets?: HunterTarget[];
@@ -144,5 +186,44 @@ export class HunterClient extends EventEmitter {
       method: 'POST',
       body: JSON.stringify({ message }),
     });
+  }
+
+  /** Full detail (including settings) for one module. */
+  async module(name: string): Promise<HunterModuleDetail> {
+    const body = await this.request<{ module: HunterModuleDetail }>(`/api/v1/modules/${encodeURIComponent(name)}`);
+    return body.module;
+  }
+
+  /** Changes one setting of one module. */
+  async setSetting(module: string, setting: string, value: string): Promise<{ result: string }> {
+    return this.request('/api/v1/settings', {
+      method: 'POST',
+      body: JSON.stringify({ module, setting, value }),
+    });
+  }
+
+  async profiles(): Promise<HunterProfile[]> {
+    const body = await this.request<{ profiles?: HunterProfile[] }>('/api/v1/profiles');
+    return body.profiles ?? [];
+  }
+
+  /** Switches the active profile. */
+  async useProfile(name: string): Promise<{ result: string }> {
+    return this.request(`/api/v1/profiles/${encodeURIComponent(name)}`, { method: 'POST', body: '{}' });
+  }
+
+  async hud(): Promise<HunterHudElement[]> {
+    const body = await this.request<{ hud?: HunterHudElement[] }>('/api/v1/hud');
+    return body.hud ?? [];
+  }
+
+  /** Toggles a HUD element on or off. */
+  async toggleHud(name: string): Promise<{ result: string }> {
+    return this.request(`/api/v1/hud/${encodeURIComponent(name)}`, { method: 'POST', body: '{}' });
+  }
+
+  /** Runs a hunter lifecycle action (start, stop, emergency-stop, clear-stop, pause, resume, save, status). */
+  async hunter(action: string): Promise<{ result: string }> {
+    return this.request(`/api/v1/hunter/${encodeURIComponent(action)}`, { method: 'POST', body: '{}' });
   }
 }

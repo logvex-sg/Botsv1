@@ -574,12 +574,18 @@ matching file under `config/logvex-hunter/` to start from it.
 ```
 .hunter                       # status summary
 .hunter status
-.hunter start | stop
+.hunter start | stop | pause | resume
 .hunter emergency-stop | clear-stop
 .hunter gui                   # open the dashboard
+.hunter control               # open the Control screen (settings, profiles, HUD)
 .hunter modules               # list module states
 .hunter toggle <module>
+.hunter get [module]          # every setting of one module, or all modules
+.hunter set <module> <setting> <value>
 .hunter profile               # list profiles
+.hunter profile use <name> | create <name> | delete <name> | save
+.hunter hud [list|<element>]  # list HUD elements, or toggle one
+.hunter export | reload
 .hunter companion [status|start|stop|token|regenerate|port <n>]
 .hunter save
 
@@ -589,6 +595,9 @@ matching file under `config/logvex-hunter/` to start from it.
 .target focus <player>
 .target clear
 .target current
+.target note <player> <text>
+.target priority <player> <1-10>
+.target category <player> <category>
 .target gui
 
 .hstats [show|sessions|events|export|reset|gui]
@@ -598,7 +607,52 @@ Categories for `.target`: `priority`, `bot`, `opponent`, `temporary`, `friend`, 
 
 ---
 
-## 19. Module reference
+## 19. Remote control from the Fleet Manager
+
+Every control action is available over the companion API, so the Fleet Manager can change settings,
+switch profiles and toggle HUD elements without touching the game. The HTTP routes and the chat
+commands both run through the same Minecraft-free control layer
+(`com.logvex.hunter.core.control`), so the two behave identically.
+
+Read and change settings:
+
+```
+GET  /api/v1/modules/player-tracker         # module detail, including every setting
+POST /api/v1/settings                        # {"module":"player-tracker","setting":"range","value":"96"}
+```
+
+Switch profiles:
+
+```
+GET  /api/v1/profiles                        # list, with the active one flagged
+POST /api/v1/profiles/pvp                    # switch the active profile
+```
+
+Toggle HUD elements:
+
+```
+GET  /api/v1/hud                             # list every element and whether it is shown
+POST /api/v1/hud/logvex-target               # toggle one
+```
+
+Drive the hunter lifecycle:
+
+```
+POST /api/v1/hunter/start
+POST /api/v1/hunter/pause
+POST /api/v1/hunter/resume
+POST /api/v1/hunter/emergency-stop
+POST /api/v1/hunter/clear-stop
+POST /api/v1/hunter/save
+POST /api/v1/hunter/status
+```
+
+In-game, the Control screen (`.hunter control`) offers the same settings editor, profile switcher
+and HUD toggles as a GUI.
+
+---
+
+## 20. Module reference
 
 All modules live under the **Logvex Hunter** Meteor category.
 
@@ -619,7 +673,7 @@ Enable the ones you want from Meteor's HUD editor.
 
 ---
 
-## 20. Troubleshooting
+## 21. Troubleshooting
 
 | Symptom | Cause / fix |
 | --- | --- |

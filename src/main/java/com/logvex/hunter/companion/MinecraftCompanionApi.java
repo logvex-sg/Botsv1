@@ -3,6 +3,9 @@ package com.logvex.hunter.companion;
 import com.logvex.hunter.HunterAddon;
 import com.logvex.hunter.core.HunterCore;
 import com.logvex.hunter.core.companion.CompanionApi;
+import com.logvex.hunter.core.control.HudView;
+import com.logvex.hunter.core.control.ModuleView;
+import com.logvex.hunter.core.control.ProfileView;
 import com.logvex.hunter.core.equipment.EquipmentItem;
 import com.logvex.hunter.core.equipment.EquipmentSnapshot;
 import com.logvex.hunter.core.equipment.InventoryStatus;
@@ -34,6 +37,7 @@ public final class MinecraftCompanionApi implements CompanionApi {
     private static final long CALL_TIMEOUT_MS = 2000;
 
     private final Minecraft mc = Minecraft.getInstance();
+    private final MinecraftControlTarget control = new MinecraftControlTarget();
 
     @Override
     public HunterCore core() {
@@ -63,6 +67,37 @@ public final class MinecraftCompanionApi implements CompanionApi {
     @Override
     public List<Map<String, Object>> moduleViews() {
         return onClient(this::buildModuleViews, List.of());
+    }
+
+    @Override
+    public List<ModuleView> modules(String name) {
+        return onClient(() -> control.modules(name), List.of());
+    }
+
+    @Override
+    public String setSetting(String module, String setting, String value) {
+        return onClient(() -> control.setSetting(module, setting, value), "client thread unavailable");
+    }
+
+    @Override
+    public List<ProfileView> profiles() {
+        return onClient(control::profiles, List.of());
+    }
+
+    @Override
+    public String switchProfile(String name) {
+        return onClient(() -> control.profile(com.logvex.hunter.core.control.ControlAction.Profile.Kind.USE, name),
+            "client thread unavailable");
+    }
+
+    @Override
+    public List<HudView> hudViews() {
+        return onClient(control::hudViews, List.of());
+    }
+
+    @Override
+    public String toggleHud(String element) {
+        return onClient(() -> control.hud(element, false), "client thread unavailable");
     }
 
     @Override

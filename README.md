@@ -81,12 +81,18 @@ See [`USAGE.md`](USAGE.md) for the full use guide. The command reference:
 ```
 .hunter                       # status summary
 .hunter status
-.hunter start | stop
+.hunter start | stop | pause | resume
 .hunter emergency-stop | clear-stop
 .hunter gui                   # open the dashboard
+.hunter control               # open the Control screen (settings, profiles, HUD)
 .hunter modules               # list module states
 .hunter toggle <module>
+.hunter get [module]          # every setting of one module, or all modules
+.hunter set <module> <setting> <value>
 .hunter profile               # list profiles
+.hunter profile use <name> | create <name> | delete <name> | save
+.hunter hud [list|<element>]  # list HUD elements, or toggle one
+.hunter export | reload
 .hunter companion [status|start|stop|token|regenerate|port <n>]
 .hunter save
 
@@ -96,6 +102,9 @@ See [`USAGE.md`](USAGE.md) for the full use guide. The command reference:
 .target focus <player>
 .target clear
 .target current
+.target note <player> <text>
+.target priority <player> <1-10>
+.target category <player> <category>
 .target gui
 
 .hstats [show|sessions|events|export|reset|gui]
@@ -137,6 +146,14 @@ Endpoints (all under the configured port, default `8720`):
 | GET | `/api/v1/players` | visible players |
 | GET | `/api/v1/targets` | target lists |
 | GET | `/api/v1/modules` | module states |
+| GET | `/api/v1/modules/{name}` | one module's full detail, including every setting |
+| GET | `/api/v1/settings` | (405) — settings are written with POST |
+| POST | `/api/v1/settings` | change one setting: `{"module","setting","value"}` |
+| GET | `/api/v1/profiles` | every profile with its range, sort mode and guards |
+| POST | `/api/v1/profiles/{name}` | switch the active profile |
+| GET | `/api/v1/hud` | every HUD element and whether it is shown |
+| POST | `/api/v1/hud/{name}` | toggle one HUD element |
+| POST | `/api/v1/hunter/{action}` | lifecycle: `start`, `stop`, `emergency-stop`, `clear-stop`, `pause`, `resume`, `save`, `status` |
 | GET | `/api/v1/stats` | statistics counters |
 | GET | `/api/v1/events?since=&limit=` | recent combat events |
 | GET | `/api/v1/tasks` | current session and target as tasks |

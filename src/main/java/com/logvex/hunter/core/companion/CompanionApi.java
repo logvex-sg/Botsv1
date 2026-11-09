@@ -1,6 +1,9 @@
 package com.logvex.hunter.core.companion;
 
 import com.logvex.hunter.core.HunterCore;
+import com.logvex.hunter.core.control.HudView;
+import com.logvex.hunter.core.control.ModuleView;
+import com.logvex.hunter.core.control.ProfileView;
 
 import java.util.List;
 import java.util.Map;
@@ -30,6 +33,36 @@ public interface CompanionApi {
 
     /** This addon's modules and their enabled state. */
     List<Map<String, Object>> moduleViews();
+
+    /** Full detail (including settings) for one module, or all modules when {@code name} is null. */
+    default List<ModuleView> modules(String name) {
+        return List.of();
+    }
+
+    /** Changes one setting of one module and returns a human-readable result. */
+    default String setSetting(String module, String setting, String value) {
+        return "settings are not available";
+    }
+
+    /** The available profiles. */
+    default List<ProfileView> profiles() {
+        return List.of();
+    }
+
+    /** Switches to a profile and returns a human-readable result. */
+    default String switchProfile(String name) {
+        return "profiles are not available";
+    }
+
+    /** The HUD elements. */
+    default List<HudView> hudViews() {
+        return List.of();
+    }
+
+    /** Toggles a HUD element and returns a human-readable result. */
+    default String toggleHud(String element) {
+        return "hud control is not available";
+    }
 
     /**
      * Runs an administrative command and returns a human-readable result.
