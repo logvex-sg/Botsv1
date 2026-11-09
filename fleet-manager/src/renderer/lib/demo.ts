@@ -18,7 +18,7 @@ import type { RoleDefinition } from '../../main/services/roles/roles';
 const now = Date.now();
 
 const settings: AppSettings = {
-  apiEnabled: true, apiHost: '127.0.0.1', apiPort: 8791, hunterAddonUrl: 'http://127.0.0.1:8080',
+  apiEnabled: true, apiHost: '127.0.0.1', apiPort: 8791, hunterAddonUrl: 'http://127.0.0.1:8720',
   hunterAddonToken: '', autosave: true, notify: true, maxMemoryMb: 4096, backupIntervalMinutes: 60,
   logLevel: 'info', theme: 'dark',
 };

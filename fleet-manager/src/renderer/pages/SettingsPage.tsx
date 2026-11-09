@@ -95,7 +95,7 @@ export function SettingsPage({ push }: Props) {
 
         <Card title="Logvex Hunter integration">
           <Field label="Hunter companion URL">
-            <input type="text" value={draft.hunterAddonUrl} onChange={(e) => setDraft({ ...draft, hunterAddonUrl: e.target.value })} placeholder="http://127.0.0.1:8080" />
+            <input type="text" value={draft.hunterAddonUrl} onChange={(e) => setDraft({ ...draft, hunterAddonUrl: e.target.value })} placeholder="http://127.0.0.1:8720" />
           </Field>
           <Field label="Hunter companion token">
             <input type="password" value={draft.hunterAddonToken} onChange={(e) => setDraft({ ...draft, hunterAddonToken: e.target.value })} />

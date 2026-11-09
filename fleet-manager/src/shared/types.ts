@@ -248,7 +248,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   apiPort: 8787,
   apiHost: '127.0.0.1',
   apiEnabled: true,
-  hunterAddonUrl: 'http://127.0.0.1:8080',
+  hunterAddonUrl: 'http://127.0.0.1:8720',
   hunterAddonToken: '',
   theme: 'dark',
   autosave: true,
