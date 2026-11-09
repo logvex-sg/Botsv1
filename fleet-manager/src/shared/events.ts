@@ -52,6 +52,7 @@ export const FleetEventType = {
   WORKER_COMMAND: 'WORKER_COMMAND',
   WORKER_GROUP_CHANGED: 'WORKER_GROUP_CHANGED',
   WORKER_ERROR: 'WORKER_ERROR',
+  WORKER_LOG: 'WORKER_LOG',
 } as const;
 
 export type FleetEventTypeName = (typeof FleetEventType)[keyof typeof FleetEventType];

@@ -240,6 +240,10 @@ export function registerIpc(context: AppContext, api: ApiServer, getWindow: () =
     context.workers.listTasks(limit ?? 200, workerId));
   handle('worker-tasks:kinds', () => [...context.workers.taskKinds()]);
 
+  handle('worker-console:get', (workerId: string) => context.workers.console(workerId));
+  handle('worker-console:clear', (workerId: string) => { context.workers.clearConsole(workerId); });
+  handle('worker-console:capabilities', (workerId: string) => context.workers.get(workerId)?.capabilities ?? []);
+
   handle('worker-commands:send', (workerId: string, kind: 'command' | 'chat', line: string) =>
     context.workers.sendLine(workerId, kind, line));
   handle('worker-commands:send-many', (workerIds: string[], kind: 'command' | 'chat', line: string) =>

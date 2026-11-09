@@ -14,13 +14,14 @@ import { TasksTab } from './workers/TasksTab';
 import { InventoryTab } from './workers/InventoryTab';
 import { CommandsTab } from './workers/CommandsTab';
 import { RegearTab } from './workers/RegearTab';
+import { ConsoleTab } from './workers/ConsoleTab';
 import { Callout } from '../components/ui';
 
 interface Props {
   push: (message: string, tone?: string) => void;
 }
 
-export type FleetTab = 'dashboard' | 'workers' | 'groups' | 'tasks' | 'inventory' | 'commands' | 'regear';
+export type FleetTab = 'dashboard' | 'workers' | 'groups' | 'tasks' | 'inventory' | 'commands' | 'regear' | 'console';
 
 const TABS: { id: FleetTab; label: string; blurb: string }[] = [
   { id: 'dashboard', label: 'Dashboard', blurb: 'Whether the host is reachable, which clients are connected, and what is running right now.' },
@@ -30,6 +31,7 @@ const TABS: { id: FleetTab; label: string; blurb: string }[] = [
   { id: 'inventory', label: 'Inventory', blurb: 'Count items across the fleet from each client’s last reported inventory.' },
   { id: 'commands', label: 'Commands', blurb: 'Send server commands and chat lines through the clients, with an audit log.' },
   { id: 'regear', label: 'Regear', blurb: 'Loadout presets, and the difference between what a client should carry and what it has.' },
+  { id: 'console', label: 'Console', blurb: 'What each client says about its own connection, and which tasks it supports.' },
 ];
 
 /** Reads the initial tab from ?fleet=<id>, so deep links and the screenshot script can target one. */
@@ -63,6 +65,7 @@ export function FleetPage({ push }: Props) {
       {tab === 'inventory' && <InventoryTab push={push} />}
       {tab === 'commands' && <CommandsTab push={push} />}
       {tab === 'regear' && <RegearTab push={push} />}
+      {tab === 'console' && <ConsoleTab push={push} />}
     </div>
   );
 }

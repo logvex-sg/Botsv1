@@ -135,6 +135,15 @@ export class FakeWorker {
     });
   }
 
+  /** Forwards a console line the way the mod's link does when it logs. */
+  log(message: string, at = Date.now()): void {
+    this.send({
+      v: WORKER_PROTOCOL_VERSION,
+      type: WorkerInbound.LOG,
+      payload: { message, at },
+    });
+  }
+
   sendResult(id: string, kind: string, ok: boolean, message: string, data: Record<string, unknown>): void {
     this.send({
       v: WORKER_PROTOCOL_VERSION,
@@ -204,10 +213,13 @@ export function baseSnapshot(workerId: string): WorkerSnapshot {
     lastActivity: '',
     lastActivityAt: 0,
     lastError: '',
+    eflyActive: false,
+    eflyTarget: '',
+    taskProgress: '',
     totalItems: 66,
     distinctItems: 2,
     freeSlots: 20,
-    capabilities: ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position'],
+    capabilities: ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position', 'efly'],
   };
 }
 

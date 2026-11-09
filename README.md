@@ -4,15 +4,17 @@ Two cooperating products live in this repository:
 
 | Product | What it is | Where |
 | --- | --- | --- |
-| **LogVex Hunter** | A single Meteor Client addon for Minecraft 1.21.11 (Fabric). Target tracking, combat coordination, equipment and stasis monitoring, statistics, an in-game **Host/Hunter swarm**, and a local companion API. | repository root (`src/main/java/com/logvex/hunter`) |
-| **Logvex Fleet Manager** | An Electron + React + TypeScript desktop app that manages Minecraft bot instances and reads/controls a LogVex Hunter client over the companion API. | `fleet-manager/` |
+| **LogVex Hunter** | A Meteor Client addon for Minecraft 1.21.11 (Fabric). Target tracking, combat coordination, equipment and stasis monitoring, statistics, an in-game **Host/Hunter swarm**, and a local companion API. | repository root (`src/main/java/com/logvex/hunter`) |
+| **Logvex Worker** | A companion Fabric mod for Minecraft 1.21.11 that dials *out* to the Fleet Manager host and answers a closed set of tasks (status, inventory, count, regear, command, chat, efly). | `worker-mod/` |
+| **Logvex Fleet Manager** | An Electron + React + TypeScript desktop app that manages Minecraft bot instances, drives the **worker fleet** over a WebSocket, and reads/controls a LogVex Hunter client over the companion API. | `fleet-manager/` |
 
-**One mod, in-game only.** Controlling several clients is done entirely inside Minecraft with this
-one addon: each client runs **Logvex Hunter**, and the **swarm** module puts it in one of two modes —
-**Host** (drives the fleet) or **Hunter** (fully controlled by the host). There is no server, no
-separate worker mod and no external process involved in the swarm; see
-[In-game swarm](#in-game-swarm-control-many-clients-from-one). The desktop app is optional and talks
-to a client through the addon's local companion API (the *inbound* direction) — see
+**Two ways to control several clients.** The desktop **Fleet Manager** drives a fleet of **Logvex
+Worker** clients: each worker dials the host, and the host sends tasks and reads confirmed results —
+see [Logvex Worker](#logvex-worker-mod) and the Fleet Manager README. The **in-game swarm** does the
+same thing without any external process: each client runs **LogVex Hunter**, and the `swarm` module
+puts it in one of two modes — **Host** (drives the fleet) or **Hunter** (fully controlled by the
+host) — see [In-game swarm](#in-game-swarm-control-many-clients-from-one). The companion API is a
+third, *inbound* path that lets the desktop app read and command a Hunter client — see
 [Companion API](#companion-api-the-hunter--fleet-manager-bridge).
 
 > **Scope note.** The Hunter addon is a *monitoring and coordination* tool. It observes players,
@@ -63,7 +65,7 @@ to a client through the addon's local companion API (the *inbound* direction) �
 
 ### Requirements
 
-- Minecraft 1.21.11 with Fabric Loader 0.19.5
+- Minecraft 1.21.11 with Fabric Loader 0.20.1
 - [Meteor Client](https://meteorclient.com/) 1.21.11-SNAPSHOT
 - Java 21 runtime (the mod targets Java 21, so it loads on a stock 1.21.11 install)
 - **JDK 25** to build the addon — Fabric Loom 1.18 requires a Java 25 runtime (the mod itself is compiled to Java 21 bytecode)
@@ -72,7 +74,7 @@ to a client through the addon's local companion API (the *inbound* direction) �
 
 1. Install Fabric Loader for Minecraft 1.21.11.
 2. Put Meteor Client in your `mods` folder.
-3. Build the addon (see below) and copy `build/libs/logvex-hunter-1.1.0.jar` into `mods`.
+3. Build the addon (see below) and copy `build/libs/logvex-hunter-1.2.0.jar` into `mods`.
 4. Launch the game. The addon registers a **Logvex Hunter** category and ClickGUI tab.
 
 ### Building
@@ -84,7 +86,7 @@ export JAVA_HOME=/path/to/jdk-25
 ./gradlew clean test build
 ```
 
-The remapped, release-ready jar is written to `build/libs/logvex-hunter-1.1.0.jar`.
+The remapped, release-ready jar is written to `build/libs/logvex-hunter-1.2.0.jar`.
 
 ### Commands
 
@@ -249,6 +251,31 @@ on a trusted network.
 
 ---
 
+## Logvex Worker (mod)
+
+`worker-mod/` is a second, independent Fabric mod. Where the Hunter addon is a *monitoring* tool,
+the Worker is a *remote-controlled client*: it dials out to the Fleet Manager host over a WebSocket
+and answers a closed set of named tasks. It is deliberately narrow.
+
+- **Outbound only.** The worker connects to the host; the host never connects to the worker. A
+  client that is offline simply is not in the roster.
+- **A closed task set, not code.** The host sends one of the message types in `Protocol.java` with a
+  validated payload (`status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`,
+  `chat`, `position`, `efly`). The worker dispatches through a fixed switch. There is no shell, no
+  class name, no eval — that is what keeps the protocol from becoming remote code execution.
+- **It answers with what it observed.** A task result carries the value the client actually read
+  (inventory, durability, coordinates), and the host records that, not an assumption.
+- **No combat.** There is no attack task kind. `efly` steers the client with its *own* Meteor
+  `ElytraFly` and `PathManagers`; nothing aims or fights.
+- **It logs to the host.** The worker forwards its own link log as throttled `log` frames, so the
+  Fleet Manager's **Console** tab shows the client's view (connect, register, task outcomes, errors).
+
+Full protocol, command allow-list, `efly` payload reference, installation and build instructions are
+in [`worker-mod/README.md`](worker-mod/README.md); the wire contract itself is written down in
+[`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+
+---
+
 ## Logvex Fleet Manager (desktop app)
 
 The Fleet Manager is a separate Electron application under `fleet-manager/`. It manages accounts,
@@ -278,7 +305,8 @@ In-game control of several clients does not need the desktop app at all — use 
 ```
 .
 ├── build.gradle.kts, settings.gradle.kts, gradle/   # LogVex Hunter Gradle build
-├── src/main/java/com/logvex/hunter/                 # the addon (the only mod)
+├── docs/PROTOCOL.md                                 # the worker wire contract, written down
+├── src/main/java/com/logvex/hunter/                 # the addon (the only Hunter mod)
 │   ├── core/            Minecraft-free logic (unit-tested): targets, stats, messages, stasis,
 │   │                    equipment, instances, swarm, companion router/server
 │   ├── mc/              game bridge: runtime, chat, player scanner
@@ -287,6 +315,12 @@ In-game control of several clients does not need the desktop app at all — use 
 │   ├── hud/             HUD elements
 │   └── companion/       game-layer companion API + command handling
 ├── src/test/java/com/logvex/hunter/                 # addon unit tests
+├── worker-mod/                                      # the Logvex Worker Fabric mod
+│   ├── src/main/java/com/logvex/worker/
+│   │   ├── core/        Minecraft-free protocol, link, validation (unit-tested)
+│   │   ├── mc/          game bridge: status, inventory, container moves, efly executor
+│   │   └── meteor/      the Fleet Manager category + modules
+│   └── src/test/java/com/logvex/worker/             # worker unit tests (real-socket link tests)
 └── fleet-manager/                                   # the Electron desktop application
 ```
 

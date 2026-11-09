@@ -2,9 +2,9 @@
  * The Fleet Manager side of the worker protocol.
  *
  * This mirrors `worker-mod/src/main/java/com/logvex/worker/core/Protocol.java`. The two are kept in
- * sync by hand because one is TypeScript and one is Java; the integration test suite drives a real
- * worker-shaped client against the real server, so a drift between them fails the build rather than
- * failing in production.
+ * sync by hand because one is TypeScript and one is Java; `tests/unit/worker-protocol-drift.test.ts`
+ * reads the Java source and asserts this file matches it, so a drift between them fails the build
+ * rather than failing in production. The contract is documented in `docs/PROTOCOL.md`.
  *
  * Security note: this is a closed set. The host may only ever send one of these task kinds, and the
  * worker refuses anything else, so neither side can be talked into executing arbitrary code.
@@ -50,12 +50,25 @@ export const TASK_KINDS = [
   'command',
   'chat',
   'position',
+  'efly',
 ] as const;
 
 export type TaskKind = (typeof TASK_KINDS)[number];
 
 export function isTaskKind(value: string): value is TaskKind {
   return (TASK_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * Task kinds that change state and may only run one at a time per worker.
+ *
+ * Mirrors the worker's `TaskCatalog.isMutating`: these move the client, talk to the server or move
+ * items, so the server refuses a second conflicting one rather than letting them interleave.
+ */
+export const EXCLUSIVE_TASK_KINDS: readonly TaskKind[] = ['regear', 'command', 'chat', 'efly'];
+
+export function isExclusiveKind(value: string): boolean {
+  return (EXCLUSIVE_TASK_KINDS as readonly string[]).includes(value);
 }
 
 /** A worker->host or host->worker envelope. */
@@ -92,6 +105,9 @@ export interface WorkerSnapshot {
   lastActivity: string;
   lastActivityAt: number;
   lastError: string;
+  eflyActive: boolean;
+  eflyTarget: string;
+  taskProgress: string;
   totalItems: number;
   distinctItems: number;
   freeSlots: number;
@@ -144,6 +160,9 @@ export function emptySnapshot(workerId: string): WorkerSnapshot {
     lastActivity: '',
     lastActivityAt: 0,
     lastError: '',
+    eflyActive: false,
+    eflyTarget: '',
+    taskProgress: '',
     totalItems: 0,
     distinctItems: 0,
     freeSlots: 0,

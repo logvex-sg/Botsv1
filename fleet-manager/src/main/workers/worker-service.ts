@@ -93,6 +93,15 @@ export class WorkerService {
     return record ? this.toView(record) : undefined;
   }
 
+  /** Recent console lines for one worker, oldest first. Empty when it has sent none. */
+  console(workerId: string): { at: number; message: string }[] {
+    return this.server.consoleFor(workerId);
+  }
+
+  clearConsole(workerId: string): void {
+    this.server.clearConsole(workerId);
+  }
+
   /** Resolves a selector that may be an id, a username, a label or a group name. */
   resolve(selector: string): WorkerRecord[] {
     const needle = selector.trim().toLowerCase();
@@ -237,6 +246,7 @@ export class WorkerService {
   forget(workerId: string): boolean {
     if (this.server.isOnline(workerId)) this.server.kick(workerId, 'removed from the fleet');
     this.deps.inventory.remove(workerId);
+    this.server.clearConsole(workerId);
     return this.deps.workers.remove(workerId);
   }
 
@@ -500,6 +510,57 @@ export class WorkerService {
     for (const workerId of workerIds) {
       try {
         const result = await this.regear(workerId, presetId, allowMoves);
+        out.push({ workerId, ok: result.ok, message: result.message });
+      } catch (error) {
+        out.push({ workerId, ok: false, message: (error as Error).message });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Starts or stops elytra flight on a worker.
+   *
+   * The flying is done by the worker's Meteor `ElytraFly` module — the host only asks for it and
+   * reports the worker's own confirmation. With a target the worker flies there; without one it
+   * engages flight where it stands. `stop` always cancels pathing and disengages flight.
+   */
+  async efly(
+    workerId: string,
+    options: {
+      action?: 'start' | 'stop';
+      x?: number;
+      y?: number;
+      z?: number;
+      mode?: string;
+      useFireworks?: boolean;
+      minHeight?: number;
+    } = {},
+  ): Promise<WorkerTaskResult> {
+    const action = options.action ?? 'start';
+    const params: Record<string, unknown> = { action };
+    if (action === 'start') {
+      if (options.x !== undefined && options.z !== undefined) {
+        params.x = options.x;
+        params.y = options.y ?? 120;
+        params.z = options.z;
+      }
+      if (options.mode) params.mode = options.mode;
+      if (options.useFireworks !== undefined) params.useFireworks = options.useFireworks;
+      if (options.minHeight !== undefined) params.minHeight = options.minHeight;
+    }
+    return this.runTask(workerId, 'efly', params);
+  }
+
+  /** Starts or stops elytra flight across a set of workers, reporting each outcome. */
+  async eflyMany(
+    workerIds: string[],
+    options: { action?: 'start' | 'stop'; x?: number; y?: number; z?: number; mode?: string } = {},
+  ): Promise<{ workerId: string; ok: boolean; message: string }[]> {
+    const out: { workerId: string; ok: boolean; message: string }[] = [];
+    for (const workerId of workerIds) {
+      try {
+        const result = await this.efly(workerId, options);
         out.push({ workerId, ok: result.ok, message: result.message });
       } catch (error) {
         out.push({ workerId, ok: false, message: (error as Error).message });

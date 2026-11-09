@@ -160,6 +160,16 @@ export class ApiServer {
       return { body: snapshot };
     }
 
+    const workerConsoleMatch = /^\/api\/v1\/workers\/([^/]+)\/console$/.exec(path);
+    if (workerConsoleMatch) {
+      const workerId = workerConsoleMatch[1];
+      if (method === 'GET') return { body: { lines: ctx.workers.console(workerId) } };
+      if (method === 'DELETE') {
+        ctx.workers.clearConsole(workerId);
+        return { body: { ok: true } };
+      }
+    }
+
     const workerTaskMatch = /^\/api\/v1\/workers\/([^/]+)\/task$/.exec(path);
     if (workerTaskMatch && method === 'POST') {
       const workerId = workerTaskMatch[1];

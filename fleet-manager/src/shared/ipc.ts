@@ -189,6 +189,10 @@ export interface FleetApi {
   listWorkerTasks(limit?: number, workerId?: string): Promise<WorkerTaskRecord[]>;
   getWorkerTaskKinds(): Promise<string[]>;
 
+  getWorkerConsole(workerId: string): Promise<{ at: number; message: string }[]>;
+  clearWorkerConsole(workerId: string): Promise<void>;
+  getWorkerCapabilities(workerId: string): Promise<string[]>;
+
   sendWorkerLine(workerId: string, kind: 'command' | 'chat', line: string): Promise<WorkerCommandRecord>;
   sendWorkerLineMany(workerIds: string[], kind: 'command' | 'chat', line: string): Promise<{ workerId: string; ok: boolean; response: string }[]>;
   listWorkerCommands(limit?: number, workerId?: string): Promise<WorkerCommandRecord[]>;
@@ -249,6 +253,10 @@ export const IPC = {
   runWorkerTaskMany: 'worker-tasks:run-many',
   listWorkerTasks: 'worker-tasks:list',
   getWorkerTaskKinds: 'worker-tasks:kinds',
+
+  getWorkerConsole: 'worker-console:get',
+  clearWorkerConsole: 'worker-console:clear',
+  getWorkerCapabilities: 'worker-console:capabilities',
 
   sendWorkerLine: 'worker-commands:send',
   sendWorkerLineMany: 'worker-commands:send-many',

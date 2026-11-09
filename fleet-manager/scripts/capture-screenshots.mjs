@@ -32,6 +32,7 @@ const PAGES = [
   ['04-fleet-tasks', 'fleet&fleet=tasks'],
   ['05-fleet-inventory', 'fleet&fleet=inventory'],
   ['06-fleet-regear', 'fleet&fleet=regear'],
+  ['13-fleet-console', 'fleet&fleet=console'],
   ['07-features-hunter', 'features'],
   ['08-tasks', 'tasks'],
   ['09-accounts', 'accounts'],

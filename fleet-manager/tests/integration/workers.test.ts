@@ -347,11 +347,13 @@ describe('robustness', () => {
     worker.register();
     await waitFor(() => ctx.context.workers.list().length === 1);
     worker.reportInventory([{ id: 'minecraft:dirt', count: 1 }]);
-    await waitFor(() => Boolean(ctx.context.workers.inventory('w-62')));
+    worker.log('for me');
+    await waitFor(() => Boolean(ctx.context.workers.inventory('w-62')) && ctx.context.workers.console('w-62').length === 1);
 
     expect(ctx.context.workers.forget('w-62')).toBe(true);
     expect(ctx.context.workers.get('w-62')).toBeUndefined();
     expect(ctx.context.workers.inventory('w-62')).toBeUndefined();
+    expect(ctx.context.workers.console('w-62')).toEqual([]);
   });
 });
 
@@ -366,5 +368,90 @@ describe('selector resolution', () => {
     expect(ctx.context.workers.resolve('w-70').map((w) => w.id)).toEqual(['w-70']);
     expect(ctx.context.workers.resolve('Digger').map((w) => w.id)).toEqual(['w-70']);
     expect(ctx.context.workers.resolve('miners').map((w) => w.id)).toEqual(['w-70']);
+  });
+});
+
+describe('worker console', () => {
+  it('buffers forwarded log lines per worker, oldest first', async () => {
+    const worker = await startWorker({ workerId: 'w-80' });
+    worker.register();
+    await waitFor(() => ctx.context.workers.list().length === 1);
+
+    worker.log('connecting to ws://host/worker', 1000);
+    worker.log('registered as w-80', 2000);
+    await waitFor(() => ctx.context.workers.console('w-80').length === 2);
+
+    const lines = ctx.context.workers.console('w-80');
+    expect(lines.map((l) => l.message)).toEqual(['connecting to ws://host/worker', 'registered as w-80']);
+    expect(lines.map((l) => l.at)).toEqual([1000, 2000]);
+  });
+
+  it('keeps console lines separate between workers', async () => {
+    const a = await startWorker({ workerId: 'w-81' });
+    const b = await startWorker({ workerId: 'w-82' });
+    a.register();
+    b.register();
+    await waitFor(() => ctx.context.workers.list().length === 2);
+
+    a.log('alpha');
+    b.log('bravo');
+    await waitFor(() => ctx.context.workers.console('w-81').length === 1 && ctx.context.workers.console('w-82').length === 1);
+
+    expect(ctx.context.workers.console('w-81')[0].message).toBe('alpha');
+    expect(ctx.context.workers.console('w-82')[0].message).toBe('bravo');
+  });
+
+  it('drops a log line with no message and clears on request', async () => {
+    const worker = await startWorker({ workerId: 'w-83' });
+    worker.register();
+    await waitFor(() => ctx.context.workers.list().length === 1);
+
+    worker.send({ v: WORKER_PROTOCOL_VERSION, type: 'log', payload: { at: 1234 } });
+    worker.log('real line');
+    await waitFor(() => ctx.context.workers.console('w-83').length === 1);
+    expect(ctx.context.workers.console('w-83')[0].message).toBe('real line');
+
+    ctx.context.workers.clearConsole('w-83');
+    expect(ctx.context.workers.console('w-83')).toEqual([]);
+  });
+
+  it('caps the buffer so a chatty worker cannot grow it without bound', async () => {
+    const worker = await startWorker({ workerId: 'w-84' });
+    worker.register();
+    await waitFor(() => ctx.context.workers.list().length === 1);
+
+    for (let i = 0; i < 260; i += 1) worker.log(`line ${i}`, i);
+    await waitFor(() => ctx.context.workers.console('w-84').length === 200);
+
+    const lines = ctx.context.workers.console('w-84');
+    expect(lines).toHaveLength(200);
+    expect(lines[0].message).toBe('line 60');
+    expect(lines[199].message).toBe('line 259');
+  });
+});
+
+describe('efly task', () => {
+  it('dispatches an efly start to the worker and records the confirmed result', async () => {
+    const worker = await startWorker({ workerId: 'w-90' });
+    worker.register();
+    await waitFor(() => ctx.context.workers.list().length === 1);
+
+    const result = await ctx.context.workers.runTask('w-90', 'efly', { action: 'start', x: 100, y: 120, z: -50, mode: 'packet' });
+    expect(result.ok).toBe(true);
+    expect(result.kind).toBe('efly');
+
+    const sent = worker.tasks.find((t) => t.kind === 'efly');
+    expect(sent?.payload).toMatchObject({ kind: 'efly', action: 'start', x: 100, y: 120, z: -50, mode: 'packet' });
+  });
+
+  it('refuses a second mutating task on the same worker while one is in flight', async () => {
+    const worker = await startWorker({ workerId: 'w-91', onTask: () => 'ignore' });
+    worker.register();
+    await waitFor(() => ctx.context.workers.list().length === 1);
+
+    const first = ctx.context.workers.server.sendTask('w-91', 'efly', { action: 'start' }, 400);
+    await waitFor(() => worker.tasks.length === 1);
+    await expect(ctx.context.workers.runTask('w-91', 'command', { command: 'spawn' })).rejects.toThrow(/conflicting/);
+    await expect(first).rejects.toThrow(/did not answer/);
   });
 });

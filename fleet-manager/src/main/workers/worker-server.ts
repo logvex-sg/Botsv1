@@ -23,6 +23,7 @@ import type { FleetEventTypeName } from '../../shared/events';
 import {
   WORKER_PATH,
   WORKER_PROTOCOL_VERSION,
+  EXCLUSIVE_TASK_KINDS,
   WorkerInbound,
   WorkerOutbound,
   decodeEnvelope,
@@ -74,6 +75,9 @@ export class WorkerServer {
   private readonly live = new Map<string, LiveWorker>();
   /** Sockets that connected but have not yet authenticated. */
   private readonly unauthenticated = new Set<WebSocket>();
+  /** Recent console lines per worker, newest last. In memory only; a restart clears them. */
+  private readonly console = new Map<string, { at: number; message: string }[]>();
+  private static readonly CONSOLE_LIMIT = 200;
   private sweepTimer: NodeJS.Timeout | null = null;
   private boundPort = 0;
 
@@ -419,12 +423,32 @@ export class WorkerServer {
         break;
       }
       case WorkerInbound.LOG:
-        // Logs are deliberately not persisted; they would drown the event log.
+        this.handleLog(workerId, envelope.payload ?? {});
         break;
       default:
         // Unknown types are ignored so an older host stays compatible with a newer worker.
         break;
     }
+  }
+
+  private handleLog(workerId: string, payload: Record<string, unknown>): void {
+    const message = typeof payload.message === 'string' ? payload.message : '';
+    if (!message) return;
+    const at = typeof payload.at === 'number' && Number.isFinite(payload.at) ? payload.at : Date.now();
+    const lines = this.console.get(workerId) ?? [];
+    lines.push({ at, message });
+    if (lines.length > WorkerServer.CONSOLE_LIMIT) lines.splice(0, lines.length - WorkerServer.CONSOLE_LIMIT);
+    this.console.set(workerId, lines);
+    this.deps.emit('WORKER_LOG', message, { workerId, at });
+  }
+
+  /** Recent console lines for one worker, oldest first. */
+  consoleFor(workerId: string): { at: number; message: string }[] {
+    return this.console.get(workerId) ?? [];
+  }
+
+  clearConsole(workerId: string): void {
+    this.console.delete(workerId);
   }
 
   private handleResult(worker: LiveWorker, envelope: WorkerEnvelope): void {
@@ -571,6 +595,9 @@ export class WorkerServer {
       lastActivity: text('lastActivity', ''),
       lastActivityAt: number('lastActivityAt', 0),
       lastError: text('lastError', ''),
+      eflyActive: bool('eflyActive', false),
+      eflyTarget: text('eflyTarget', ''),
+      taskProgress: text('taskProgress', ''),
       totalItems: number('totalItems', 0),
       distinctItems: number('distinctItems', 0),
       freeSlots: number('freeSlots', 0),
@@ -591,4 +618,4 @@ export class WorkerServer {
 }
 
 /** Task kinds that change state, so only one may be in flight per worker at a time. */
-const EXCLUSIVE_KINDS = new Set<TaskKind>(['regear', 'command', 'chat']);
+const EXCLUSIVE_KINDS = new Set<TaskKind>(EXCLUSIVE_TASK_KINDS);

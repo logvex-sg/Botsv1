@@ -140,6 +140,10 @@ const api = {
   listWorkerTasks: (limit?: number, workerId?: string) => invoke('worker-tasks:list', limit, workerId),
   getWorkerTaskKinds: () => invoke('worker-tasks:kinds'),
 
+  getWorkerConsole: (workerId: string) => invoke('worker-console:get', workerId),
+  clearWorkerConsole: (workerId: string) => invoke('worker-console:clear', workerId),
+  getWorkerCapabilities: (workerId: string) => invoke('worker-console:capabilities', workerId),
+
   sendWorkerLine: (workerId: string, kind: string, line: string) => invoke('worker-commands:send', workerId, kind, line),
   sendWorkerLineMany: (workerIds: string[], kind: string, line: string) => invoke('worker-commands:send-many', workerIds, kind, line),
   listWorkerCommands: (limit?: number, workerId?: string) => invoke('worker-commands:list', limit, workerId),

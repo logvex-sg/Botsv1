@@ -43,7 +43,10 @@ and the **Logvex Fleet Manager** desktop app, and how to wire them together.
 
 **Logvex Fleet Manager** (the desktop app) manages many bot accounts and instances: accounts,
 server profiles, groups, deployments, bot roles (GEARER / STASIS / HUNTER), a target database,
-an event log, and a connection to one or more Hunter clients.
+an event log, and a connection to one or more Hunter clients. It also drives a **worker fleet**: the
+**Logvex Worker** mod (`worker-mod/`) runs in a bot's client, dials the Fleet Manager host over a
+WebSocket, and answers a closed set of named tasks (status, inventory, count, regear, command, chat,
+**efly**). See [`worker-mod/README.md`](worker-mod/README.md).
 
 > **Scope.** The addon observes, records and coordinates Meteor's own modules around a target that
 > is selected manually or by its filters. It adds no unattended combat automation of its own. The
@@ -57,7 +60,7 @@ an event log, and a connection to one or more Hunter clients.
 | Component | Requirement |
 | --- | --- |
 | Minecraft | 1.21.11 |
-| Mod loader | Fabric Loader 0.19.5+ |
+| Mod loader | Fabric Loader 0.20.1+ |
 | Meteor Client | 1.21.11-SNAPSHOT |
 | Java (runtime) | 21 |
 | Java (to build the addon) | **JDK 25** (Fabric Loom 1.18 needs a Java 25 runtime) |
@@ -76,7 +79,7 @@ an event log, and a connection to one or more Hunter clients.
    # The mod itself is compiled to Java 21 bytecode and runs on Java 21.
    export JAVA_HOME=/path/to/jdk-25
    ./gradlew clean test build
-   cp build/libs/logvex-hunter-1.1.0.jar ~/.minecraft/mods/
+   cp build/libs/logvex-hunter-1.2.0.jar ~/.minecraft/mods/
    ```
 
 4. Start the game. A **Logvex Hunter** category appears in Meteor's ClickGUI.
@@ -578,6 +581,26 @@ The Fleet Manager calls `/health`, `/api/v1/snapshot`, `/api/v1/modules`, `/api/
 simply shows as disconnected; nothing throws into the UI.
 
 > If you changed the addon's port with `.hunter companion port <n>`, use the same port in the URL.
+
+### Connecting a worker client (the outbound direction)
+
+The Fleet Manager also drives the **Logvex Worker** mod. Put `logvex-worker-<version>.jar` (from
+`worker-mod/build/libs`) into a bot client's `mods` folder, start it once so it writes
+`config/logvex-worker.json`, then point it at the Fleet Manager host and the shared token from
+**Settings → Worker server**:
+
+```json
+{
+  "host": "127.0.0.1",
+  "port": 8721,
+  "token": "<token from Settings → Worker server>"
+}
+```
+
+Open **Fleet** in the Fleet Manager: the worker appears in the roster with live state. From there you
+can refresh status, pull inventory, run a task (including **EFly**), send a command or chat line, and
+watch the worker's own **Console** log. See the **Fleet** section of the
+[Fleet Manager README](fleet-manager/README.md#fleet-worker-management) for every tab.
 
 ---
 

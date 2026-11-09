@@ -8,6 +8,42 @@ Fleet Manager** desktop app. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-08
+
+### Added
+- **The Logvex Worker mod is back, as the Fleet Manager's outbound half.** A second, independent
+  Fabric mod under `worker-mod/` dials the Fleet Manager host over a WebSocket and answers a closed
+  set of named tasks. It is outbound only (the host never connects to the worker), it dispatches a
+  fixed set of message types with validated payloads rather than code, and it has no combat task
+  kind. See [`worker-mod/README.md`](worker-mod/README.md).
+  - New Minecraft-free core (`com.logvex.worker.core`): the newline-framed JSON envelope
+    (`Envelope`), the protocol constants (`Protocol`), the handshake/task link (`WorkerLink`) over a
+    hand-rolled WebSocket client, the command allow-list (`CommandValidator`), and the
+    inventory/equipment/efly value types — all unit-tested.
+  - New game layer (`com.logvex.worker.mc`): status and inventory readers, container moves for
+    regear, and the EFly executor that drives Meteor's own `ElytraFly` and `PathManagers`.
+  - New Meteor integration (`com.logvex.worker.meteor`): the **Fleet Manager** ClickGUI category and
+    its modules (connection, information, task status, inventory monitor, item counter, equipment
+    manager, regear manager, remote control, EFly).
+  - Wired into the root Gradle build as the `worker-mod` subproject, producing its own release jar.
+- **EFly task end-to-end.** The worker can engage or stop the client's own elytra flight and fly to
+  target coordinates, with optional `mode`, `minHeight`, `useFireworks` and `startPathing`. The
+  payload is validated in `EflyRequest` before it can reach the client. The Fleet Manager's **Tasks**
+  tab gained an EFly form and the task kind is exposed on the API.
+- **Worker console streaming.** The worker forwards its own link log to the host as throttled `log`
+  frames (at most one a second). The host keeps a bounded, per-worker buffer (200 lines) and exposes
+  it through a new **Console** tab in the Fleet section, plus `GET`/`DELETE
+  /api/v1/workers/{id}/console`. This shows what the client itself saw, not what the host assumed.
+- **Exclusive mutating tasks.** The host refuses to start a second mutating task (`regear`,
+  `command`, `chat`, `efly`) on a worker that already has one in flight, so a flight and a regear can
+  never race.
+
+### Changed
+- **The single-mod scope note no longer applies to the worker direction.** Controlling other clients
+  is still possible entirely in game with the one Hunter addon's **swarm** module, but the Fleet
+  Manager also drives a separate **worker** fleet again; both directions are documented in the
+  README.
+
 ## [1.1.0] - 2026-11-08
 
 ### Added

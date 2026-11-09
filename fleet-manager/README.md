@@ -76,12 +76,14 @@ Navigation is deliberately small — seven sections, each with a clear job:
 | Workers | Fleet tasks |
 | ![Inventory](docs/screenshots/05-fleet-inventory.png) | ![Regear](docs/screenshots/06-fleet-regear.png) |
 | Inventory | Regear |
-| ![Features](docs/screenshots/07-features-hunter.png) | ![Tasks](docs/screenshots/08-tasks.png) |
-| Main Features | Tasks |
-| ![Accounts](docs/screenshots/09-accounts.png) | ![Activity](docs/screenshots/10-activity.png) |
-| Accounts & Profiles | Activity |
-| ![Settings](docs/screenshots/11-settings.png) | ![Help](docs/screenshots/12-help.png) |
-| Settings | Help |
+| ![Console](docs/screenshots/13-fleet-console.png) | ![Features](docs/screenshots/07-features-hunter.png) |
+| Console | Main Features |
+| ![Tasks](docs/screenshots/08-tasks.png) | ![Accounts](docs/screenshots/09-accounts.png) |
+| Tasks | Accounts & Profiles |
+| ![Activity](docs/screenshots/10-activity.png) | ![Settings](docs/screenshots/11-settings.png) |
+| Activity | Settings |
+| ![Help](docs/screenshots/12-help.png) | |
+| Help | |
 
 The screenshots are captured from the renderer in demo mode (`?demo`), so they render without a
 live backend. To regenerate them:
@@ -198,8 +200,12 @@ execution. Both sides refuse to talk to a different protocol version.
   heartbeat age), a per-worker inspector, and controls: refresh status, pull inventory, ask position,
   send a command, send chat, socket ping, kick and forget. Label, group and notes are host-side only.
 - **Groups** — named, coloured groups used for bulk actions and item counting.
-- **Tasks** — dispatch a task kind to one worker or many, with a live history (status, duration,
-  result/error).
+- **Tasks** — dispatch a task kind (including **EFly**: engage the client's own elytra flight, with
+  optional target coordinates, mode and minimum height) to one worker or many, with a live history
+  (status, duration, result/error). Mutating kinds are exclusive per worker, so a flight and a
+  regear can never race.
+- **Console** — the log lines a worker forwarded about itself (connect, register, task outcomes,
+  errors), newest last, with a clear button. This is the client's own view, not the host's guess.
 - **Inventory** — a worker's last *reported* inventory (with its capture time) and a fleet-wide item
   count for a friendly query such as `totem`, `gapple` or `diamond`, scoped to a group.
 - **Commands** — send a server command or a chat line to many workers at once, with the audit log of
@@ -218,13 +224,15 @@ execution. Both sides refuse to talk to a different protocol version.
 
 The envelope is JSON: `{ v, type, id, payload }`. The message types mirror
 `worker-mod/src/main/java/com/logvex/worker/core/Protocol.java` and are re-declared in
-`src/shared/workers.ts`; a drift between the two fails the integration tests.
+`src/shared/workers.ts`; `tests/unit/worker-protocol-drift.test.ts` reads the Java file and asserts
+the two agree, so a drift fails the build. The contract is written down in
+[`../docs/PROTOCOL.md`](../docs/PROTOCOL.md).
 
 | Direction | Types |
 | --- | --- |
 | worker → host | `hello`, `register`, `status`, `inventory`, `equipment`, `result`, `progress`, `pong`, `error`, `log` |
 | host → worker | `hello-ack`, `command`, `task`, `ping`, `kick` |
-| task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position` |
+| task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position`, `efly` |
 
 A worker authenticates with the shared token from **Settings → Worker server**; the host assigns a
 stable id and tracks the last snapshot and online state. Task results are whatever the worker
@@ -253,6 +261,8 @@ The worker endpoints are also available on the local API:
 | POST | `/api/v1/workers/{id}/task` | run a task (`{ "kind": "...", "params": {} }`) |
 | POST | `/api/v1/workers/{id}/line` | send a command or chat line (`{ "kind": "command", "line": "..." }`) |
 | GET | `/api/v1/workers/{id}/inventory` | the last reported inventory |
+| GET | `/api/v1/workers/{id}/console` | the log lines that worker forwarded |
+| DELETE | `/api/v1/workers/{id}/console` | clear that worker's console buffer |
 | GET | `/api/v1/workers/count?item=totem` | a fleet-wide item count |
 | GET | `/api/v1/workers/groups` | worker groups |
 | GET | `/api/v1/workers/tasks` | recent task history |

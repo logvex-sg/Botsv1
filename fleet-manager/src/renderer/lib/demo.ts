@@ -409,7 +409,15 @@ export function createDemoApi(): FleetApi {
     runWorkerTask: async (workerId: string, kind: string) => ({ ok: true, taskId: `wt-${Date.now()}`, kind, message: `did ${kind}`, data: {} }),
     runWorkerTaskMany: async (ids: string[], kind: string) => ids.map((workerId) => ({ workerId, ok: true, result: { ok: true, taskId: `wt-${Date.now()}`, kind, message: `did ${kind}`, data: {} } })),
     listWorkerTasks: async () => clone(workerTasks),
-    getWorkerTaskKinds: async () => ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position'],
+    getWorkerTaskKinds: async () => ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position', 'efly'],
+
+    getWorkerConsole: async () => [
+      { at: Date.now() - 4000, message: 'connecting to ws://127.0.0.1:8721/worker' },
+      { at: Date.now() - 3000, message: 'registered as bot-1' },
+      { at: Date.now() - 1000, message: 'status ok' },
+    ],
+    clearWorkerConsole: async () => {},
+    getWorkerCapabilities: async () => ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position', 'efly'],
 
     sendWorkerLine: async (workerId: string, kind: 'command' | 'chat', line: string) => ({ id: `wc-${Date.now()}`, workerId, kind, line, ok: true, response: 'ok', createdAt: Date.now() }),
     sendWorkerLineMany: async (ids: string[], _kind: 'command' | 'chat', _line: string) => ids.map((workerId) => ({ workerId, ok: true, response: 'ok' })),

@@ -28,12 +28,22 @@ const KIND_LABELS: Record<string, string> = {
   regear: 'Regear — compare and (optionally) withdraw',
   command: 'Command — send a server command',
   chat: 'Chat — send a chat message',
+  efly: 'EFly — fly this client with its elytra (Meteor ElytraFly)',
 };
 
 const KIND_PARAMS: Record<string, { key: string; label: string; placeholder: string; hint?: string } | undefined> = {
   count: { key: 'query', label: 'Item to count', placeholder: 'diamond', hint: 'Friendly names work: totem, gapple, iron, pearl.' },
   search: { key: 'query', label: 'Search term', placeholder: 'netherite' },
 };
+
+/** EFly options, gathered separately because a flight has several fields, not one. */
+interface EflyOptions {
+  action: 'start' | 'stop';
+  x: string;
+  y: string;
+  z: string;
+  mode: string;
+}
 
 export function TasksTab({ push }: Props) {
   const store = useStore();
@@ -42,6 +52,7 @@ export function TasksTab({ push }: Props) {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [kinds, setKinds] = useState<string[]>([]);
+  const [efly, setEfly] = useState<EflyOptions>({ action: 'start', x: '', y: '120', z: '', mode: '' });
 
   useEffect(() => {
     void fleet.getWorkerTaskKinds().then(setKinds).catch(() => setKinds(Object.keys(KIND_LABELS)));
@@ -70,10 +81,15 @@ export function TasksTab({ push }: Props) {
     }
     setBusy(true);
     try {
-      const params = needsParam && paramSpec ? { [paramSpec.key]: param.trim() } : {};
-      if (needsParam && param.trim().length === 0) {
-        push('Enter a value for that task first', 'error');
-        return;
+      let params: Record<string, unknown> = {};
+      if (kind === 'efly') {
+        params = buildEflyParams(efly);
+      } else if (needsParam && paramSpec) {
+        if (param.trim().length === 0) {
+          push('Enter a value for that task first', 'error');
+          return;
+        }
+        params = { [paramSpec.key]: param.trim() };
       }
       const results = await fleet.runWorkerTaskMany(targets, kind as never, params);
       const ok = results.filter((r) => r.ok).length;
@@ -125,6 +141,43 @@ export function TasksTab({ push }: Props) {
             </Field>
           )}
         </div>
+
+        {kind === 'efly' && (
+          <div style={{ marginTop: 10, padding: 12, border: '1px solid var(--border)', borderRadius: 8 }}>
+            <div className="card-sub" style={{ marginBottom: 8 }}>
+              EFly uses the worker's own elytra. The worker reports whether it engaged; the host never assumes flight.
+            </div>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+              <Field label="Action">
+                <select value={efly.action} onChange={(e) => setEfly((p) => ({ ...p, action: e.target.value as 'start' | 'stop' }))}>
+                  <option value="start">Start flying</option>
+                  <option value="stop">Stop flying</option>
+                </select>
+              </Field>
+              {efly.action === 'start' && (
+                <>
+                  <Field label="Target X" hint="Leave blank to just engage flight.">
+                    <input value={efly.x} placeholder="0" onChange={(e) => setEfly((p) => ({ ...p, x: e.target.value }))} />
+                  </Field>
+                  <Field label="Target Y">
+                    <input value={efly.y} placeholder="120" onChange={(e) => setEfly((p) => ({ ...p, y: e.target.value }))} />
+                  </Field>
+                  <Field label="Target Z">
+                    <input value={efly.z} placeholder="0" onChange={(e) => setEfly((p) => ({ ...p, z: e.target.value }))} />
+                  </Field>
+                  <Field label="Flight mode" hint="vanilla, packet, pitch40 or bounce (blank = keep current).">
+                    <input value={efly.mode} placeholder="packet" onChange={(e) => setEfly((p) => ({ ...p, mode: e.target.value }))} />
+                  </Field>
+                </>
+              )}
+            </div>
+            {efly.action === 'start' && (efly.x.trim() !== '') !== (efly.z.trim() !== '') && (
+              <Callout tone="warning" title="Incomplete target">
+                Give both X and Z to fly to a point, or leave both blank to engage flight in place.
+              </Callout>
+            )}
+          </div>
+        )}
 
         <div className="row between" style={{ marginTop: 4, marginBottom: 6 }}>
           <span className="card-sub">Recipients ({targets.length} selected of {online.length} connected)</span>
@@ -225,4 +278,25 @@ export function TasksTab({ push }: Props) {
 
 export function onlineWorkers(workers: WorkerView[]): WorkerView[] {
   return workers.filter((w) => w.online);
+}
+
+/**
+ * Turns the EFly form into task params.
+ *
+ * Coordinates are only sent when both X and Z are given; a half-filled target becomes "engage in
+ * place" rather than a flight to (x, 0), which would be a surprise the operator did not ask for.
+ */
+function buildEflyParams(efly: EflyOptions): Record<string, unknown> {
+  const params: Record<string, unknown> = { action: efly.action };
+  if (efly.action !== 'start') return params;
+  const x = Number(efly.x);
+  const z = Number(efly.z);
+  const hasTarget = efly.x.trim() !== '' && efly.z.trim() !== '' && Number.isFinite(x) && Number.isFinite(z);
+  if (hasTarget) {
+    params.x = x;
+    params.y = Number.isFinite(Number(efly.y)) ? Number(efly.y) : 120;
+    params.z = z;
+  }
+  if (efly.mode.trim() !== '') params.mode = efly.mode.trim();
+  return params;
 }

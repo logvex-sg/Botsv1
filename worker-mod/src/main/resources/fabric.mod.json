@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "logvex-worker",
+  "version": "${version}",
+  "name": "Logvex Worker",
+  "description": "Connects this Minecraft client to a Logvex Fleet Manager host so it can be controlled remotely, and registers a Fleet Manager category in Meteor Client. Reads inventory, equipment and position, runs commands, executes regear and EFly tasks and reports results.",
+  "authors": [
+    "Logvex"
+  ],
+  "contact": {
+    "sources": "https://github.com/logvex-sg/Botsv1"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.logvex.worker.WorkerMod"
+    ],
+    "meteor": [
+      "com.logvex.worker.meteor.FleetAddon"
+    ]
+  },
+  "custom": {
+    "meteor-client:color": "145,61,226"
+  },
+  "depends": {
+    "java": ">=${jdk_version}",
+    "minecraft": "${minecraft_version}",
+    "fabricloader": ">=0.16.0",
+    "meteor-client": "*"
+  }
+}

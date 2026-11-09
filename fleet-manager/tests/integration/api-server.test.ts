@@ -176,5 +176,21 @@ describe('worker API routes', () => {
     });
     expect(response.status).toBeGreaterThanOrEqual(400);
   });
+
+  it('returns an empty console for a worker that has sent none', async () => {
+    const response = await fetch(url('/api/v1/workers/ghost/console'), { headers: authHeaders() });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.lines).toEqual([]);
+  });
+
+  it('clears a worker console', async () => {
+    const response = await fetch(url('/api/v1/workers/ghost/console'), {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(response.status).toBe(200);
+    expect((await response.json()).ok).toBe(true);
+  });
 });
 
