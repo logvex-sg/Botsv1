@@ -104,6 +104,7 @@ See [`USAGE.md`](USAGE.md) for the full use guide. The command reference:
 .hunter save
 
 .swarm                        # swarm status (mode, port, workers)
+.swarm status                 # same as above
 .swarm host                   # this client becomes the swarm host
 .swarm join <ip> <port>       # this client becomes a worker of that host
 .swarm stop                   # stop the swarm link
