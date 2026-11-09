@@ -27,18 +27,14 @@ const PORT = Number(process.env.DEBUG_PORT ?? 9333);
 
 const PAGES = [
   ['01-dashboard', 'dashboard'],
-  ['02-fleet-dashboard', 'fleet&fleet=dashboard'],
-  ['03-fleet-workers', 'fleet&fleet=workers'],
-  ['04-fleet-tasks', 'fleet&fleet=tasks'],
-  ['05-fleet-inventory', 'fleet&fleet=inventory'],
-  ['06-fleet-regear', 'fleet&fleet=regear'],
-  ['13-fleet-console', 'fleet&fleet=console'],
-  ['07-features-hunter', 'features'],
-  ['08-tasks', 'tasks'],
-  ['09-accounts', 'accounts'],
-  ['10-activity', 'activity'],
-  ['11-settings', 'settings'],
-  ['12-help', 'help'],
+  ['02-workers', 'workers'],
+  ['03-groups', 'groups'],
+  ['04-tasks', 'tasks'],
+  ['05-inventory', 'inventory'],
+  ['06-regear', 'regear'],
+  ['07-commands', 'commands'],
+  ['08-consoles', 'consoles'],
+  ['09-settings', 'settings'],
 ];
 
 function findChrome() {

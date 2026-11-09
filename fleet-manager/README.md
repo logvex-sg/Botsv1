@@ -1,217 +1,108 @@
-# Logvex Fleet Manager
+# Logvex Fleet Manager (Host)
 
-A desktop command center for running and supervising a fleet of Minecraft bot instances. Add an
-account and a server, press **Start**, and the app handles connecting, reconnecting and reporting.
-Bots can take one of three roles (**GEARER**, **STASIS** or **HUNTER**), and the app can connect to
-one or more **LogVex Hunter** Meteor clients over their companion API.
+The **Host** half of the Logvex bot platform. It does not run bots itself and it does not need a
+Minecraft account: it is a control plane. Real Minecraft clients that are already running the
+[**Logvex Worker** mod](../worker-mod) dial *out* to the Host over a WebSocket, register themselves,
+and then accept a closed set of tasks. The Host is where you watch and command them.
 
-Built with **Electron + React + TypeScript + Vite**. Each bot runs in its own isolated Node worker
-process, so one crashing or hanging bot never takes down the application.
+That design has one big consequence: **the Host never needs an inbound port on a bot machine.** Each
+worker makes an outbound connection to the Host, so it works from behind NAT, from a home network,
+from a container, or from a machine you cannot otherwise reach. Adding a bot is "start Minecraft
+with the worker mod installed", nothing more.
+
+Built with **Electron + React + TypeScript + Vite**. The main process is Electron-free below the
+window layer, so the whole backend is exercised in-process by the test suite.
 
 ![Dashboard](docs/screenshots/01-dashboard.png)
 
 ---
 
-## Getting started in 60 seconds
+## Two halves, one protocol
 
-1. **Open the app.** The Dashboard tells you exactly what to do next.
-2. **Add an account.** Use *Quick start* on the Dashboard (or the Accounts page) to add an account
-   and a server in one step.
-3. **Press Start.** Pick the accounts you want online and press **Start my bots**.
-4. **Watch it work.** The Dashboard and the Activity page show live status, events and statistics.
+```
+        Logvex Worker (Minecraft client)            Logvex Fleet Manager (this app)
+        ─────────────────────────────────           ────────────────────────────────
+   ┌───────────────────────────────┐           ┌──────────────────────────────────┐
+   │  worker-mod (Fabric/Meteor)   │  dials →  │  Worker server (ws://host:8721)  │
+   │  • reads the client           │  out      │  • authenticates + pairs         │
+   │  • executes named tasks       │  ←────────│  • stores snapshots & inventory  │
+   │  • reconnects forever         │   tasks   │  • dispatches tasks, records     │
+   └───────────────────────────────┘           │  • the dashboard, the API        │
+                                               └──────────────────────────────────┘
+```
 
-Everything has sensible defaults. You never have to edit a configuration file to get going.
+- The worker is a Fabric/Meteor mod you drop into a bot's `mods/` folder. See
+  [`../worker-mod/README.md`](../worker-mod/README.md).
+- The Host is this app. It listens on one WebSocket port and one local HTTP API port, both on the
+  Host machine only.
+
+---
+
+## Getting started
+
+1. **Install and open the Host.**
+
+   ```bash
+   cd fleet-manager
+   npm install
+   npm run dev          # Vite + Electron with hot reload
+   # or: npm run build && npm start
+   ```
+
+2. **Pick Host mode.** On first run the app asks whether this machine is the Host or a Worker. This
+   app is the Host; the Worker choice only explains where to get the mod.
+
+3. **Read the connection address.** The Dashboard shows the address your workers should dial, e.g.
+   `ws://192.168.1.20:8721`. Press **Copy address**.
+
+4. **Pair a worker.** Press **Generate pairing code**. It shows a short code (for example `ABCD2345`)
+   valid for a few minutes. In the Minecraft client, install the worker mod and put the code in its
+   config:
+
+   ```json
+   { "host": "192.168.1.20", "port": 8721, "pairingCode": "ABCD2345" }
+   ```
+
+   The worker connects, presents the code once, and the Host answers with the shared token. The
+   worker stores the token and uses it from then on, so the code is never needed again.
+
+5. **Watch it work.** The worker appears on the Dashboard with its world, coordinates, health, gear
+   and heartbeat age, and can now be given tasks.
+
+Everything has sensible defaults. You never have to hand-edit a Host config file to get going.
 
 ### Beginner and Advanced modes
 
-The app starts in **Beginner mode**: simple screens, plain language and only the options that
-matter. Switch to **Advanced mode** (top-right, or in Settings) to reveal the full deployment
-builder, queue editor, role configuration and technical settings. Both modes are the same
-application — no features are removed, only revealed.
+Beginner mode shows plain-language screens and only the options that matter. Advanced mode (top
+right, or in Settings) reveals the technical settings. Both are the same application; nothing is
+removed, only revealed.
 
 ---
 
-## Features
+## What the Host can do
 
-Navigation is deliberately small — seven sections, each with a clear job:
+Navigation is small on purpose — each page has one job:
 
-- **Dashboard** — what is happening now, a guided setup checklist, one-click *Start my bots*, the
-  live state of every bot and recent activity.
-- **Main Features** — the fleet's capabilities behind one set of tabs: **Hunter** (LogVex Hunter
-  link and combat readiness), **Targets** (the shared target list), **Gear** (equipment profiles
-  and warnings), **Stasis** (defensive locations) and **Servers** (connection profiles).
-- **Tasks** — start and manage bots. Beginner mode is a single "pick and press start" flow;
-  Advanced mode exposes the full deployment builder, queue, validation preview and live monitor.
-- **Accounts** — register offline/Microsoft accounts, store credentials in the OS keychain (with an
-  encrypted-file fallback) and prepare logins.
-- **Activity** — the event feed, notification inbox, statistics and live per-bot logs.
-- **Settings** — grouped, plain-language options with tooltips, an optional Advanced section and a
-  **Restore defaults** button.
-- **Fleet** — the worker fleet: a live dashboard, the worker roster, groups, tasks, inventory,
-  commands and regear. See [Fleet (worker management)](#fleet-worker-management) below.
-- **Help** — a short guide, a glossary and answers to common questions.
-
-### Cross-cutting
-- **One-click operations** — *Quick start* creates a server + account; *Start my bots* builds and
-  launches a deployment; *Stop everything* halts the whole fleet.
-- **Friendly errors** — technical failures are translated into a plain explanation and a suggested
-  fix, with a **Copy technical details** option for debugging.
-- **Emergency stop** — one control halts every instance and cancels deployments; every destructive
-  action asks for confirmation first.
-- **Local HTTP + WebSocket API** — the same functionality as the UI, for automation, at
-  `/api/v1/*` with `/events` for the event stream (token-authenticated).
-- **Resilient Hunter integration** — an unreachable addon degrades to "disconnected" instead of
-  throwing into the UI.
-- **Light and dark themes**, remembered between sessions, with a responsive layout.
-
----
-
-## Screenshots
-
-| | |
-| --- | --- |
-| ![Dashboard](docs/screenshots/01-dashboard.png) | ![Fleet dashboard](docs/screenshots/02-fleet-dashboard.png) |
-| Dashboard | Fleet dashboard |
-| ![Workers](docs/screenshots/03-fleet-workers.png) | ![Tasks](docs/screenshots/04-fleet-tasks.png) |
-| Workers | Fleet tasks |
-| ![Inventory](docs/screenshots/05-fleet-inventory.png) | ![Regear](docs/screenshots/06-fleet-regear.png) |
-| Inventory | Regear |
-| ![Console](docs/screenshots/13-fleet-console.png) | ![Features](docs/screenshots/07-features-hunter.png) |
-| Console | Main Features |
-| ![Tasks](docs/screenshots/08-tasks.png) | ![Accounts](docs/screenshots/09-accounts.png) |
-| Tasks | Accounts & Profiles |
-| ![Activity](docs/screenshots/10-activity.png) | ![Settings](docs/screenshots/11-settings.png) |
-| Activity | Settings |
-| ![Help](docs/screenshots/12-help.png) | |
-| Help | |
-
-The screenshots are captured from the renderer in demo mode (`?demo`), so they render without a
-live backend. To regenerate them:
-
-```bash
-npm run dev:renderer -- --port 5173 --host 0.0.0.0   # in one terminal
-npm run screenshots                                   # in another
-```
-
-The script (`scripts/capture-screenshots.mjs`) drives headless Chromium over the DevTools
-Protocol, visiting each page via `?demo&page=<id>` at 1600x1000, and the Fleet sub-tabs via
-`?demo&page=fleet&fleet=<tab>`. Old page ids (such as `?page=overview` or `?page=deployment`) are
-still accepted and redirect to the matching new section. Set `CHROME` if Chromium is not on the
-default path, or `BASE_URL` to point at a different dev server.
-
----
-
-## Requirements
-
-- **Node.js 20+** (the project is developed and tested on Node 20/22; `better-sqlite3` and
-  `keytar` ship prebuilt binaries for common platforms).
-- A desktop OS supported by Electron (Windows, macOS, Linux).
-
-## Install
-
-```bash
-cd fleet-manager
-npm install
-```
-
-`keytar` is an optional dependency: if it cannot be installed, the app automatically falls back to
-an encrypted-file credential vault (see `src/main/security/credential-vault.ts`).
-
-## Run
-
-```bash
-# Development: Vite dev server + Electron, hot reload.
-npm run dev
-
-# Production build + launch.
-npm run build
-npm start
-```
-
-## Build & package
-
-```bash
-npm run build          # type-check main, bundle the renderer into dist/
-npm run package:linux  # AppImage + deb
-npm run package:win    # NSIS installer
-```
-
-## Test & type-check
-
-```bash
-npm test               # Vitest: unit + integration
-npm run typecheck      # tsc for renderer and main
-```
-
----
-
-## Architecture
-
-```
-src/
-├── shared/            Types and constants shared by main and renderer (single source of truth).
-├── main/              Electron main process (Node).
-│   ├── index.ts       App bootstrap: context, API, window, IPC, shutdown.
-│   ├── context.ts     AppContext: wires db, repositories, vault and services. Electron-free.
-│   ├── db/            SQLite schema/migrations and typed repositories.
-│   ├── api/           Local HTTP + WebSocket API and its token auth.
-│   ├── ipc/           IPC handlers exposed to the renderer through the preload bridge.
-│   ├── security/      Credential vault (keytar or encrypted-file fallback).
-│   ├── services/      Domain services: accounts, groups, instances, deployment, roles,
-│   │                  hunter client + target sync, stasis, equipment, events, diagnostics.
-│   ├── workers/       Worker fleet: WebSocket server, the protocol mirror and WorkerService.
-│   └── mineflayer/    Bot supervisor, bot worker, collectors and role task scripts.
-└── renderer/          React UI (Vite).
-    ├── App.tsx        Shell: sidebar navigation, top bar, toasts.
-    ├── lib/           Typed API bridge, state store, demo backend.
-    ├── components/    Reusable UI primitives.
-    └── pages/         One component per screen.
-```
-
-### Key design points
-
-- **Isolation.** Every bot runs in a separate worker process managed by `WorkerSupervisor`; the UI
-  and main process never block on a bot.
-- **Testable core.** `AppContext` and every service are constructed without Electron, so the whole
-  backend can be exercised in-process over an in-memory database (see `tests/integration`).
-- **One event stream.** Services publish to an `EventBus`; the UI subscribes over IPC and the API
-  over WebSocket, so both see the same events.
-- **Safe credentials.** Passwords never live in the database; the vault stores them and the
-  database only holds a reference.
-
----
-
-## Fleet (worker management)
-
-The **Fleet** section manages the *Logvex Worker* mod — a small Fabric companion that runs inside a
-separate Minecraft client and connects back to the Fleet Manager over a WebSocket. It is the
-outbound direction of the same ecosystem the Hunter companion covers inbound: Hunter lets the app
-*read* a client, the worker mod lets the app *ask* a client to do a bounded, named task.
-
-The worker protocol is a closed set of message types and task kinds — the host never sends code,
-a class name or a shell command, so a compromised host cannot turn a worker into remote code
-execution. Both sides refuse to talk to a different protocol version.
-
-### What each tab does
-
-- **Dashboard** — fleet totals (online/offline/degraded), active tasks, tracked items, a per-group
-  breakdown and the recent worker events.
-- **Workers** — every client that has connected, with live state (world, coordinates, health, gear,
-  heartbeat age), a per-worker inspector, and controls: refresh status, pull inventory, ask position,
-  send a command, send chat, socket ping, kick and forget. Label, group and notes are host-side only.
+- **Dashboard** — what is happening now: worker totals (online/offline/degraded), active tasks,
+  tracked items, a per-group breakdown, the pairing-code panel and the recent events.
+- **Workers** — every client that has connected, with live state, a per-worker inspector and the
+  controls: refresh status, pull inventory, ask position, send a command, send chat, socket ping,
+  kick, forget, label, group and notes. Label, group and notes are host-side bookkeeping only.
 - **Groups** — named, coloured groups used for bulk actions and item counting.
-- **Tasks** — dispatch a task kind (including **EFly**: engage the client's own elytra flight, with
+- **Tasks** — dispatch a task kind (including **EFly**: engage the client's *own* elytra flight, with
   optional target coordinates, mode and minimum height) to one worker or many, with a live history
-  (status, duration, result/error). Mutating kinds are exclusive per worker, so a flight and a
-  regear can never race.
-- **Console** — the log lines a worker forwarded about itself (connect, register, task outcomes,
-  errors), newest last, with a clear button. This is the client's own view, not the host's guess.
+  (status, duration, result/error). Mutating kinds are exclusive per worker, so a flight and a regear
+  can never race.
+- **Consoles** — the log lines a worker forwarded about itself (connect, register, task outcomes,
+  errors), newest last, with a clear button. This is the client's own view, not the Host's guess.
 - **Inventory** — a worker's last *reported* inventory (with its capture time) and a fleet-wide item
   count for a friendly query such as `totem`, `gapple` or `diamond`, scoped to a group.
 - **Commands** — send a server command or a chat line to many workers at once, with the audit log of
   what was sent and what each worker answered.
 - **Regear** — loadout presets and a per-worker comparison between the preset and the last reported
   inventory, plus a fleet sweep. Moves are **off** by default (a dry run that only reports).
+- **Settings** — grouped, plain-language options, the worker server address, tokens, and a
+  **Restore defaults** button.
 
 ### Two ideas that are kept apart
 
@@ -220,13 +111,30 @@ execution. Both sides refuse to talk to a different protocol version.
 - A worker's **accessible** inventory is only what is inside a container screen it currently has
   open. The app never claims the two are the same, and it never opens a container for you.
 
-### Protocol
+---
+
+## Pairing and authentication
+
+There are two credentials, both generated on the Host and both regenerable from Settings:
+
+- **Worker token** — the long-lived shared secret. A worker that already has it authenticates
+  silently on every reconnect.
+- **Pairing code** — a short, single-use, expiring code so you do not have to copy the long token
+  onto a bot machine by hand. The first `hello` that carries a valid code is answered with the shared
+  token; the code is consumed immediately.
+
+A worker that presents neither, or a stale code, is refused with a reason the client logs. The Host
+also refuses any worker whose protocol version does not match, rather than guessing at a payload it
+does not understand.
+
+---
+
+## Protocol
 
 The envelope is JSON: `{ v, type, id, payload }`. The message types mirror
 `worker-mod/src/main/java/com/logvex/worker/core/Protocol.java` and are re-declared in
-`src/shared/workers.ts`; `tests/unit/worker-protocol-drift.test.ts` reads the Java file and asserts
-the two agree, so a drift fails the build. The contract is written down in
-[`../docs/PROTOCOL.md`](../docs/PROTOCOL.md).
+`src/shared/workers.ts`. `tests/unit/worker-protocol-drift.test.ts` reads the Java file and asserts
+the two agree, so a drift fails the build rather than reaching a user.
 
 | Direction | Types |
 | --- | --- |
@@ -234,30 +142,25 @@ the two agree, so a drift fails the build. The contract is written down in
 | host → worker | `hello-ack`, `command`, `task`, `ping`, `kick` |
 | task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position`, `efly` |
 
-A worker authenticates with the shared token from **Settings → Worker server**; the host assigns a
-stable id and tracks the last snapshot and online state. Task results are whatever the worker
-actually reported — a task that timed out or was refused raises, so the UI can never mistake
-"asked" for "done".
+The task kinds are a **closed set**. The Host never sends code, a class name or a shell command; it
+sends one of these kinds with a validated payload, and the worker dispatches it through a fixed
+switch. Task results are whatever the worker actually reported — a task that timed out or was
+refused raises, so the UI can never mistake "asked" for "done".
 
-### Connecting a worker
+---
 
-In the worker client's config, set the host address and the shared token:
+## HTTP API
 
-```
-.host  <fleet-manager-host>:8721
-.token <token from Settings → Worker server>
-```
-
-The token is generated once and shown in Settings (with a reveal and a regenerate button).
-
-### HTTP API
-
-The worker endpoints are also available on the local API:
+The same functionality as the UI, for scripts, at `/api/v1/*` with a bearer token (or `?token=`).
+`/health` is open. The API is loopback-only by default.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| GET | `/health` | liveness (no token) |
+| GET | `/api/v1/status` | host status |
 | GET | `/api/v1/workers` | the roster with live state |
 | GET | `/api/v1/workers/overview` | fleet totals |
+| GET | `/api/v1/workers/{id}` | one worker |
 | POST | `/api/v1/workers/{id}/task` | run a task (`{ "kind": "...", "params": {} }`) |
 | POST | `/api/v1/workers/{id}/line` | send a command or chat line (`{ "kind": "command", "line": "..." }`) |
 | GET | `/api/v1/workers/{id}/inventory` | the last reported inventory |
@@ -271,30 +174,98 @@ The worker endpoints are also available on the local API:
 
 ---
 
-## Connecting to LogVex Hunter
+## Screenshots
 
-The Hunter Manager page and the Target Database sync both use the LogVex Hunter companion API. In
-the addon:
+| | |
+| --- | --- |
+| ![Dashboard](docs/screenshots/01-dashboard.png) | ![Workers](docs/screenshots/02-workers.png) |
+| Dashboard | Workers |
+| ![Groups](docs/screenshots/03-groups.png) | ![Tasks](docs/screenshots/04-tasks.png) |
+| Groups | Tasks |
+| ![Inventory](docs/screenshots/05-inventory.png) | ![Regear](docs/screenshots/06-regear.png) |
+| Inventory | Regear |
+| ![Commands](docs/screenshots/07-commands.png) | ![Consoles](docs/screenshots/08-consoles.png) |
+| Commands | Consoles |
+| ![Settings](docs/screenshots/09-settings.png) | |
+| Settings | |
+
+The screenshots are captured from the renderer in demo mode (`?demo`), so they render without a live
+backend or a connected worker. To regenerate them:
+
+```bash
+npm run dev:renderer -- --port 5173 --host 0.0.0.0   # in one terminal
+npm run screenshots                                   # in another
+```
+
+The script (`scripts/capture-screenshots.mjs`) drives headless Chromium over the DevTools Protocol,
+visiting each page via `?demo&page=<id>` at 1600x1000. Set `CHROME` if Chromium is not on the default
+path, or `BASE_URL` to point at a different dev server.
+
+---
+
+## Requirements
+
+- **Node.js 20+** (developed and tested on Node 20/22; `better-sqlite3` ships prebuilt binaries for
+  common platforms).
+- A desktop OS supported by Electron (Windows, macOS, Linux).
+
+## Build & package
+
+```bash
+npm run build          # type-check main, bundle the renderer into dist/
+npm run package:linux  # AppImage + deb
+npm run package:win    # NSIS installer
+```
+
+## Test & type-check
+
+```bash
+npm test               # Vitest: unit + integration (includes a real worker handshake)
+npm run typecheck      # tsc for renderer and main
+```
+
+The integration tests drive a **real worker-shaped WebSocket client** against the **real** Host
+server over a real loopback socket, so the handshake, pairing, task round-trip, inventory cache and
+regear comparison are all exercised end to end. The only thing faked is the Minecraft client itself,
+which is exactly the boundary the protocol is meant to cross.
+
+---
+
+## Architecture
 
 ```
-.hunter companion start
-.hunter companion token     # copy this token
+src/
+├── shared/            Types and constants shared by main and renderer (single source of truth).
+│   ├── types.ts       Domain types: workers, groups, tasks, inventory, events, settings.
+│   ├── workers.ts     The worker protocol mirror + defensive envelope decoder.
+│   ├── events.ts      The canonical event catalog and its schema version.
+│   └── ipc.ts         The IPC channel names and their request/response shapes.
+├── main/              Electron main process (Node).
+│   ├── index.ts       App bootstrap: context, API, window, IPC, shutdown.
+│   ├── context.ts     AppContext: wires db, repositories, worker server/service. Electron-free.
+│   ├── db/            SQLite schema/migrations and typed repositories.
+│   ├── api/           Local HTTP + WebSocket API and its token auth.
+│   ├── ipc/           IPC handlers exposed to the renderer through the preload bridge.
+│   ├── services/      The event bus (the one event stream).
+│   └── workers/       The worker WebSocket server and WorkerService (the control plane).
+└── renderer/          React UI (Vite).
+    ├── App.tsx        Shell: sidebar navigation, top bar, toasts.
+    ├── lib/           Typed API bridge, state store, demo backend.
+    ├── components/    Reusable UI primitives.
+    └── pages/         One component per screen.
 ```
 
-Then in the Fleet Manager's **Settings** page set the Hunter base URL (e.g.
-`http://127.0.0.1:8720`) and the token. The client calls:
+### Key design points
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/health` | connection + version |
-| GET | `/api/v1/snapshot` | bot, players, targets, modules, stats |
-| GET | `/api/v1/modules` | module states |
-| GET | `/api/v1/players` | visible players |
-| POST | `/api/v1/command` | administrative command |
-| POST | `/api/v1/notify` | show a local notification in the client |
-
-A client that is offline, misconfigured or missing simply shows as disconnected; nothing throws
-into the UI.
+- **The Host is a controller, not a runner.** It never launches Minecraft, never holds a game
+  account, and never reads another client's world state directly. Everything it shows came from a
+  worker's own report.
+- **Testable core.** `AppContext` and the worker server are constructed without Electron, so the
+  whole backend can be exercised in-process over an in-memory database (see `tests/integration`).
+- **One event stream.** Services publish to an `EventBus`; the UI subscribes over IPC and the API
+  over WebSocket, so both see the same events.
+- **Failure is contained.** A worker that hangs, crashes or floods is bounded: task timeouts raise,
+  console buffers are capped, and a stale connection is replaced when the same id reconnects.
 
 ---
 

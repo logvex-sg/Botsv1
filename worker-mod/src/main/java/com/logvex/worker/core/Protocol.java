@@ -12,7 +12,7 @@ public final class Protocol {
     private Protocol() {}
 
     /** Bumped whenever the envelope or a payload changes shape; mismatches are refused. */
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
 
     // worker -> host
     public static final String HELLO = "hello";
@@ -46,6 +46,7 @@ public final class Protocol {
     public static final String TASK_EFLY = "efly";
 
     // payload fields shared by more than one task
+    public static final String FIELD_PAIRING_CODE = "pairingCode";
     public static final String FIELD_QUERY = "query";
     public static final String FIELD_ITEM = "item";
     public static final String FIELD_MESSAGE = "message";

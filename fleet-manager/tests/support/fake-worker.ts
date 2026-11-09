@@ -23,6 +23,8 @@ import {
 export interface FakeWorkerOptions {
   workerId?: string;
   token?: string;
+  /** When set, the worker presents this pairing code instead of a token on its first hello. */
+  pairingCode?: string;
   protocolVersion?: number;
   /** Answers every task by default; return 'ignore' to simulate a worker that never replies. */
   onTask?: (kind: string, payload: Record<string, unknown>) => { ok: boolean; message: string; data?: Record<string, unknown> } | 'ignore';
@@ -37,6 +39,8 @@ export class FakeWorker {
   accepted = false;
   refusalReason = '';
   assignedId = '';
+  /** The shared token the host handed back on a successful pairing, if any. */
+  grantedToken = '';
   closed = false;
 
   constructor(private readonly options: FakeWorkerOptions = {}) {}
@@ -57,6 +61,7 @@ export class FakeWorker {
       type: WorkerInbound.HELLO,
       payload: {
         token: this.options.token ?? 'test-worker-token',
+        pairingCode: this.options.pairingCode ?? '',
         protocolVersion: this.options.protocolVersion ?? WORKER_PROTOCOL_VERSION,
         workerId: this.options.workerId ?? '',
         username: this.options.username ?? 'TestWorker',
@@ -74,6 +79,7 @@ export class FakeWorker {
       this.accepted = envelope.payload?.accepted === true;
       this.refusalReason = String(envelope.payload?.reason ?? '');
       this.assignedId = String(envelope.payload?.workerId ?? '');
+      this.grantedToken = String(envelope.payload?.token ?? '');
       return;
     }
     if (envelope.type === WorkerOutbound.PING) {

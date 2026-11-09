@@ -1,5 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { createTestContext, seed, type TestContext } from '../helpers';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { rmSync } from 'node:fs';
+import { AppContext } from '../../src/main/context';
+import { createTestContext, type TestContext } from '../helpers';
 
 let ctx: TestContext | null = null;
 afterEach(async () => { await ctx?.context.shutdown(); ctx = null; });
@@ -8,10 +12,10 @@ describe('AppContext integration', () => {
   it('creates a fully wired context over an in-memory database', async () => {
     ctx = await createTestContext();
     expect(ctx.context.db.path).toBe(':memory:');
-    expect(ctx.context.healthReport()).toBeDefined();
     const health = await ctx.context.healthReport();
     expect(health.ok).toBe(true);
     expect(health.database.ok).toBe(true);
+    expect(health.workerServer).toBeDefined();
   });
 
   it('exposes a stable API token and can regenerate it', async () => {
@@ -23,56 +27,87 @@ describe('AppContext integration', () => {
     expect(second).not.toBe(first);
   });
 
-  it('round-trips settings and survives corruption', async () => {
+  it('exposes a stable worker token and can regenerate it', async () => {
+    ctx = await createTestContext();
+    const first = ctx.context.getWorkerToken();
+    expect(first.length).toBeGreaterThan(8);
+    expect(ctx.context.getWorkerToken()).toBe(first);
+    expect(ctx.context.regenerateWorkerToken()).not.toBe(first);
+  });
+
+  it('round-trips settings', async () => {
     ctx = await createTestContext();
     ctx.context.saveSettings({ apiPort: 9999, logLevel: 'debug' });
     expect(ctx.context.getSettings().apiPort).toBe(9999);
-    ctx.context.settingsRepo.set('app', '{not json');
-    expect(ctx.context.getSettings().apiPort).toBe(9999);
+    expect(ctx.context.getSettings().logLevel).toBe('debug');
   });
 
-  it('creates accounts and marks them deployable by auth mode', async () => {
-    ctx = await createTestContext();
-    const offline = await ctx.context.accounts.create({ username: 'Offline', authMode: 'offline' });
-    expect(offline.deployable).toBe(true);
-    const online = await ctx.context.accounts.create({ username: 'Online', authMode: 'microsoft' });
-    expect(online.deployable).toBe(false);
-    await ctx.context.accounts.setCredential(online.id, 'token');
-    const views = await ctx.context.accounts.listWithStatus();
-    expect(views.find((a) => a.id === online.id)?.deployable).toBe(true);
+  it('serves defaults when the stored settings blob is corrupt', async () => {
+    const file = join(tmpdir(), `logvex-corrupt-${Date.now()}.sqlite`);
+    const first = await AppContext.create({ databasePath: file, startWorkerServer: false });
+    first.saveSettings({ apiPort: 9999 });
+    first.settingsRepo.set('app', '{not json');
+    await first.shutdown();
+
+    const second = await AppContext.create({ databasePath: file, startWorkerServer: false });
+    expect(second.getSettings().apiPort).toBe(8787);
+    await second.shutdown();
+    rmSync(file, { force: true });
   });
 
-  it('prevents duplicate accounts', async () => {
-    ctx = await createTestContext();
-    await ctx.context.accounts.create({ username: 'Dup' });
-    await expect(ctx.context.accounts.create({ username: 'dup' })).rejects.toThrow();
+  describe('pairing codes', () => {
+    it('creates a code that expires in the future and clears it', async () => {
+      ctx = await createTestContext();
+      const code = ctx.context.createPairingCode();
+      expect(code.code).toMatch(/^[A-Z2-9]{8}$/);
+      expect(code.expiresAt).toBeGreaterThan(code.createdAt);
+      expect(ctx.context.currentPairingCode()?.code).toBe(code.code);
+      ctx.context.clearPairingCode();
+      expect(ctx.context.currentPairingCode()).toBeNull();
+    });
+
+    it('replaces any previous code', async () => {
+      ctx = await createTestContext();
+      const first = ctx.context.createPairingCode();
+      const second = ctx.context.createPairingCode();
+      expect(second.code).not.toBe(first.code);
+      expect(ctx.context.currentPairingCode()?.code).toBe(second.code);
+    });
+
+    it('honours the configured TTL, with a 30-second floor', async () => {
+      ctx = await createTestContext();
+      ctx.context.saveSettings({ pairingCodeTtlSeconds: 5 });
+      const code = ctx.context.createPairingCode();
+      expect(code.expiresAt - code.createdAt).toBe(30_000);
+    });
   });
 
-  it('exports and imports a configuration bundle without credentials', async () => {
+  it('exports and imports a configuration bundle without the token', async () => {
     ctx = await createTestContext();
-    const { account } = await seed(ctx.context, ctx.vault, { username: 'ExportBot', authMode: 'microsoft', withCredential: true });
-    ctx.context.servers.create({ name: 'S2', host: 'h2', port: 25566, version: '', authMode: 'offline', connectionTimeoutMs: 1000, options: {} });
-    ctx.context.targets.upsert({ username: 'Enemy', category: 'PRIORITY' });
+    ctx.context.workers.createGroup('Farmers', 'crew', '#3fb950');
+    ctx.context.workers.createPreset({
+      name: 'Standard', description: '', items: [{ query: 'diamond', count: 64, label: 'Diamonds' }],
+      minArmorPieces: 4, minFood: 8, lowDurabilityPercent: 10,
+    });
 
     const bundle = ctx.context.exportBundle();
-    const serialised = JSON.stringify(bundle);
-    expect(serialised).not.toContain('secret-token');
-    expect(bundle.accounts).toBeDefined();
+    expect(JSON.stringify(bundle)).not.toContain(ctx.context.getWorkerToken());
+    expect(bundle.workerGroups).toBeDefined();
+    expect(bundle.regearPresets).toBeDefined();
 
     const fresh = await createTestContext();
-    const imported = fresh.context.importBundle(bundle as Record<string, unknown>);
-    expect(imported).toBeGreaterThan(0);
-    expect(fresh.context.servers.list().some((s) => s.name === 'S2')).toBe(true);
-    expect(fresh.context.targets.list().some((t) => t.username === 'Enemy')).toBe(true);
+    const imported = fresh.context.importBundle(bundle);
+    expect(imported).toBe(2);
+    expect(fresh.context.workers.listGroups().some((g) => g.name === 'Farmers')).toBe(true);
+    expect(fresh.context.workers.listPresets().some((p) => p.name === 'Standard')).toBe(true);
+    // Re-importing is a no-op because names already exist.
+    expect(fresh.context.importBundle(bundle)).toBe(0);
     await fresh.context.shutdown();
-    expect(account.id).toBeTruthy();
   });
 
-  it('records config versions on account edits', async () => {
+  it('emits a host event that lands on the bus', async () => {
     ctx = await createTestContext();
-    const account = await ctx.context.accounts.create({ username: 'Versioned' });
-    ctx.context.configVersions.record('account', account.id, { role: 'HUNTER' });
-    ctx.context.configVersions.record('account', account.id, { role: 'GEARER' });
-    expect(ctx.context.configVersions.history('account', account.id)).toHaveLength(2);
+    ctx.context.emitEvent('SYSTEM', 'hello world');
+    expect(ctx.context.bus.recentEvents().some((e) => e.message === 'hello world')).toBe(true);
   });
 });

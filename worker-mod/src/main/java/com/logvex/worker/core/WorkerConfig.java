@@ -18,6 +18,11 @@ public final class WorkerConfig {
     public String host = DEFAULT_HOST;
     public int port = DEFAULT_PORT;
     public String token = "";
+    /**
+     * A short-lived code the host issues; when set the worker presents it instead of a token on the
+     * first handshake and the host answers with the shared token, which is then stored here.
+     */
+    public String pairingCode = "";
     /** Optional stable id; when blank the worker derives one from its Minecraft account. */
     public String workerId = "";
     public String label = "";
@@ -63,6 +68,7 @@ public final class WorkerConfig {
             config.host = Json.string(root, "host", config.host);
             config.port = Json.integer(root, "port", config.port);
             config.token = Json.string(root, "token", config.token);
+            config.pairingCode = Json.string(root, "pairingCode", config.pairingCode);
             config.workerId = Json.string(root, "workerId", config.workerId);
             config.label = Json.string(root, "label", config.label);
             config.group = Json.string(root, "group", config.group);

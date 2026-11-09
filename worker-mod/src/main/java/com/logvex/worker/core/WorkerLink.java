@@ -65,6 +65,8 @@ public final class WorkerLink implements AutoCloseable {
     private volatile long connectedAt;
     /** When the last log line was forwarded to the host, so the wire is not flooded. */
     private volatile long lastHostLogAt;
+    /** Called after the host grants a token, so the owner can persist the config to disk. */
+    private volatile Runnable persistHook = () -> {};
 
     public WorkerLink(WorkerConfig config, TaskDispatcher dispatcher) {
         this(config, dispatcher, ConnectionFactory.defaultFactory(), message -> {});
@@ -91,6 +93,11 @@ public final class WorkerLink implements AutoCloseable {
 
     public void onStateChange(Consumer<WorkerState> listener) {
         this.stateListener = listener == null ? ignored -> {} : listener;
+    }
+
+    /** Registers a callback run after the host hands back a token on a successful pairing. */
+    public void setPersistHook(Runnable hook) {
+        this.persistHook = hook == null ? () -> {} : hook;
     }
 
     public synchronized void start() {
@@ -162,6 +169,7 @@ public final class WorkerLink implements AutoCloseable {
         ackLatch = new CountDownLatch(1);
         JsonObject hello = new JsonObject();
         hello.addProperty("token", config.token);
+        hello.addProperty("pairingCode", config.pairingCode);
         hello.addProperty("protocolVersion", Protocol.VERSION);
         hello.addProperty("workerId", config.workerId);
         hello.addProperty("modVersion", "1.0.0");
@@ -294,6 +302,17 @@ public final class WorkerLink implements AutoCloseable {
             log("protocol mismatch: host speaks v" + hostVersion + ", this worker speaks v" + Protocol.VERSION);
             stop();
             return;
+        }
+        String granted = Json.string(payload, "token", "");
+        if (!granted.isBlank() && !granted.equals(config.token)) {
+            config.token = granted;
+            config.pairingCode = "";
+            log("paired with the host; shared token stored");
+            try {
+                persistHook.run();
+            } catch (RuntimeException ignored) {
+                // Persisting is best-effort; the in-memory token still applies this session.
+            }
         }
         CountDownLatch latch = ackLatch;
         if (latch != null) latch.countDown();

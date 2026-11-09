@@ -8,6 +8,40 @@ Fleet Manager** desktop app. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **The Fleet Manager is now a host, not a bot runner.** `fleet-manager/` was rebuilt around one
+  idea: the desktop app *controls* workers, it does not *run* bots. It no longer launches Minecraft,
+  holds no game account, and needs no inbound port on a bot machine. Each bot is a real Minecraft
+  client running the **Logvex Worker** mod, which dials *out* to the host over a WebSocket.
+  - The whole parallel `mineflayer` subsystem is gone (accounts, servers, deployments, instances,
+    targets, stasis, roles, hunter client, credential vault). The Host has no place to type a
+    password because it never logs in.
+  - New navigation and pages: **Dashboard**, **Workers**, **Groups**, **Tasks**, **Inventory**,
+    **Regear**, **Commands**, **Consoles**, **Settings**, with a first-run **Host mode / Worker
+    mode** chooser.
+  - The database was rewritten for the host schema; the retired tables are dropped by a migration.
+    Live connection state stays in memory; the roster, groups, task history, command audit log,
+    inventory cache and regear presets are persisted.
+  - The local HTTP API is host-scoped (`/api/v1/workers*`, `/api/v1/status`); `/health` stays open
+    and the rest needs the bearer token.
+
+### Added
+- **Worker pairing codes.** The host can mint a short, single-use, expiring code (for example
+  `ABCD2345`). A worker's first `hello` may carry it instead of the long-lived token; the host
+  answers with the shared token and consumes the code. The worker stores the token and uses it on
+  every later reconnect, so enrolling a bot no longer means copying a long secret onto the bot
+  machine by hand.
+- **Worker protocol v2.** `Protocol.VERSION` is now `2`; the `hello` payload gained `pairingCode`,
+  and a successful `hello-ack` may carry a granted `token`. Both sides still refuse a version
+  mismatch rather than coercing it, and the host-side drift test now also pins the pairing field so
+  the two declarations cannot silently diverge.
+
+### Fixed
+- **The Fleet Manager's database no longer loses its worker tables.** A rewrite pass had dropped the
+  migration that *creates* them while adding the host-schema migration that drops the retired ones,
+  which made every worker write fail with `no such table: workers`. The creating migration is
+  restored ahead of the dropping one.
+
 ## [1.2.0] - 2026-11-08
 
 ### Added

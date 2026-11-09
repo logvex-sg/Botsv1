@@ -83,6 +83,38 @@ describe('worker handshake', () => {
   });
 });
 
+describe('pairing', () => {
+  it('admits a worker that presents a fresh pairing code and hands back the token', async () => {
+    const code = ctx.context.createPairingCode().code;
+    const worker = await startWorker({ workerId: 'w-p1', pairingCode: code });
+    expect(worker.accepted).toBe(true);
+    expect(worker.grantedToken).toBe('test-worker-token');
+    // The code is single-use, so it is gone now.
+    expect(ctx.context.currentPairingCode()).toBeNull();
+  });
+
+  it('refuses a worker whose pairing code is wrong', async () => {
+    ctx.context.createPairingCode();
+    const worker = await startWorker({ workerId: 'w-p2', pairingCode: 'WRONG234' });
+    expect(worker.accepted).toBe(false);
+    expect(worker.refusalReason).toContain('pairing code');
+  });
+
+  it('refuses a worker that presents no code and no token', async () => {
+    const worker = await startWorker({ workerId: 'w-p3', token: '', pairingCode: '' });
+    expect(worker.accepted).toBe(false);
+    expect(worker.refusalReason).toContain('token');
+  });
+
+  it('consumes the code so a second worker cannot reuse it', async () => {
+    const code = ctx.context.createPairingCode().code;
+    const first = await startWorker({ workerId: 'w-p4', pairingCode: code });
+    expect(first.accepted).toBe(true);
+    const second = await startWorker({ workerId: 'w-p5', pairingCode: code });
+    expect(second.accepted).toBe(false);
+  });
+});
+
 describe('task dispatch', () => {
   it('round-trips a status task and records the result', async () => {
     const worker = await startWorker({ workerId: 'w-10' });

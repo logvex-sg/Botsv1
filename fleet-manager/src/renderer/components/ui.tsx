@@ -45,10 +45,6 @@ export function Pill({ children, tone = 'muted' }: { children: ReactNode; tone?:
   return <span className={`pill ${tone}`}>{children}</span>;
 }
 
-export function RolePill({ role }: { role: string }) {
-  return <span className={`pill ${role.toLowerCase()}`}>{role}</span>;
-}
-
 export function Dot({ state }: { state: string }) {
   const cls = state === 'ONLINE' || state === 'RUNNING' ? 'online'
     : state === 'CONNECTING' || state === 'AUTHENTICATING' || state === 'INITIALIZING' || state === 'VALIDATING' || state === 'WAITING' ? 'connecting'

@@ -114,6 +114,42 @@ class WorkerLinkTest {
     }
 
     @Test
+    void pairsWithTheHostAndStoresTheGrantedToken() throws Exception {
+        try (TestWebSocketServer server = new TestWebSocketServer()) {
+            FakeDispatcher dispatcher = new FakeDispatcher();
+            WorkerConfig config = configFor(server.port());
+            config.token = "";
+            config.pairingCode = "ABCD2345";
+            WorkerLink link = new WorkerLink(config, dispatcher);
+            java.util.concurrent.atomic.AtomicInteger persisted = new java.util.concurrent.atomic.AtomicInteger();
+            link.setPersistHook(persisted::incrementAndGet);
+            try {
+                link.start();
+
+                Envelope hello = read(server);
+                assertEquals(Protocol.HELLO, hello.type);
+                assertEquals("ABCD2345", hello.payload.get("pairingCode").getAsString());
+
+                JsonObject ack = new JsonObject();
+                ack.addProperty("accepted", true);
+                ack.addProperty("workerId", "worker-9");
+                ack.addProperty("protocolVersion", Protocol.VERSION);
+                ack.addProperty("token", "granted-token-xyz");
+                server.send(new Envelope(Protocol.HELLO_ACK, null, ack).encode());
+
+                readOfType(server, Protocol.REGISTER);
+
+                // The granted token replaces the one-time code and the owner is asked to persist it.
+                assertEquals("granted-token-xyz", config.token);
+                assertEquals("", config.pairingCode);
+                assertEquals(1, persisted.get());
+            } finally {
+                link.close();
+            }
+        }
+    }
+
+    @Test
     void runsATaskAndReturnsItsResult() throws Exception {
         try (TestWebSocketServer server = new TestWebSocketServer()) {
             FakeDispatcher dispatcher = new FakeDispatcher();

@@ -41,17 +41,18 @@ and the **Logvex Fleet Manager** desktop app, and how to wire them together.
 - optionally **registers other clients** and polls their read-only stats,
 - serves a local, authenticated **companion HTTP API** so a desktop app can read and control it.
 
-**Logvex Fleet Manager** (the desktop app) manages many bot accounts and instances: accounts,
-server profiles, groups, deployments, bot roles (GEARER / STASIS / HUNTER), a target database,
-an event log, and a connection to one or more Hunter clients. It also drives a **worker fleet**: the
-**Logvex Worker** mod (`worker-mod/`) runs in a bot's client, dials the Fleet Manager host over a
-WebSocket, and answers a closed set of named tasks (status, inventory, count, regear, command, chat,
-**efly**). See [`worker-mod/README.md`](worker-mod/README.md).
+**Logvex Fleet Manager** (the desktop app) is the **host**: a control plane that does not run bots
+and holds no game account. Each bot is a real Minecraft client running the **Logvex Worker** mod
+(`worker-mod/`), which dials the host over a WebSocket and answers a closed set of named tasks
+(status, inventory, count, search, equipment, regear, command, chat, position, **efly**). The host
+shows live state, pairs new workers with a short code, dispatches tasks and records the confirmed
+results. See [`worker-mod/README.md`](worker-mod/README.md) and
+[`fleet-manager/README.md`](fleet-manager/README.md).
 
 > **Scope.** The addon observes, records and coordinates Meteor's own modules around a target that
 > is selected manually or by its filters. It adds no unattended combat automation of its own. The
-> HUNTER role in the Fleet Manager requires an explicit authorisation toggle and a target
-> allowlist before it will engage anything, and is meant for private test environments.
+> Worker mod has no combat task kind, and the Fleet Manager never fights for you — it steers a
+> client only through that client's own modules, in controlled environments.
 
 ---
 
@@ -503,104 +504,92 @@ npm run package:win      # NSIS installer
 The app stores its SQLite database at `<userData>/fleet.sqlite` (Electron's `userData` directory,
 e.g. `~/.config/logvex-fleet-manager/` on Linux).
 
-Each bot runs in its own isolated Node worker process, so a crash or hang in one never takes the
-app down.
+The Fleet Manager is a **host**, not a bot runner. It never launches Minecraft and holds no game
+account: each bot is a real Minecraft client running the **Logvex Worker** mod that dials *out* to
+this app over a WebSocket. So the app's cost is one socket per worker, and it never needs an inbound
+port on a bot machine.
 
 ---
 
 ## 15. Fleet Manager: pages and workflow
 
+On first run the app asks whether this machine is the **Host** or a **Worker**. Choose **Host** —
+this app is the host. (The Worker choice only explains where to get the worker mod.)
+
 The app starts in **Beginner mode** with a small, focused navigation. Switch to **Advanced mode**
-(top-right, or in Settings) to reveal the deployment builder, queue editor and technical settings —
-the same features, just shown when you want them.
+(top-right, or in Settings) to reveal the technical settings.
 
 | Section | What it does |
 | --- | --- |
-| **Dashboard** | Guided setup checklist, one-click *Start my bots*, live bot state and recent activity. |
-| **Main Features** | Tabs for **Hunter** (LogVex Hunter link), **Targets** (shared target list), **Gear** (equipment profiles), **Stasis** (defensive locations) and **Servers** (connection profiles). |
-| **Tasks** | Start and manage bots. Beginner mode is pick-and-press-start; Advanced mode adds the deployment builder, queue, validation preview and live monitor. |
-| **Accounts** | Minecraft accounts, credentials (stored in the credential vault), and status. |
-| **Activity** | The event stream, notifications, statistics and per-instance logs. |
-| **Settings** | App settings, including the Hunter addon URL and token, plus an Advanced section. |
-| **Help** | A short guide, glossary and FAQ. |
+| **Dashboard** | Worker totals (online/offline/degraded), active tasks, tracked items, a per-group breakdown, the **pairing-code** panel and recent events. |
+| **Workers** | Every client that has connected, with live state (world, coordinates, health, gear, heartbeat age) and a per-worker inspector. Controls: refresh status, pull inventory, ask position, send command, send chat, socket ping, kick, forget, label, group, notes. |
+| **Groups** | Named, coloured groups used for bulk actions and item counting. |
+| **Tasks** | Dispatch a task kind to one worker or many (including **EFly**) with a live history. |
+| **Inventory** | A worker's last *reported* inventory, and a fleet-wide item count for a friendly query such as `totem`. |
+| **Regear** | Loadout presets and a per-worker comparison against the last reported inventory, plus a fleet sweep (dry-run by default). |
+| **Commands** | Send a server command or chat line to many workers at once, with the audit log of what each answered. |
+| **Consoles** | The log lines a worker forwarded about itself, newest last. |
+| **Settings** | Grouped, plain-language options, the worker server address, tokens, and **Restore defaults**. |
 
-Typical workflow (everything below is also reachable from the Dashboard checklist):
+### Typical workflow
 
-1. **Dashboard → Quick start** — add a server and an account in one step (or use **Main Features →
-   Servers** and **Accounts** separately).
-2. **Dashboard → Start my bots** — pick the accounts to bring online and press start.
-3. **Main Features** — adjust gear, stasis or target settings as needed.
-4. **Activity** — watch the fleet and react to events.
+1. **Dashboard** — read the connection address and press **Copy address**.
+2. **Dashboard → Generate pairing code** — copy the short code.
+3. In the Minecraft client, install the worker mod and set `host`, `port` and `pairingCode` in its
+   config; start the client. The worker appears on the Dashboard.
+4. **Workers** — watch live state and act on the worker.
+5. **Tasks / Commands / Regear / Inventory** — dispatch work and read back the confirmed results.
 
 ### Roles
 
-| Role | Purpose |
-| --- | --- |
-| **GEARER** | Manages armour, weapons, tools and supplies; sorts inventory to the profile (never drops items) and reports EQUIPMENT_READY / EQUIPMENT_WARNING. |
-| **STASIS** | Monitors a saved stasis location and its readiness; notifies on state change; optional confirmation before state-changing actions. |
-| **HUNTER** | Observes targets, and — **only** with `combat-testing-enabled` plus `explicit-combat-authorisation` and a matching allowlist — engages them in a private test environment. |
-
-The HUNTER role is deliberately gated: with the two toggles off (the default) it observes only. The
-one-click *Start my bots* flow never arms combat for you — it requires an explicit
-"Authorise combat testing" tick, and refuses to start otherwise.
+The host has no roles of its own — a worker is simply a client that connects. Any grouping or
+labelling you want is host-side bookkeeping on the **Workers** and **Groups** pages.
 
 ### The app's own API
 
 The Fleet Manager serves a local HTTP API (default `127.0.0.1:8787`) and a WebSocket event stream
-at `/events`:
+at `/events`, both bearer-token authenticated (`/health` is open):
 
 ```
-GET  /health
-GET  /api/v1/status | instances | accounts | servers | targets | events
-     | deployments | groups | roles | settings | stasis | equipment
-POST /api/v1/targets | events | command | notify | targets/sync
-WS   /events
+GET    /health
+GET    /api/v1/status | workers | workers/overview | workers/{id}
+     | workers/{id}/inventory | workers/{id}/console | workers/count?item=totem
+     | workers/groups | workers/tasks | workers/commands | workers/presets | events
+POST   /api/v1/workers/{id}/task | workers/{id}/line
+DELETE /api/v1/workers/{id}/console
+WS     /events
 ```
 
 ---
 
-## 16. Connecting the Fleet Manager to the addon
+## 16. Connecting a worker client to the Fleet Manager
 
-In the addon:
+The Fleet Manager is a host: it does not talk to the Hunter addon. A Hunter client is reached
+instead through its own **companion API** (see section 13) by a browser or a script, and several
+Hunter clients are coordinated in game with the **swarm** module (section 12b). The Fleet Manager's
+job is the other direction — controlling **Logvex Worker** clients.
 
-```
-.hunter companion start
-.hunter companion token     # copy this token
-```
-
-In the Fleet Manager:
-
-1. Open the **Settings** page.
-2. Set **Hunter base URL** to `http://127.0.0.1:8720` (the addon's default port).
-3. Paste the token.
-4. Open **Main Features → Hunter** — the client should show as connected with its version and last
-   sync. (The Dashboard checklist also links straight there.)
-
-The Fleet Manager calls `/health`, `/api/v1/snapshot`, `/api/v1/modules`, `/api/v1/players`,
-`/api/v1/command` and `/api/v1/notify`. A client that is offline, misconfigured or not running
-simply shows as disconnected; nothing throws into the UI.
-
-> If you changed the addon's port with `.hunter companion port <n>`, use the same port in the URL.
-
-### Connecting a worker client (the outbound direction)
-
-The Fleet Manager also drives the **Logvex Worker** mod. Put `logvex-worker-<version>.jar` (from
+The Fleet Manager drives the **Logvex Worker** mod. Put `logvex-worker-<version>.jar` (from
 `worker-mod/build/libs`) into a bot client's `mods` folder, start it once so it writes
-`config/logvex-worker.json`, then point it at the Fleet Manager host and the shared token from
-**Settings → Worker server**:
+`config/logvex-worker.json`, then point it at the Fleet Manager host. The simplest way is a pairing
+code from the Dashboard (**Generate pairing code**):
 
 ```json
 {
   "host": "127.0.0.1",
   "port": 8721,
-  "token": "<token from Settings → Worker server>"
+  "pairingCode": "ABCD2345"
 }
 ```
 
-Open **Fleet** in the Fleet Manager: the worker appears in the roster with live state. From there you
-can refresh status, pull inventory, run a task (including **EFly**), send a command or chat line, and
-watch the worker's own **Console** log. See the **Fleet** section of the
-[Fleet Manager README](fleet-manager/README.md#fleet-worker-management) for every tab.
+The worker presents the code once and the host answers with the shared token, which the worker stores
+and reuses. To skip pairing, put the long-lived token from **Settings → Worker server** in `token`
+instead.
+
+Open **Workers** in the Fleet Manager: the worker appears in the roster with live state. From there
+you can refresh status, pull inventory, run a task (including **EFly**), send a command or chat line,
+and watch the worker's own **Consoles** log. See the
+[Fleet Manager README](fleet-manager/README.md) for every page.
 
 ---
 

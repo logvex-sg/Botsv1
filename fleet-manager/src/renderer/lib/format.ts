@@ -32,13 +32,3 @@ export function relativeTime(ts: number | null | undefined): string {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
-
-export const ROLE_COLORS: Record<string, string> = {
-  GEARER: 'var(--gearer)',
-  STASIS: 'var(--stasis)',
-  HUNTER: 'var(--hunter)',
-};
-
-export function roleClass(role: string): string {
-  return role.toLowerCase();
-}

@@ -55,6 +55,11 @@ public final class FleetRuntime {
         this.dispatcher = new MinecraftTaskDispatcher(config);
         this.link = new WorkerLink(config, dispatcher, WorkerLink.ConnectionFactory.defaultFactory(), this::record);
         this.link.onStateChange(this::onState);
+        // When the host grants a token during pairing, write it to disk so the next launch connects
+        // with the token instead of the one-time code.
+        this.link.setPersistHook(() -> {
+            if (configFile != null && config != null) WorkerConfig.save(configFile, config);
+        });
         record("worker configured for " + config.endpoint());
     }
 

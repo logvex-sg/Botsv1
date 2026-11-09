@@ -8,7 +8,9 @@ answers with what it actually observed. It never fights and never runs code the 
 
 ## What it does
 
-- Connects to the Fleet Manager's worker server and authenticates with a shared token.
+- Connects to the Fleet Manager's worker server and authenticates with a shared token, or with a
+  short one-time **pairing code** on its first connection (the host then hands back the token, which
+  the worker stores and reuses).
 - Reports a **status** snapshot on a heartbeat: world, dimension, coordinates, health, food, armour
   pieces, totems, food items, held/off-hand item, current task.
 - Reports an **inventory** snapshot on request: carried stacks, the contents of a container screen
@@ -81,18 +83,24 @@ remote party, so the worker must decide for itself what it is willing to do.
 1. Install Fabric Loader for Minecraft 1.21.11.
 2. Put `logvex-worker-1.2.0.jar` (from `worker-mod/build/libs`) into the client's `mods` folder.
 3. Start the client once; a config file is written to `config/logvex-worker.json`.
-4. In the Fleet Manager, open **Settings → Worker server**, copy the shared token and note the port.
-5. In the client's config, set the host and token:
+4. In the Fleet Manager, open the Dashboard and press **Generate pairing code** (or **Settings →
+   Worker server** for the shared token and the port).
+5. In the client's config, set the host and the pairing code:
 
 ```json
 {
   "host": "127.0.0.1",
   "port": 8721,
-  "token": "<the token from Settings>",
+  "pairingCode": "ABCD2345",
   "workerId": "",
   "label": ""
 }
 ```
+
+The worker connects, presents the code once, and the host answers with the shared token. The worker
+writes that token back into `config/logvex-worker.json` and uses it from then on, so the code is
+never needed again. If you would rather skip pairing, put the long-lived token in `token` directly
+instead of `pairingCode`.
 
 `workerId` is assigned by the host on first connect and remembered; leave it blank to let the host
 pick one. `label` is a friendly name you can also set from the Fleet Manager's Workers tab.

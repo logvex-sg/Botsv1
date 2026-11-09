@@ -6,15 +6,15 @@ Two cooperating products live in this repository:
 | --- | --- | --- |
 | **LogVex Hunter** | A Meteor Client addon for Minecraft 1.21.11 (Fabric). Target tracking, combat coordination, equipment and stasis monitoring, statistics, an in-game **Host/Hunter swarm**, and a local companion API. | repository root (`src/main/java/com/logvex/hunter`) |
 | **Logvex Worker** | A companion Fabric mod for Minecraft 1.21.11 that dials *out* to the Fleet Manager host and answers a closed set of tasks (status, inventory, count, regear, command, chat, efly). | `worker-mod/` |
-| **Logvex Fleet Manager** | An Electron + React + TypeScript desktop app that manages Minecraft bot instances, drives the **worker fleet** over a WebSocket, and reads/controls a LogVex Hunter client over the companion API. | `fleet-manager/` |
+| **Logvex Fleet Manager** | An Electron + React + TypeScript desktop **host**: it does not run bots, it controls real Minecraft clients that run the **Logvex Worker** mod and dial in over a WebSocket. | `fleet-manager/` |
 
-**Two ways to control several clients.** The desktop **Fleet Manager** drives a fleet of **Logvex
-Worker** clients: each worker dials the host, and the host sends tasks and reads confirmed results —
-see [Logvex Worker](#logvex-worker-mod) and the Fleet Manager README. The **in-game swarm** does the
-same thing without any external process: each client runs **LogVex Hunter**, and the `swarm` module
-puts it in one of two modes — **Host** (drives the fleet) or **Hunter** (fully controlled by the
-host) — see [In-game swarm](#in-game-swarm-control-many-clients-from-one). The companion API is a
-third, *inbound* path that lets the desktop app read and command a Hunter client — see
+**Two ways to control several clients.** The desktop **Fleet Manager** is a *host*: each
+**Logvex Worker** client dials out to it, and the host sends tasks and reads confirmed results — see
+[Logvex Worker](#logvex-worker-mod) and the Fleet Manager README. The **in-game swarm** does the same
+thing without any external process: each client runs **LogVex Hunter**, and the `swarm` module puts
+it in one of two modes — **Host** (drives the fleet) or **Hunter** (fully controlled by the host) —
+see [In-game swarm](#in-game-swarm-control-many-clients-from-one). The companion API is a third,
+*inbound* path that exposes a Hunter client's state and commands to a browser or automation — see
 [Companion API](#companion-api-the-hunter--fleet-manager-bridge).
 
 > **Scope note.** The Hunter addon is a *monitoring and coordination* tool. It observes players,
@@ -278,10 +278,13 @@ in [`worker-mod/README.md`](worker-mod/README.md); the wire contract itself is w
 
 ## Logvex Fleet Manager (desktop app)
 
-The Fleet Manager is a separate Electron application under `fleet-manager/`. It manages accounts,
-server profiles, groups, deployments and bot roles (GEARER/STASIS/HUNTER), tracks a target
-database, and connects to one or more LogVex Hunter clients. Each bot runs in its own isolated
-Node worker process, so a crash or hang in one never takes down the app.
+The Fleet Manager is a separate Electron application under `fleet-manager/`. It is a **control
+plane**: it never launches Minecraft and holds no game account. Instead, each bot is a real
+Minecraft client running the **Logvex Worker** mod, which dials *out* to the host — so the host never
+needs an inbound port on a bot machine, and works from behind NAT. The host is where you watch the
+fleet (live state, inventory, coordinates, health, gear), pair new workers with a short code, and
+dispatch a closed set of tasks (status, inventory, count, search, equipment, regear, command, chat,
+position, efly) to one worker or many, reading back the result each client actually reported.
 
 See [`fleet-manager/README.md`](fleet-manager/README.md) for the full feature list, architecture,
 build and packaging instructions, and screenshots in `fleet-manager/docs/screenshots/`.
@@ -289,14 +292,13 @@ The end-to-end walkthrough for both halves is in [`USAGE.md`](USAGE.md).
 
 ---
 
-## Fleet section (desktop, optional)
+## Two control planes, deliberately separate
 
-The Fleet Manager's **Fleet** section talks to LogVex Hunter clients that have the **companion**
-module enabled: it reads their state and sends the same commands the in-game commands accept. Each
-client is addressed by its companion URL and token (**Settings → Hunter addon URL / token**).
-
-In-game control of several clients does not need the desktop app at all — use the
-[in-game swarm](#in-game-swarm-control-many-clients-from-one) instead.
+The desktop host talks to **Logvex Worker** clients over the worker WebSocket. The in-game swarm
+talks to **LogVex Hunter** clients over its own host/hunter protocol. The **companion API** is a
+third, inbound-only surface on a Hunter client (read state, send commands) meant for a browser or a
+script. They are independent: the desktop host does not read a worker's world state except through
+that worker's own reports, and it does not assume one client's state is visible to another.
 
 ---
 

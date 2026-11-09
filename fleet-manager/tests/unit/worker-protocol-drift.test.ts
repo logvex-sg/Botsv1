@@ -82,6 +82,10 @@ describe('protocol drift', () => {
     expect([...EXCLUSIVE_TASK_KINDS].sort()).toEqual([...EXCLUSIVE_KINDS].sort());
   });
 
+  it('agrees on the pairing-code field', () => {
+    expect(java.get('FIELD_PAIRING_CODE')).toBe('pairingCode');
+  });
+
   it('has a distinct constant for every task kind', () => {
     const taskValues = [...withPrefix(java, 'TASK_').values()];
     expect(new Set(taskValues).size).toBe(taskValues.length);

@@ -37,14 +37,15 @@ If you change the protocol, change it in this order:
 - A **WebSocket** at path `/worker` on the host's worker server (default `127.0.0.1:8721`).
 - Each frame is one JSON object on its own line — **newline-framed JSON**, not a WebSocket message
   per frame, so the same envelope is easy to log and test.
-- The worker authenticates with the shared token from the host's **Settings → Worker server**. A
-  frame with the wrong token, or a `v` that does not match `Protocol.VERSION`, is refused at the
+- The worker authenticates with the shared token from the host's **Settings → Worker server**, or —
+  on its very first connection — with a short **pairing code** the host generates. A frame with the
+  wrong token, a stale code, or a `v` that does not match `Protocol.VERSION`, is refused at the
   handshake.
 
 ### Envelope
 
 ```json
-{ "v": 1, "type": "task", "id": "t-42", "payload": { "kind": "efly", "action": "start" } }
+{ "v": 2, "type": "task", "id": "t-42", "payload": { "kind": "efly", "action": "start" } }
 ```
 
 | Field | Type | Notes |
@@ -58,6 +59,20 @@ The host's decoder (`decodeEnvelope`) never throws: anything that is not a JSON 
 `type` is dropped. This is the host's only defence against a malformed frame from a remote client, so
 it is tested directly.
 
+## Pairing
+
+A worker is enrolled without copying the long token by hand:
+
+1. On the host, **Generate pairing code** produces a short code (e.g. `ABCD2345`) that is valid for a
+   few minutes and can be used once.
+2. The worker's first `hello` carries that code in `payload.pairingCode` instead of `payload.token`.
+3. The host validates the code, replies `hello-ack` with `accepted: true` and the shared `token`, and
+   consumes the code.
+4. The worker stores the token in its config and presents it as `payload.token` from then on. The
+   code is never needed again.
+
+A code that is wrong, already used or expired is refused with `accepted: false` and a reason.
+
 ## Message types
 
 | Direction | Types |
@@ -65,7 +80,10 @@ it is tested directly.
 | worker → host | `hello`, `register`, `status`, `inventory`, `equipment`, `result`, `progress`, `pong`, `error`, `log` |
 | host → worker | `hello-ack`, `command`, `task`, `ping`, `kick` |
 
-- **`hello` / `hello-ack`** — version and token check at connect.
+- **`hello` / `hello-ack`** — version and credential check at connect. The `hello` payload carries
+  `token` and/or `pairingCode`; when a valid one-time `pairingCode` is presented, the `hello-ack`
+  carries the shared `token` and the code is consumed, so the worker can store the token and use it
+  on every later reconnect.
 - **`register`** — the worker announces its stable id, username and capabilities (the task kinds it
   supports). The host records the roster entry here.
 - **`status`** — the heartbeat snapshot (world, dimension, coordinates, health, food, armour, totems,
