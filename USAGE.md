@@ -60,7 +60,7 @@ an event log, and a connection to one or more Hunter clients.
 | Mod loader | Fabric Loader 0.19.5+ |
 | Meteor Client | 1.21.11-SNAPSHOT |
 | Java (runtime) | 21 |
-| Java (to build the addon) | JDK 25 |
+| Java (to build the addon) | any JDK 21 or newer (CI uses 25) |
 | Fleet Manager | Node.js 20+ and npm |
 
 ---
@@ -72,7 +72,8 @@ an event log, and a connection to one or more Hunter clients.
 3. Build the addon and copy the jar into the same folder:
 
    ```bash
-   export JAVA_HOME=/path/to/jdk-25
+   # Any JDK 21 or newer works; the mod is always compiled to Java 21 bytecode.
+   export JAVA_HOME=/path/to/jdk-21-or-newer
    ./gradlew clean test build
    cp build/libs/logvex-hunter-1.0.0.jar ~/.minecraft/mods/
    ```
@@ -629,7 +630,8 @@ Enable the ones you want from Meteor's HUD editor.
 | Chat warnings spam | Raise the relevant cooldown, or disable the specific event in the Messages screen. |
 | A config file looks broken | It is reset to defaults and moved to `backups/`; the reason is printed in chat on next launch. |
 | Stats export is missing | Run `.hstats export`; files are written to `config/logvex-hunter/exports/`. |
-| Build fails on `./gradlew` | Use JDK 25 as the Gradle JVM (`export JAVA_HOME=/path/to/jdk-25`); the mod itself compiles against Java 21. |
+| `./gradlew` says JAVA_HOME is invalid | You exported the literal placeholder. Point `JAVA_HOME` at a real JDK 21+ directory, e.g. `export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(which javac)")")")"`, or install one. |
+| `./gradlew` says the build needs Java 21+ | You are building with a JDK older than 21. Install/point to JDK 21 or newer. |
 
 ---
 

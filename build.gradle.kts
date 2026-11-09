@@ -5,6 +5,13 @@ plugins {
 val archivesBaseName = providers.gradleProperty("archives_base_name").get()
 val mavenGroup = providers.gradleProperty("maven_group").get()
 
+// Fail with a clear message instead of a confusing javac error if the JDK running Gradle is too
+// old. Any JDK 21 or newer works; the mod is always compiled to Java 21 bytecode.
+require(JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21)) {
+    "Logvex Hunter must be built with Java 21 or newer (found ${JavaVersion.current()}). " +
+        "Point JAVA_HOME at a JDK 21+ installation and re-run ./gradlew."
+}
+
 base {
     archivesName = archivesBaseName
     version = libs.versions.mod.version.get()
@@ -43,9 +50,11 @@ dependencies {
 }
 
 java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(libs.versions.jdk.get().toInt()))
-    }
+    // No fixed toolchain: the build runs on whatever JDK Gradle itself is running on, as long as
+    // it is Java 21 or newer. The mod is compiled *for* Java 21 (see options.release below), which
+    // is the runtime Minecraft 1.21.11 and Meteor 1.21.11-SNAPSHOT use, so the resulting jar loads
+    // on a stock Java 21 game install. Building with a newer JDK (e.g. 25) is fine and is what CI
+    // uses; a Java 21 JDK builds the identical bytecode.
 }
 
 loom {
@@ -71,7 +80,8 @@ tasks {
         val propertyMap = mapOf(
             "version" to project.version,
             "minecraft_version" to toMinecraftCompat(libs.versions.minecraft.get()),
-            "jdk_version" to libs.versions.jdk.get(),
+            // Declared runtime requirement: the mod's bytecode targets this level.
+            "jdk_version" to libs.versions.java.get(),
         )
 
         inputs.properties(propertyMap)
@@ -97,6 +107,9 @@ tasks {
     }
 
     withType<JavaCompile>().configureEach {
+        // Emit Java 21 bytecode so the mod loads on the Java 21 runtime Minecraft 1.21.11 uses,
+        // regardless of which (newer) JDK runs the build.
+        options.release.set(libs.versions.java.get().toInt())
         options.compilerArgs.addAll(
             listOf(
                 "-Xlint:deprecation",

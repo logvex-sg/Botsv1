@@ -4,6 +4,16 @@ All notable changes to **LogVex Hunter** (the Meteor Client addon) are documente
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **The built jar now targets Java 21 instead of Java 25.** Minecraft 1.21.11 and Meteor
+  1.21.11-SNAPSHOT run on Java 21, so the previous jar (Java 25 bytecode, `"java": ">=25"` in
+  `fabric.mod.json`) would have been rejected by Fabric Loader and could never load. The mod is now
+  compiled with `--release 21` and declares `"java": ">=21"`.
+- The build no longer requires a JDK 25 toolchain; any JDK 21 or newer builds the identical Java 21
+  bytecode. An explicit, readable error is raised if the build JDK is older than 21.
+
 ## [1.0.0] - 2026-11-08
 
 Initial release. LogVex Hunter is a Meteor Client addon for Minecraft 1.21.11 (Fabric) that

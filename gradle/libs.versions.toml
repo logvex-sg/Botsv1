@@ -2,7 +2,10 @@
 mod-version = "1.0.0"
 
 # Fabric (https://fabricmc.net/develop)
-jdk = "25"
+# `java` is the language level the mod is compiled against and declares in fabric.mod.json.
+# Minecraft 1.21.11 (and Meteor 1.21.11-SNAPSHOT) run on Java 21, so the mod targets 21. The
+# build itself runs on any JDK 21+ (CI uses 25); the produced bytecode is identical either way.
+java = "21"
 minecraft = "1.21.11"
 fabric-loader = "0.19.5"
 fabric-api = "0.141.6+1.21.11"
