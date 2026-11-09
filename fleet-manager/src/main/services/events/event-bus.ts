@@ -16,9 +16,7 @@ export interface PublishInput {
   source: string;
   message: string;
   severity?: EventSeverity;
-  instanceId?: string | null;
-  accountId?: string | null;
-  targetUuid?: string | null;
+  workerId?: string | null;
   payload?: Record<string, unknown>;
   /** When false the event is broadcast but not persisted (e.g. high-frequency metrics). */
   persist?: boolean;
@@ -45,9 +43,7 @@ export class EventBus {
       type: input.type,
       source: input.source,
       severity: input.severity ?? 'info',
-      instanceId: input.instanceId ?? null,
-      accountId: input.accountId ?? null,
-      targetUuid: input.targetUuid ?? null,
+      workerId: input.workerId ?? null,
       message: input.message,
       payload: input.payload ?? {},
       timestamp: Date.now(),

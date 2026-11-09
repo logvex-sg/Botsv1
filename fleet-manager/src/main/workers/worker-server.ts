@@ -44,6 +44,13 @@ export interface WorkerServerOptions {
   host: string;
   port: number;
   token: string;
+  /**
+   * Validates a short-lived pairing code from a worker's first `hello`.
+   *
+   * Returns the shared token to grant that worker on success, or null when the code is unknown or
+   * expired. When absent, only the shared token is accepted (the pre-pairing behaviour).
+   */
+  verifyPairingCode?: (code: string) => string | null;
   /** How long a worker may go without a heartbeat before it is considered degraded. */
   heartbeatTimeoutMs?: number;
   /** Default timeout for a dispatched task. */
@@ -317,6 +324,7 @@ export class WorkerServer {
   private handleHello(socket: WebSocket, envelope: WorkerEnvelope, address: string): string | null {
     const payload = envelope.payload ?? {};
     const token = typeof payload.token === 'string' ? payload.token : '';
+    const pairingCode = typeof payload.pairingCode === 'string' ? payload.pairingCode.trim() : '';
     const protocolVersion = typeof payload.protocolVersion === 'number' ? payload.protocolVersion : 0;
     const modVersion = typeof payload.modVersion === 'string' ? payload.modVersion : '';
     const suppliedId = typeof payload.workerId === 'string' ? payload.workerId.trim() : '';
@@ -332,7 +340,16 @@ export class WorkerServer {
       return null;
     };
 
-    if (!this.tokenMatches(token)) return refuse('invalid token');
+    // A worker may present the shared token (already paired) or a short-lived pairing code (first
+    // join). The pairing path hands back the token so the worker can store it and reconnect
+    // without the code later.
+    let grantedToken: string | null = null;
+    if (pairingCode.length > 0) {
+      grantedToken = this.options.verifyPairingCode?.(pairingCode) ?? null;
+      if (!grantedToken) return refuse('invalid or expired pairing code');
+    } else if (!this.tokenMatches(token)) {
+      return refuse('invalid token');
+    }
     if (protocolVersion !== WORKER_PROTOCOL_VERSION) {
       return refuse(`protocol mismatch: host speaks v${WORKER_PROTOCOL_VERSION}`);
     }
@@ -369,8 +386,21 @@ export class WorkerServer {
     socket.send(encodeEnvelope({
       v: WORKER_PROTOCOL_VERSION,
       type: WorkerOutbound.HELLO_ACK,
-      payload: { accepted: true, workerId, protocolVersion: WORKER_PROTOCOL_VERSION },
+      payload: {
+        accepted: true,
+        workerId,
+        protocolVersion: WORKER_PROTOCOL_VERSION,
+        // Present only on a successful pairing: the worker persists it and uses it from then on.
+        ...(grantedToken ? { token: grantedToken } : {}),
+      },
     }));
+    if (grantedToken) {
+      this.deps.emit('WORKER_PAIRED', `Worker ${username || workerId} paired with the host`, {
+        workerId,
+        username,
+        address,
+      });
+    }
     return workerId;
   }
 

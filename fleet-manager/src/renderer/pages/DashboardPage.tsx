@@ -1,273 +1,160 @@
 /**
- * Dashboard — the landing page.
+ * Dashboard: the "is everything all right?" screen.
  *
- * Designed so a brand-new user can see exactly what is happening and what to do next without
- * reading a guide: a guided setup checklist, one-click "start my bots", the live state of every
- * bot and the most recent activity. Everything important is reachable from here.
+ * Shows the host's own listening address (with a copy button, so pasting it into a worker is one
+ * click), a pairing-code panel, the worker roster at a glance, active tasks and the most recent
+ * worker events. Everything is read from the store, which the main process keeps current.
  */
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { fleet } from '../lib/api';
-import { Button, Card, EmptyState, ErrorNotice, Field, Pill, ProgressBar, Ring, RolePill, Stat, Tip } from '../components/ui';
-import { formatTime, formatUptime } from '../lib/format';
-import { toFriendlyError, type FriendlyError } from '../lib/errors';
+import { Button, Callout, Card, Empty, Pill, Ring, Stat } from '../components/ui';
+import { copyText, toFriendlyError } from '../lib/errors';
+import { relativeTime } from '../lib/format';
+import { StatusChip, workerTitle } from './workers/shared';
+import type { PairingCode } from '../../shared/types';
 import type { PageId } from '../App';
-import type { FeatureTab } from './FeaturesPage';
 
 interface Props {
-  onNavigate: (page: PageId, tab?: FeatureTab) => void;
   push: (message: string, tone?: string) => void;
+  onNavigate: (page: PageId) => void;
 }
 
-export function DashboardPage({ onNavigate, push }: Props) {
+export function DashboardPage({ push, onNavigate }: Props) {
   const store = useStore();
-  const [username, setUsername] = useState('');
-  const [host, setHost] = useState('');
-  const [combat, setCombat] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<FriendlyError | null>(null);
+  const [code, setCode] = useState<PairingCode | null>(store.pairingCode);
 
-  const running = store.instances.filter((i) => i.state === 'RUNNING');
-  const failed = store.instances.filter((i) => i.state === 'FAILED');
-  const deployable = store.accounts.filter((a) => a.deployable);
-  const setup = store.setup;
-  const completion = setup?.completion ?? 0;
+  const overview = store.workerOverview;
+  const workers = store.workers;
+  const online = workers.filter((w) => w.online);
+  const tasks = store.workerTasks;
+  const activeTasks = tasks.filter((t) => t.status === 'PENDING' || t.status === 'DISPATCHED');
 
-  const recentEvents = useMemo(() => store.events.slice(0, 6), [store.events]);
+  useEffect(() => { setCode(store.pairingCode); }, [store.pairingCode]);
 
-  const runStep = async (id: string): Promise<void> => {
-    const step = setup?.steps.find((s) => s.id === id);
-    if (!step) return;
-    if (step.id === 'server') { onNavigate('features', 'servers'); return; }
-    if (step.id === 'account' || step.id === 'credential') { onNavigate('accounts'); return; }
-    if (step.id === 'deploy') { onNavigate('tasks'); return; }
-    if (step.id === 'hunter') { onNavigate('features', 'hunter'); return; }
-    onNavigate(step.page as PageId);
-  };
+  const server = store.workerServer;
+  const address = server ? `${server.host}:${server.port}` : '—';
 
-  const quickStart = async (): Promise<void> => {
-    setError(null);
-    setBusy('setup');
+  const createCode = useCallback(async (): Promise<void> => {
     try {
-      await fleet.quickSetup({ username: username.trim(), host: host.trim(), role: 'HUNTER' });
-      setUsername(''); setHost('');
-      push('Account created. You can start it now.', 'success');
-      await store.refresh();
-    } catch (err) {
-      setError(toFriendlyError(err));
-      push(toFriendlyError(err).title, 'error');
-    } finally {
-      setBusy(null);
+      const created = await fleet.createPairingCode();
+      setCode(created);
+      store.setPairingCode(created);
+      push('Pairing code created — it admits one worker and expires shortly.');
+    } catch (error) {
+      push(toFriendlyError(error).title, 'error');
     }
-  };
+  }, [push, store]);
 
-  const startAll = async (): Promise<void> => {
-    setError(null);
-    setBusy('deploy');
-    try {
-      const ids = deployable.map((a) => a.id);
-      const result = await fleet.quickDeploy({ accountIds: ids, authorizeCombat: combat });
-      if (result.ok) {
-        push(`Starting ${ids.length} bot${ids.length === 1 ? '' : 's'}…`, 'success');
-        await store.refresh();
-        onNavigate('tasks');
-      } else {
-        const first = result.report.issues.find((i) => i.level === 'error');
-        setError({ title: first?.message ?? 'The bots could not be started.', hint: 'Open Tasks to review the details and try again.', technical: JSON.stringify(result.report, null, 2) });
-        push(first?.message ?? 'Could not start bots', 'error');
-      }
-    } catch (err) {
-      setError(toFriendlyError(err));
-      push(toFriendlyError(err).title, 'error');
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const stopAll = async (): Promise<void> => {
-    await store.emergencyStop();
-    push('All bots stopped', 'error');
-    await store.refresh();
-  };
-
-  const anythingRunning = running.length > 0;
+  const clearCode = useCallback(async (): Promise<void> => {
+    await fleet.clearPairingCode();
+    setCode(null);
+    store.setPairingCode(null);
+    push('Pairing code cleared');
+  }, [push, store]);
 
   return (
-    <div className="col" style={{ gap: 18 }}>
-      {/* Hero: where am I, and what next */}
-      <div className="card hero">
-        <Ring
-          value={completion}
-          color={completion >= 1 ? 'var(--success)' : 'var(--accent)'}
-          label={completion >= 1 ? '✓' : `${Math.round(completion * 100)}%`}
-        />
-        <div className="grow">
-          <h3>{setup?.ready ? 'Your fleet is ready' : 'Let\'s get your bots running'}</h3>
-          <div className="card-sub" style={{ fontSize: 13, maxWidth: 560 }}>
-            {setup?.nextHint ?? 'Loading your fleet…'}
-          </div>
-          <div className="row" style={{ gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-            {anythingRunning ? (
-              <>
-                <Button variant="danger" onClick={stopAll}>⏹ Stop all bots</Button>
-                <Button onClick={() => onNavigate('tasks')}>View running bots</Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="primary"
-                  onClick={startAll}
-                  disabled={busy !== null || deployable.length === 0}
-                  title={deployable.length === 0 ? 'Add an account first' : 'Start every ready account'}
-                >
-                  {busy === 'deploy' ? 'Starting…' : '▶ Start my bots'}
-                </Button>
-                <Button onClick={() => onNavigate('accounts')}>Add an account</Button>
-              </>
-            )}
-          </div>
-        </div>
+    <div className="col" style={{ gap: 16 }}>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <Stat value={online.length} label="Workers online" />
+        <Stat value={workers.length} label="Workers known" />
+        <Stat value={activeTasks.length} label="Active tasks" />
+        <Stat value={overview?.trackedItems ?? 0} label="Tracked items" />
       </div>
 
-      {error && <ErrorNotice error={error} onDismiss={() => setError(null)} />}
+      <div className="grid" style={{ gridTemplateColumns: '1.2fr 1fr' }}>
+        <Card title="Host" sub="This computer is the controller. Workers connect out to it.">
+          <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Pill tone={server?.bound ? 'online' : 'muted'}>{server?.bound ? 'Listening' : 'Not listening'}</Pill>
+            <span className="mono" style={{ fontSize: 16 }}>{address}</span>
+            <Button small onClick={() => void copyText(address).then((ok) => push(ok ? 'Address copied' : 'Copy failed', ok ? undefined : 'error'))}>Copy address</Button>
+            <Button small onClick={() => onNavigate('settings')}>Worker server settings</Button>
+          </div>
+          <div className="card-sub" style={{ marginTop: 10 }}>
+            A worker needs this address and a pairing code. One code pairs one worker and expires.
+          </div>
+        </Card>
 
-      {/* Guided setup checklist */}
-      {setup && !setup.ready && (
-        <Card title="Finish setting up" sub="Follow these steps — most people are done in a minute.">
-          <div className="checklist">
-            {setup.steps.map((step) => (
-              <div key={step.id} className={`step ${step.status === 'done' ? 'done' : ''} ${step.id === setup.nextStepId ? 'current' : ''} ${step.status === 'blocked' ? 'blocked' : ''}`}>
-                <div className="step-mark">{step.status === 'done' ? '✓' : step.id === setup.nextStepId ? '→' : ''}</div>
-                <div className="step-body">
-                  <div className="step-title">
-                    {step.title}
-                    {step.optional && <span className="card-sub" style={{ fontWeight: 400 }}> · optional</span>}
-                  </div>
-                  <div className="step-desc">{step.description}</div>
+        <Card title="Pairing" sub="Give a code to each worker once.">
+          {code ? (
+            <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span className="mono" style={{ fontSize: 24, letterSpacing: 5, padding: '4px 12px', border: '1px dashed var(--accent)', borderRadius: 8 }}>{code.code}</span>
+              <Button small onClick={() => void copyText(code.code).then(() => push('Pairing code copied'))}>Copy</Button>
+              <Button small variant="ghost" onClick={() => void clearCode()}>Clear</Button>
+              <span className="card-sub" style={{ color: 'var(--text-dim)' }}>expires {new Date(code.expiresAt).toLocaleTimeString()}</span>
+            </div>
+          ) : (
+            <Button variant="primary" onClick={() => void createCode()}>Generate pairing code</Button>
+          )}
+        </Card>
+      </div>
+
+      <Card
+        title="Workers"
+        sub="Every client that has connected, newest state first."
+        actions={<Button small onClick={() => onNavigate('workers')}>Open Workers</Button>}
+      >
+        {workers.length === 0 ? (
+          <Empty>No workers yet. Launch Minecraft with the Logvex Worker mod, enter the host address and a pairing code, and it will appear here.</Empty>
+        ) : (
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+            {workers.slice(0, 8).map((worker) => (
+              <div key={worker.id} className="bot-card" onClick={() => onNavigate('workers')} style={{ cursor: 'pointer' }}>
+                <div className="row between">
+                  <strong>{workerTitle(worker)}</strong>
+                  <StatusChip worker={worker} />
                 </div>
-                {step.status !== 'done' && (
-                  <Button small variant={step.id === setup.nextStepId ? 'primary' : 'default'} onClick={() => runStep(step.id)}>
-                    {step.actionLabel}
-                  </Button>
-                )}
+                <div className="card-sub" style={{ marginTop: 6 }}>
+                  {worker.snapshot.inWorld ? `${worker.snapshot.dimension.split(':').pop()} · ${Math.round(worker.snapshot.x)}, ${Math.round(worker.snapshot.y)}, ${Math.round(worker.snapshot.z)}` : 'Not in a world'}
+                </div>
+                <div className="row" style={{ gap: 12, marginTop: 8, fontSize: 12, color: 'var(--text-dim)' }}>
+                  <span>♥ {Math.round(worker.snapshot.health)}/{Math.round(worker.snapshot.maxHealth)}</span>
+                  <span>◈ {worker.snapshot.armorPieces} armor</span>
+                  <span>☗ {worker.snapshot.totems} totems</span>
+                </div>
               </div>
             ))}
           </div>
-        </Card>
-      )}
+        )}
+      </Card>
 
-      {/* One-click setup form, shown until an account exists */}
-      {store.accounts.length === 0 && (
-        <Card title="Quick start" sub="Add a server and an account together — no configuration files needed.">
-          <div className="grid cols-2">
-            <Field label="Account username" hint="The Minecraft name this bot will use.">
-              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="MyBotName" />
-            </Field>
-            <Field label="Server address" hint="For example play.example.net — the port defaults to 25565.">
-              <input type="text" value={host} onChange={(e) => setHost(e.target.value)} placeholder="play.example.net" />
-            </Field>
-          </div>
-          <label className="row" style={{ gap: 8, marginBottom: 12 }}>
-            <input type="checkbox" checked={combat} onChange={(e) => setCombat(e.target.checked)} />
-            <span className="card-sub">Enable combat testing for this account (HUNTER)</span>
-            <Tip text="Off by default. Turn this on only in a private test environment — the Hunter will not attack anything until you authorise it here." />
-          </label>
-          <Button variant="primary" onClick={quickStart} disabled={busy !== null || !username.trim() || !host.trim()}>
-            {busy === 'setup' ? 'Creating…' : 'Create account and server'}
-          </Button>
-        </Card>
-      )}
-
-      {/* Live fleet state */}
-      <div className="grid cols-4">
-        <Card><Stat value={<span style={{ color: running.length ? 'var(--success)' : undefined }}>{running.length}</span>} label="Bots running" /></Card>
-        <Card><Stat value={<span style={{ color: failed.length ? 'var(--error)' : undefined }}>{failed.length}</span>} label="Bots failed" /></Card>
-        <Card><Stat value={store.instances.length} label="Bots total" /></Card>
-        <Card><Stat value={store.targets.length} label="Tracked targets" /></Card>
-      </div>
-
-      <div className="grid cols-3">
-        <Card title="What to do next" className="card">
-          <div className="col" style={{ gap: 8 }}>
-            <button className="action-tile" onClick={() => onNavigate('tasks')}>
-              <span className="ico">▶</span>
-              <span className="t">Start & manage bots</span>
-              <span className="d">Launch, stop and watch your bots in one place.</span>
-            </button>
-            <button className="action-tile" onClick={() => onNavigate('features')}>
-              <span className="ico">◈</span>
-              <span className="t">Main features</span>
-              <span className="d">Hunter, Gearer, Stasis, targets and servers.</span>
-            </button>
-            <button className="action-tile" onClick={() => onNavigate('activity')}>
-              <span className="ico">⚡</span>
-              <span className="t">See what happened</span>
-              <span className="d">Events, statistics and live logs.</span>
-            </button>
-          </div>
-        </Card>
-
-        <Card title="Fleet status">
-          <div className="col">
-            <div className="row between">
-              <span className="card-sub">Logvex Hunter</span>
-              <Pill tone={store.hunterConnected ? 'success' : 'muted'}>{store.hunterConnected ? 'linked' : 'not connected'}</Pill>
-            </div>
-            <div className="row between"><span className="card-sub">Ready accounts</span><strong>{deployable.length} of {store.accounts.length}</strong></div>
-            <div className="row between"><span className="card-sub">Servers</span><strong>{store.servers.length}</strong></div>
-            <div className="row between"><span className="card-sub">Uptime</span><strong>{formatUptime(store.health?.uptimeMs ?? 0)}</strong></div>
-            {store.accounts.length > 0 && (
-              <div style={{ marginTop: 6 }}>
-                <div className="card-sub" style={{ marginBottom: 4 }}>Accounts ready to start</div>
-                <ProgressBar value={store.accounts.length ? (deployable.length / store.accounts.length) * 100 : 0} color="var(--success)" />
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card title="Recent activity" actions={<Button small onClick={() => onNavigate('activity')}>All activity</Button>}>
-          {recentEvents.length === 0 ? (
-            <EmptyState icon="🌙" title="Nothing yet">Activity appears here once your bots connect.</EmptyState>
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <Card title="Recent worker events" actions={<Button small onClick={() => onNavigate('consoles')}>Consoles</Button>}>
+          {(overview?.recent ?? store.events).length === 0 ? (
+            <Empty>Nothing has happened yet.</Empty>
           ) : (
             <div className="col" style={{ gap: 8 }}>
-              {recentEvents.map((event) => (
-                <div key={event.id} className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
-                  <Pill tone={event.severity}>{event.severity}</Pill>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5 }}>{event.message}</div>
-                    <div className="card-sub" style={{ fontSize: 11 }}>{formatTime(event.timestamp)}</div>
-                  </div>
+              {(overview?.recent ?? store.events).slice(0, 8).map((event) => (
+                <div key={event.id} className="row between" style={{ gap: 10 }}>
+                  <span style={{ color: 'var(--text-dim)' }}>{relativeTime(event.timestamp)}</span>
+                  <span style={{ flex: 1 }}>{event.message}</span>
+                  <Pill tone={event.severity === 'error' ? 'error' : event.severity === 'success' ? 'online' : 'muted'}>{event.type.replace('WORKER_', '')}</Pill>
                 </div>
               ))}
             </div>
           )}
         </Card>
-      </div>
 
-      {store.instances.length > 0 && (
-        <Card title="Your bots" actions={<Button small onClick={() => onNavigate('tasks')}>Manage</Button>}>
-          <div className="grid auto">
-            {store.instances.map((instance) => (
-              <div key={instance.id} className={`bot-card ${instance.state === 'RUNNING' ? 'running' : instance.state === 'FAILED' ? 'failed' : ''}`}>
-                <div className="row">
-                  <div className="avatar" style={{ background: instance.role === 'GEARER' ? 'var(--gearer)' : instance.role === 'STASIS' ? 'var(--stasis)' : 'var(--hunter)' }}>
-                    {instance.accountUsername.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="col" style={{ gap: 2, flex: 1 }}>
-                    <strong>{instance.name}</strong>
-                    <span className="card-sub" style={{ fontSize: 11 }}>{instance.accountUsername}</span>
-                  </div>
-                  <RolePill role={instance.role} />
-                </div>
-                <div className="row" style={{ gap: 8 }}>
-                  <Pill tone={instance.state === 'RUNNING' ? 'success' : instance.state === 'FAILED' ? 'error' : 'muted'}>{instance.state}</Pill>
-                  <div className="spacer" />
-                  <span className="card-sub">{formatUptime(instance.uptimeMs)}</span>
-                </div>
-              </div>
-            ))}
+        <Card title="Fleet health" sub="How many clients are reachable right now.">
+          <div className="row" style={{ gap: 20, alignItems: 'center' }}>
+            <Ring value={workers.length === 0 ? 0 : online.length / workers.length} label={`${online.length}/${workers.length}`} />
+            <div className="col" style={{ gap: 8 }}>
+              <div className="row" style={{ gap: 8 }}><Pill tone="online">Online</Pill> {online.length}</div>
+              <div className="row" style={{ gap: 8 }}><Pill tone="warning">Unresponsive</Pill> {workers.filter((w) => w.status === 'DEGRADED').length}</div>
+              <div className="row" style={{ gap: 8 }}><Pill tone="muted">Offline</Pill> {workers.filter((w) => !w.online).length}</div>
+            </div>
           </div>
         </Card>
+      </div>
+
+      {workers.length === 0 && (
+        <Callout tone="info" title="Getting a worker connected">
+          <ol style={{ margin: '0 0 0 18px', lineHeight: 1.8 }}>
+            <li>Copy the host address above into the worker's config (or enter it in the in-game Worker settings).</li>
+            <li>Generate a pairing code and enter it on the worker once.</li>
+            <li>When it connects, it appears here and you can send it tasks.</li>
+          </ol>
+        </Callout>
       )}
     </div>
   );

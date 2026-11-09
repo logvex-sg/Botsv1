@@ -210,91 +210,50 @@ export const migrations: Migration[] = [
     },
   },
   {
-    id: '0003_workers',
+    id: '0004_host_schema',
     up: (db) => {
+      // The mineflayer-era fleet (accounts, servers, deployments, instances, targets, stasis and
+      // the role system) was removed in the rewrite: the host only manages real Minecraft clients
+      // that dial in. The worker tables are unchanged; this migration rebuilds the two tables whose
+      // shape followed the old domain and drops the rest.
       db.exec(`
-        -- A worker is a Minecraft client running the logvex-worker mod. The live connection lives
-        -- in memory; this row is the durable record so the host remembers a worker across restarts
-        -- (its id, last known state and group).
-        CREATE TABLE IF NOT EXISTS workers (
-          id TEXT PRIMARY KEY,
-          label TEXT NOT NULL DEFAULT '',
-          username TEXT NOT NULL DEFAULT '',
-          minecraft_version TEXT NOT NULL DEFAULT '',
-          server_address TEXT NOT NULL DEFAULT '',
-          protocol_version INTEGER NOT NULL DEFAULT 0,
-          mod_version TEXT NOT NULL DEFAULT '',
-          group_id TEXT REFERENCES worker_groups(id) ON DELETE SET NULL,
-          notes TEXT NOT NULL DEFAULT '',
-          first_seen INTEGER NOT NULL,
-          last_seen INTEGER NOT NULL,
-          last_address TEXT NOT NULL DEFAULT '',
-          status TEXT NOT NULL DEFAULT 'OFFLINE',
-          snapshot TEXT NOT NULL DEFAULT '{}'
-        );
+        DROP TABLE IF EXISTS deployment_queue;
+        DROP TABLE IF EXISTS deployment_configs;
+        DROP TABLE IF EXISTS stasis_locations;
+        DROP TABLE IF EXISTS equipment_profiles;
+        DROP TABLE IF EXISTS targets;
+        DROP TABLE IF EXISTS instances;
+        DROP TABLE IF EXISTS accounts;
+        DROP TABLE IF EXISTS server_profiles;
+        DROP TABLE IF EXISTS groups;
+        DROP TABLE IF EXISTS events;
+        DROP TABLE IF EXISTS notifications;
 
-        -- Worker groups are separate from bot groups: a bot group labels an account the host
-        -- launches, a worker group labels a client that connected to the host.
-        CREATE TABLE IF NOT EXISTS worker_groups (
+        -- Events are now scoped to a worker (or null for host-level events).
+        CREATE TABLE events (
           id TEXT PRIMARY KEY,
-          name TEXT NOT NULL UNIQUE,
-          description TEXT NOT NULL DEFAULT '',
-          color TEXT NOT NULL DEFAULT '#6d5efc',
-          created_at INTEGER NOT NULL
+          type TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'host',
+          severity TEXT NOT NULL DEFAULT 'info',
+          worker_id TEXT,
+          message TEXT NOT NULL DEFAULT '',
+          payload TEXT NOT NULL DEFAULT '{}',
+          timestamp INTEGER NOT NULL
         );
+        CREATE INDEX IF NOT EXISTS idx_events_time ON events(timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_events_worker ON events(worker_id, timestamp DESC);
 
-        CREATE TABLE IF NOT EXISTS worker_tasks (
+        CREATE TABLE notifications (
           id TEXT PRIMARY KEY,
-          worker_id TEXT NOT NULL,
-          kind TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'PENDING',
-          params TEXT NOT NULL DEFAULT '{}',
-          result TEXT,
-          error TEXT,
-          created_at INTEGER NOT NULL,
-          dispatched_at INTEGER,
-          completed_at INTEGER,
-          duration_ms INTEGER,
-          actor TEXT NOT NULL DEFAULT 'host'
+          event_id TEXT NOT NULL,
+          type TEXT NOT NULL,
+          severity TEXT NOT NULL DEFAULT 'info',
+          title TEXT NOT NULL DEFAULT '',
+          body TEXT NOT NULL DEFAULT '',
+          read INTEGER NOT NULL DEFAULT 0,
+          timestamp INTEGER NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_worker_tasks_worker ON worker_tasks(worker_id, created_at DESC);
-
-        -- Every command or chat line a worker was asked to send, so an operator can audit exactly
-        -- what the fleet did and when.
-        CREATE TABLE IF NOT EXISTS worker_commands (
-          id TEXT PRIMARY KEY,
-          worker_id TEXT NOT NULL,
-          kind TEXT NOT NULL,
-          line TEXT NOT NULL,
-          ok INTEGER NOT NULL DEFAULT 0,
-          response TEXT NOT NULL DEFAULT '',
-          created_at INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_worker_commands_worker ON worker_commands(worker_id, created_at DESC);
-
-        -- A named equipment loadout the host can assign to a worker or a group.
-        CREATE TABLE IF NOT EXISTS regear_presets (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL UNIQUE,
-          description TEXT NOT NULL DEFAULT '',
-          items TEXT NOT NULL DEFAULT '[]',
-          min_armor_pieces INTEGER NOT NULL DEFAULT 0,
-          min_food INTEGER NOT NULL DEFAULT 0,
-          low_durability_percent INTEGER NOT NULL DEFAULT 10,
-          created_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL
-        );
-
-        -- The latest inventory a worker reported, kept so the host can count items and diff
-        -- inventories without asking again. Clearly a *reported* snapshot, never a live view.
-        CREATE TABLE IF NOT EXISTS worker_inventory (
-          worker_id TEXT PRIMARY KEY,
-          captured_at INTEGER NOT NULL,
-          carried TEXT NOT NULL DEFAULT '[]',
-          accessible TEXT NOT NULL DEFAULT '[]',
-          armor TEXT NOT NULL DEFAULT '[]',
-          container_open INTEGER NOT NULL DEFAULT 0
-        );
+        CREATE INDEX IF NOT EXISTS idx_notifications_time ON notifications(timestamp DESC);
       `);
     },
   },

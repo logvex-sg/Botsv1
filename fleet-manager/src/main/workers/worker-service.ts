@@ -66,7 +66,7 @@ export class WorkerService {
 
   constructor(
     private readonly deps: WorkerServiceDeps,
-    serverOptions: { host: string; port: number; token: string },
+    serverOptions: import('./worker-server').WorkerServerOptions,
   ) {
     this.server = new WorkerServer(
       {

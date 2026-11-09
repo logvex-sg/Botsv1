@@ -1,16 +1,15 @@
 /**
  * Local HTTP + WebSocket API.
  *
- * Exposes the fleet over a small, versioned REST surface and a WebSocket event stream so the
- * Logvex Hunter addon (or any other authenticated client) can read state and submit events.
- * The server binds to loopback by default and requires a bearer token on every route except
- * `/health`. It is intentionally thin: all logic lives in the services it delegates to.
+ * Exposes the host over a small, versioned REST surface and a WebSocket event stream so another
+ * authenticated client (a script, a phone, or a second tool) can read worker state and dispatch
+ * tasks. The server binds to loopback by default and requires a bearer token on every route except
+ * `/health`. It is intentionally thin: all logic lives in the worker service it delegates to.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { AppContext } from '../context';
 import { ApiAuth, RateLimiter } from './auth';
-import { FleetEventType } from '../../shared/events';
 
 export interface ApiServerOptions {
   host: string;
@@ -130,17 +129,8 @@ export class ApiServer {
     const ctx = this.context;
 
     if (path === '/api/v1/status' && method === 'GET') return { body: await ctx.healthReport() };
-    if (path === '/api/v1/instances' && method === 'GET') return { body: { instances: ctx.instances.list() } };
-    if (path === '/api/v1/accounts' && method === 'GET') return { body: { accounts: await ctx.accounts.listWithStatus() } };
-    if (path === '/api/v1/servers' && method === 'GET') return { body: { servers: ctx.servers.list() } };
-    if (path === '/api/v1/targets' && method === 'GET') return { body: { targets: ctx.targets.list() } };
-    if (path === '/api/v1/events' && method === 'GET') return { body: { events: ctx.bus.recentEvents(100) } };
-    if (path === '/api/v1/deployments' && method === 'GET') return { body: { deployments: ctx.deployments.list() } };
-    if (path === '/api/v1/groups' && method === 'GET') return { body: { groups: ctx.groups.list() } };
-    if (path === '/api/v1/roles' && method === 'GET') return { body: { roles: ctx.roleCatalog() } };
     if (path === '/api/v1/settings' && method === 'GET') return { body: ctx.getSettings() };
-    if (path === '/api/v1/stasis' && method === 'GET') return { body: { locations: ctx.stasisManager.list() } };
-    if (path === '/api/v1/equipment' && method === 'GET') return { body: { profiles: ctx.equipmentManager.list() } };
+    if (path === '/api/v1/events' && method === 'GET') return { body: { events: ctx.bus.recentEvents(100) } };
 
     // ---------------------------------------------------------------- workers
     if (path === '/api/v1/workers' && method === 'GET') return { body: { workers: ctx.workers.list() } };
@@ -152,96 +142,42 @@ export class ApiServer {
     if (path === '/api/v1/workers/count' && method === 'GET') {
       return { body: ctx.workers.countItem(query.get('item') ?? '') };
     }
-
-    const workerInventoryMatch = /^\/api\/v1\/workers\/([^/]+)\/inventory$/.exec(path);
-    if (workerInventoryMatch && method === 'GET') {
-      const snapshot = ctx.workers.inventory(workerInventoryMatch[1]);
-      if (!snapshot) return { status: 404, body: { error: 'no inventory reported for that worker' } };
-      return { body: snapshot };
+    if (path === '/api/v1/workers/console' && method === 'GET') {
+      // Every worker's console in one call, keyed by worker id.
+      const consoles: Record<string, unknown> = {};
+      for (const worker of ctx.workers.list()) consoles[worker.id] = ctx.workers.console(worker.id);
+      return { body: { consoles } };
     }
 
-    const workerConsoleMatch = /^\/api\/v1\/workers\/([^/]+)\/console$/.exec(path);
-    if (workerConsoleMatch) {
-      const workerId = workerConsoleMatch[1];
-      if (method === 'GET') return { body: { lines: ctx.workers.console(workerId) } };
-      if (method === 'DELETE') {
+    const workerMatch = /^\/api\/v1\/workers\/([^/]+)(?:\/(inventory|console|task|line))?$/.exec(path);
+    if (workerMatch) {
+      const workerId = decodeURIComponent(workerMatch[1]);
+      const action = workerMatch[2];
+
+      if (!action && method === 'GET') {
+        const worker = ctx.workers.get(workerId);
+        return worker ? { body: worker } : { status: 404, body: { error: 'unknown worker' } };
+      }
+      if (action === 'inventory' && method === 'GET') {
+        const inventory = ctx.workers.inventory(workerId);
+        return inventory ? { body: inventory } : { status: 404, body: { error: 'no reported inventory' } };
+      }
+      if (action === 'console' && method === 'GET') return { body: { lines: ctx.workers.console(workerId) } };
+      if (action === 'console' && method === 'DELETE') {
         ctx.workers.clearConsole(workerId);
         return { body: { ok: true } };
       }
-    }
-
-    const workerTaskMatch = /^\/api\/v1\/workers\/([^/]+)\/task$/.exec(path);
-    if (workerTaskMatch && method === 'POST') {
-      const workerId = workerTaskMatch[1];
-      const kind = String(body.kind ?? '');
-      const params = (body.params as Record<string, unknown>) ?? {};
-      const result = await ctx.workers.runTask(workerId, kind as never, params);
-      return { status: result.ok ? 200 : 400, body: result };
-    }
-
-    const workerCommandMatch = /^\/api\/v1\/workers\/([^/]+)\/line$/.exec(path);
-    if (workerCommandMatch && method === 'POST') {
-      const record = await ctx.workers.sendLine(
-        workerCommandMatch[1],
-        body.kind === 'chat' ? 'chat' : 'command',
-        String(body.line ?? ''),
-      );
-      return { status: record.ok ? 200 : 400, body: record };
-    }
-
-    if (path === '/api/v1/targets' && method === 'POST') {
-      const target = ctx.targets.upsert(body as { username: string });
-      ctx.emitEvent(FleetEventType.TARGET_UPDATED, `Target ${target.username} upserted via API`, {
-        username: target.username, uuid: target.uuid,
-      });
-      return { status: 201, body: { target } };
-    }
-
-    if (path === '/api/v1/events' && method === 'POST') {
-      const result = ctx.coordinator.submit({
-        type: String(body.type ?? ''),
-        role: String(body.role ?? 'meteor'),
-        source: 'meteor',
-        instanceId: (body.instanceId as string) ?? null,
-        targetUuid: (body.targetUuid as string) ?? null,
-        payload: (body.payload as Record<string, unknown>) ?? {},
-        severity: (body.severity as 'info' | 'warning' | 'error' | 'success') ?? 'info',
-      });
-      return { status: result.accepted ? 202 : 400, body: result };
-    }
-
-    if (path === '/api/v1/command' && method === 'POST') {
-      const command = String(body.command ?? '');
-      const instanceId = body.instanceId as string | undefined;
-      if (instanceId) {
-        const ok = ctx.instances.sendCommand(instanceId, command);
-        return { body: { ok } };
+      if (action === 'task' && method === 'POST') {
+        const kind = typeof body.kind === 'string' ? body.kind : '';
+        const params = typeof body.params === 'object' && body.params !== null ? (body.params as Record<string, unknown>) : {};
+        const result = await ctx.workers.runTask(workerId, kind as never, params);
+        return { body: result };
       }
-      // Without an instance id the command is a Hunter companion command.
-      try {
-        await ctx.hunter.command(command);
-        return { body: { ok: true } };
-      } catch (error) {
-        return { status: 502, body: { ok: false, error: (error as Error).message } };
+      if (action === 'line' && method === 'POST') {
+        const kind = body.kind === 'chat' ? 'chat' : 'command';
+        const line = typeof body.line === 'string' ? body.line : '';
+        return { body: ctx.workers.sendLine(workerId, kind, line) };
       }
-    }
-
-    if (path === '/api/v1/notify' && method === 'POST') {
-      ctx.emitEvent('NOTIFICATION', String(body.message ?? 'Notification'), { source: 'api' });
-      return { body: { ok: true } };
-    }
-
-    if (path === '/api/v1/targets/sync' && method === 'POST') {
-      const result = await ctx.targetSync.pull();
-      return { body: result };
-    }
-
-    const instanceMatch = /^\/api\/v1\/instances\/([^/]+)\/(start|stop|restart)$/.exec(path);
-    if (instanceMatch && method === 'POST') {
-      const [, id, action] = instanceMatch;
-      if (action === 'start') return { body: { instance: ctx.instances.start(id) } };
-      if (action === 'stop') return { body: { instance: ctx.instances.stop(id) } };
-      return { body: { instance: ctx.instances.restart(id) } };
     }
 
     return undefined;
@@ -250,15 +186,7 @@ export class ApiServer {
   private readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
     return new Promise((resolve) => {
       const chunks: Buffer[] = [];
-      let size = 0;
-      req.on('data', (chunk: Buffer) => {
-        size += chunk.length;
-        if (size > 1_000_000) {
-          req.destroy();
-          return;
-        }
-        chunks.push(chunk);
-      });
+      req.on('data', (chunk: Buffer) => chunks.push(chunk));
       req.on('end', () => {
         if (chunks.length === 0) return resolve({});
         try {
@@ -272,7 +200,7 @@ export class ApiServer {
   }
 
   private json(res: ServerResponse, status: number, body: unknown): void {
-    const payload = JSON.stringify(body);
+    const payload = JSON.stringify(body ?? {});
     res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) });
     res.end(payload);
   }

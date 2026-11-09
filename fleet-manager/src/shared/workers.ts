@@ -11,7 +11,7 @@
  */
 
 /** Bumped whenever an envelope or payload changes shape. Mismatches are refused, not coerced. */
-export const WORKER_PROTOCOL_VERSION = 1;
+export const WORKER_PROTOCOL_VERSION = 2;
 
 /** The WebSocket path workers dial. */
 export const WORKER_PATH = '/worker';

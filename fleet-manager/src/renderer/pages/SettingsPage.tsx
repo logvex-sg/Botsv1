@@ -1,301 +1,160 @@
 /**
- * Settings.
+ * Settings: the small set of host knobs that actually matter.
  *
- * Grouped, plain-language settings with tooltips. Only the essentials are shown by default; the
- * technical options live behind an Advanced section. A Restore Defaults button returns everything
- * to a known-good state, and every change is explained in a sentence rather than a code name.
+ * The worker server (address, port, shared token), pairing-code lifetime, appearance and the local
+ * API. Nothing here is decorative — each control writes through to the host and takes effect.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { fleet } from '../lib/api';
-import { Button, Callout, Card, ConfirmDialog, Expandable, Field, Pill, Segmented, Tip } from '../components/ui';
-import { DEFAULT_SETTINGS, type AppSettings, type UiMode } from '../../shared/types';
-import { toFriendlyError } from '../lib/errors';
+import { Button, Callout, Card, Field } from '../components/ui';
+import { copyText, toFriendlyError } from '../lib/errors';
+import type { AppSettings, UiMode } from '../../shared/types';
+import type { WorkerServerStatus } from '../../shared/ipc';
 
 interface Props {
   push: (message: string, tone?: string) => void;
   uiMode: UiMode;
 }
 
-export function SettingsPage({ push, uiMode }: Props) {
+export function SettingsPage({ push }: Props) {
   const store = useStore();
-  const [draft, setDraft] = useState<AppSettings | null>(null);
-  const [token, setToken] = useState('');
+  const [settings, setSettings] = useState<AppSettings | null>(store.settings);
+  const [server, setServer] = useState<WorkerServerStatus | null>(store.workerServer);
+  const [host, setHost] = useState('');
+  const [port, setPort] = useState('');
+  const [ttl, setTtl] = useState('600');
   const [revealToken, setRevealToken] = useState(false);
-  const [revealWorkerToken, setRevealWorkerToken] = useState(false);
-  const [workerToken, setWorkerToken] = useState('');
-  const [confirmWorkerRegen, setConfirmWorkerRegen] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
-  const [confirmRegen, setConfirmRegen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (store.settings) setDraft(store.settings);
-  }, [store.settings]);
-
-  useEffect(() => {
-    void fleet.getApiToken().then(setToken).catch(() => setToken(''));
-    void fleet.getWorkerServer().then((info) => setWorkerToken(info.token)).catch(() => setWorkerToken(''));
-  }, []);
-
-  const save = async (): Promise<void> => {
-    if (!draft) return;
-    setError(null);
+  const load = useCallback(async (): Promise<void> => {
     try {
-      await fleet.saveSettings(draft);
-      push('Settings saved', 'success');
+      const [next, srv] = await Promise.all([fleet.getSettings(), fleet.getWorkerServer()]);
+      setSettings(next);
+      setServer(srv);
+      setHost(next.workerServerHost);
+      setPort(String(next.workerServerPort));
+      setTtl(String(next.pairingCodeTtlSeconds));
+    } catch (error) {
+      push(toFriendlyError(error).title, 'error');
+    }
+  }, [push]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const save = useCallback(async (patch: Partial<AppSettings>): Promise<void> => {
+    try {
+      const next = await fleet.saveSettings(patch);
+      setSettings(next);
       await store.refresh();
-    } catch (err) {
-      const friendly = toFriendlyError(err);
-      setError(friendly.title);
-      push(friendly.title, 'error');
+    } catch (error) {
+      push(toFriendlyError(error).title, 'error');
     }
-  };
+  }, [push, store]);
 
-  const regenerate = async (): Promise<void> => {
-    setConfirmRegen(false);
-    const next = await fleet.regenerateApiToken();
-    setToken(next);
-    setRevealToken(true);
-    push('New connection key generated', 'success');
-  };
-
-  const restoreDefaults = async (): Promise<void> => {
-    setConfirmReset(false);
-    if (!draft) return;
-    // Keep the user's Hunter link and theme; reset everything else to sensible defaults.
-    const reset: AppSettings = {
-      ...DEFAULT_SETTINGS,
-      theme: draft.theme,
-      uiMode: draft.uiMode,
-      hunterAddonUrl: draft.hunterAddonUrl,
-      hunterAddonToken: draft.hunterAddonToken,
-    };
-    setDraft(reset);
-    await fleet.saveSettings(reset);
-    await store.refresh();
-    push('Settings restored to defaults', 'success');
-  };
-
-  const exportConfig = async (): Promise<void> => {
-    const result = await fleet.exportConfig();
-    push(`Exported configuration to ${result.path}`, 'success');
-  };
-
-  const importConfig = async (): Promise<void> => {
-    try {
-      const result = await fleet.importConfig();
-      if (result) {
-        push(`Imported ${result.imported} records`, 'success');
-        await store.refresh();
-      }
-    } catch (err) {
-      push(toFriendlyError(err).title, 'error');
+  const saveServer = useCallback(async (): Promise<void> => {
+    const portNumber = Number.parseInt(port, 10);
+    if (!Number.isFinite(portNumber) || portNumber <= 0 || portNumber > 65535) {
+      push('Enter a valid port (1–65535).', 'error');
+      return;
     }
-  };
+    const ttlNumber = Number.parseInt(ttl, 10);
+    await save({
+      workerServerHost: host.trim() || '127.0.0.1',
+      workerServerPort: portNumber,
+      pairingCodeTtlSeconds: Number.isFinite(ttlNumber) && ttlNumber >= 30 ? ttlNumber : 600,
+    });
+    push('Worker server settings saved');
+    await load();
+  }, [host, port, ttl, save, push, load]);
 
-  const backup = async (): Promise<void> => {
-    const result = await fleet.backupDatabase();
-    if (result) push(`Backup saved to ${result.path}`, 'success');
-  };
+  const regenerate = useCallback(async (): Promise<void> => {
+    await fleet.regenerateWorkerToken();
+    push('Worker token regenerated — connected workers must be re-paired.', 'error');
+    await load();
+  }, [push, load]);
 
-  if (!draft) return <div className="empty">Loading settings…</div>;
+  if (!settings) return <div className="empty">Loading settings…</div>;
 
   return (
     <div className="col" style={{ gap: 16 }}>
-      {error && <Callout tone="error" title={error} />}
-
-      {/* Everyday settings first */}
-      <div className="grid cols-2">
-        <Card title="Appearance" sub="How the app looks and how much it shows.">
-          <Field label="Mode">
-            <Segmented<UiMode>
-              value={draft.uiMode}
-              onChange={(mode) => setDraft({ ...draft, uiMode: mode })}
-              options={[{ value: 'beginner', label: 'Beginner' }, { value: 'advanced', label: 'Advanced' }]}
-            />
-            <span className="hint">
-              {draft.uiMode === 'beginner'
-                ? 'Simple screens, fewer options, plain language.'
-                : 'Every option, including deployment queues and role configuration.'}
-            </span>
+      <Card title="Worker server" sub="Where workers connect to this host.">
+        <div className="grid" style={{ gridTemplateColumns: '1fr 140px 160px', gap: 12 }}>
+          <Field label="Bind address" hint="127.0.0.1 keeps it local; use 0.0.0.0 to reach other PCs.">
+            <input className="input" value={host} onChange={(e) => setHost(e.target.value)} />
           </Field>
-          <Field label="Theme">
-            <Segmented<'dark' | 'light'>
-              value={draft.theme}
-              onChange={(theme) => setDraft({ ...draft, theme })}
-              options={[{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]}
-            />
+          <Field label="Port">
+            <input className="input" value={port} onChange={(e) => setPort(e.target.value)} />
           </Field>
-        </Card>
-
-        <Card title="Notifications" sub="What the app tells you about.">
-          <label className="row" style={{ gap: 8 }}>
-            <input type="checkbox" checked={draft.notify} onChange={(e) => setDraft({ ...draft, notify: e.target.checked })} />
-            <span className="card-sub">Show notifications for warnings and errors</span>
-            <Tip text="Important problems (a bot failed, a connection dropped) appear as a message so you do not have to watch the screen." />
-          </label>
-          <label className="row" style={{ gap: 8, marginTop: 12 }}>
-            <input type="checkbox" checked={draft.autosave} onChange={(e) => setDraft({ ...draft, autosave: e.target.checked })} />
-            <span className="card-sub">Save changes automatically</span>
-            <Tip text="When on, edits are stored as soon as you make them instead of waiting for a Save button." />
-          </label>
-        </Card>
-      </div>
-
-      <Card title="Logvex Hunter link" sub="Connect the Hunter addon to share targets and see combat events.">
-        <div className="grid cols-2">
-          <Field label="Companion address" hint="Where the Hunter addon is listening. The default is correct for a local game.">
-            <input type="text" value={draft.hunterAddonUrl} onChange={(e) => setDraft({ ...draft, hunterAddonUrl: e.target.value })} placeholder="http://127.0.0.1:8720" />
-          </Field>
-          <Field label="Companion key" hint="The key shown by the addon in-game. Leave blank if the addon does not use one.">
-            <input type="password" value={draft.hunterAddonToken} onChange={(e) => setDraft({ ...draft, hunterAddonToken: e.target.value })} />
+          <Field label="Pairing code TTL (s)">
+            <input className="input" value={ttl} onChange={(e) => setTtl(e.target.value)} />
           </Field>
         </div>
-        <div className="row" style={{ gap: 10 }}>
-          <Pill tone={store.hunterConnected ? 'success' : 'muted'}>{store.hunterConnected ? 'connected' : 'not connected'}</Pill>
-          <Button small onClick={async () => {
-            const s = await fleet.hunterStatus();
-            push(s.connected ? 'Hunter is reachable' : 'Hunter could not be reached', s.connected ? 'success' : 'error');
-          }}>Test connection</Button>
+        <div className="row" style={{ gap: 10, marginTop: 8 }}>
+          <Button variant="primary" onClick={() => void saveServer()}>Save &amp; restart listener</Button>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={settings.workerServerEnabled}
+              onChange={(e) => void save({ workerServerEnabled: e.target.checked })}
+            />
+            Accept worker connections
+          </label>
+          <span className="card-sub" style={{ color: server?.bound ? 'var(--ok)' : 'var(--text-dim)' }}>
+            {server?.bound ? `Listening on ${server.host}:${server.port}` : 'Not listening'}
+          </span>
         </div>
       </Card>
 
-      <div className="row" style={{ gap: 10 }}>
-        <Button variant="primary" onClick={save}>Save settings</Button>
-        <Button onClick={() => setConfirmReset(true)}>Restore defaults</Button>
-      </div>
+      <Card title="Shared token" sub="What a worker presents after pairing. Regenerating invalidates every paired worker.">
+        <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="mono" style={{ fontSize: 15 }}>{revealToken ? server?.token ?? '' : '••••••••••••••••••••'}</span>
+          <Button small onClick={() => setRevealToken((v) => !v)}>{revealToken ? 'Hide' : 'Reveal'}</Button>
+          <Button small onClick={() => void copyText(server?.token ?? '').then(() => push('Token copied'))}>Copy</Button>
+          <Button small variant="danger" onClick={() => void regenerate()}>Regenerate</Button>
+        </div>
+      </Card>
 
-      {/* Advanced options are hidden unless the user asks for them. */}
-      {(uiMode === 'advanced' || draft.apiEnabled !== DEFAULT_SETTINGS.apiEnabled) && (
-        <Expandable title="Advanced" defaultOpen={uiMode === 'advanced'}>
-          <Card title="Local connection" sub="How other tools on this computer talk to the app.">
-            <label className="row" style={{ gap: 8 }}>
-              <input type="checkbox" checked={draft.apiEnabled} onChange={(e) => setDraft({ ...draft, apiEnabled: e.target.checked })} />
-              <span className="card-sub">Allow other tools to connect</span>
-            </label>
-            <div className="grid cols-2" style={{ marginTop: 12 }}>
-              <Field label="Address">
-                <input type="text" value={draft.apiHost} onChange={(e) => setDraft({ ...draft, apiHost: e.target.value })} />
-              </Field>
-              <Field label="Port">
-                <input type="number" value={draft.apiPort} onChange={(e) => setDraft({ ...draft, apiPort: Number(e.target.value) })} />
-              </Field>
-            </div>
-            <Field label="Connection key" hint="Used like a password by the Hunter addon. It never leaves this computer.">
-              <div className="row" style={{ gap: 8 }}>
-                <input
-                  type="text"
-                  value={revealToken ? token : '•'.repeat(Math.min(32, token.length))}
-                  readOnly
-                  onFocus={(e) => e.currentTarget.select()}
-                />
-                <Button small onClick={() => setRevealToken((v) => !v)}>{revealToken ? 'Hide' : 'Show'}</Button>
-                <Button small onClick={() => setConfirmRegen(true)}>New key</Button>
-              </div>
-            </Field>
-          </Card>
+      <Card title="Appearance" sub="Local to this app.">
+        <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button onClick={() => void save({ theme: settings.theme === 'dark' ? 'light' : 'dark' })}>
+            {settings.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          </Button>
+          <Button onClick={() => void save({ uiMode: settings.uiMode === 'beginner' ? 'advanced' : 'beginner' })}>
+            {settings.uiMode === 'beginner' ? 'Switch to advanced mode' : 'Switch to beginner mode'}
+          </Button>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <input type="checkbox" checked={settings.notify} onChange={(e) => void save({ notify: e.target.checked })} />
+            Desktop notifications
+          </label>
+        </div>
+      </Card>
 
-          <Card title="Fleet worker server" sub="Where Minecraft clients running the worker mod connect.">
-            <label className="row" style={{ gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={draft.workerServerEnabled}
-                onChange={(e) => setDraft({ ...draft, workerServerEnabled: e.target.checked })}
-              />
-              <span className="card-sub">Accept worker connections</span>
-            </label>
-            <div className="grid cols-2" style={{ marginTop: 12 }}>
-              <Field label="Bind address" hint="Use 127.0.0.1 for clients on this PC; your LAN address to reach clients on other machines.">
-                <input type="text" value={draft.workerServerHost} onChange={(e) => setDraft({ ...draft, workerServerHost: e.target.value })} />
-              </Field>
-              <Field label="Port">
-                <input type="number" value={draft.workerServerPort} onChange={(e) => setDraft({ ...draft, workerServerPort: Number(e.target.value) })} />
-              </Field>
-            </div>
-            <Field label="Worker token" hint="Workers must present this token to connect. It is stored on this computer only.">
-              <div className="row" style={{ gap: 8 }}>
-                <input
-                  type="text"
-                  value={revealWorkerToken ? workerToken : '•'.repeat(Math.min(32, workerToken.length))}
-                  readOnly
-                  onFocus={(e) => e.currentTarget.select()}
-                />
-                <Button small onClick={() => setRevealWorkerToken((v) => !v)}>{revealWorkerToken ? 'Hide' : 'Show'}</Button>
-                <Button small onClick={() => setConfirmWorkerRegen(true)}>New token</Button>
-              </div>
-            </Field>
-          </Card>
+      <Card title="Local API" sub="For scripts and other tools. Bearer token, loopback by default.">
+        <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="mono">{settings.apiHost}:{settings.apiPort}</span>
+          <Button small onClick={() => void fleet.getApiToken().then((t) => copyText(t)).then(() => push('API token copied'))}>Copy API token</Button>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <input type="checkbox" checked={settings.apiEnabled} onChange={(e) => void save({ apiEnabled: e.target.checked })} />
+            Enable local API
+          </label>
+        </div>
+      </Card>
 
-          <Card title="Performance & maintenance" sub="Fine tuning — the defaults work well for most people.">
-            <div className="grid cols-3">
-              <Field label="Max memory (MB)">
-                <input type="number" value={draft.maxMemoryMb} onChange={(e) => setDraft({ ...draft, maxMemoryMb: Number(e.target.value) })} />
-              </Field>
-              <Field label="Backup every (minutes)">
-                <input type="number" value={draft.backupIntervalMinutes} onChange={(e) => setDraft({ ...draft, backupIntervalMinutes: Number(e.target.value) })} />
-              </Field>
-              <Field label="Log level">
-                <select value={draft.logLevel} onChange={(e) => setDraft({ ...draft, logLevel: e.target.value as never })}>
-                  <option value="debug">Debug (verbose)</option>
-                  <option value="info">Info</option>
-                  <option value="warn">Warnings</option>
-                  <option value="error">Errors only</option>
-                </select>
-              </Field>
-            </div>
-          </Card>
+      <Card title="Configuration" sub="Export or import worker groups and regear presets. The token is never included.">
+        <div className="row" style={{ gap: 10 }}>
+          <Button onClick={() => void fleet.exportConfig().then((r) => push(r ? `Exported to ${r.path}` : 'Export cancelled'))}>Export configuration</Button>
+          <Button onClick={() => void fleet.importConfig().then((r) => push(r ? `Imported ${r.imported} records` : 'Import cancelled'))}>Import configuration</Button>
+        </div>
+      </Card>
 
-          <Card title="Backup & transfer" sub="Export or import your configuration. Passwords are never included.">
-            <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-              <Button onClick={exportConfig}>Export configuration</Button>
-              <Button onClick={importConfig}>Import configuration</Button>
-              <Button onClick={backup}>Back up database</Button>
-            </div>
-          </Card>
-        </Expandable>
-      )}
-
-      {confirmReset && (
-        <ConfirmDialog
-          title="Restore default settings?"
-          confirmLabel="Restore defaults"
-          message="Your connection key, saved accounts, servers and bots are not touched. Only the options on this page return to their defaults."
-          onCancel={() => setConfirmReset(false)}
-          onConfirm={restoreDefaults}
-        />
-      )}
-
-      {confirmRegen && (
-        <ConfirmDialog
-          title="Generate a new connection key?"
-          danger
-          confirmLabel="Generate new key"
-          message="Any tool already connected with the old key will be disconnected until you update it with the new one."
-          onCancel={() => setConfirmRegen(false)}
-          onConfirm={regenerate}
-        />
-      )}
-
-      {confirmWorkerRegen && (
-        <ConfirmDialog
-          title="Generate a new worker token?"
-          danger
-          confirmLabel="Generate new token"
-          message="Every worker must be given the new token before it can connect again. Workers already connected stay connected until they drop."
-          onCancel={() => setConfirmWorkerRegen(false)}
-          onConfirm={async () => {
-            setConfirmWorkerRegen(false);
-            try {
-              const next = await fleet.regenerateWorkerToken();
-              setWorkerToken(next);
-              push('Worker token regenerated', 'warning');
-            } catch (err) {
-              setError((err as Error).message);
-            }
-          }}
-        />
-      )}
+      <Card title="Mode" sub="Host mode controls workers; Worker mode points this machine at another host.">
+        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+          <Callout tone="info" title="Currently in HOST mode">
+            To re-run the first-time setup and choose a mode again, use the button below.
+          </Callout>
+          <Button onClick={() => void save({ onboarded: false })}>Run first-time setup again</Button>
+        </div>
+      </Card>
     </div>
   );
 }
