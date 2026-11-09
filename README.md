@@ -154,12 +154,14 @@ Once connected, the host can run **any** hunter command on a worker:
 `send` accepts an id, a label, or a 1-based index (`1`, `2`, …). A worker replies with the command's
 output, which the host shows in chat and on the roster row.
 
-**Safety.** A broadcast reaches every client at once, so only read-only and cosmetic commands are
-allowed to broadcast (`status`, `save`, `hud`, `profile`, `target`, `settings`, `notify`). Lifecycle
-changes (`start`, `stop`, …) and anything that would arm combat on the whole fleet are refused
-unless you tick **allow-combat-broadcast** on the host. `emergency-stop` is always allowed. The
-token is a shared secret: set the same value on the host and every worker, and leave
-`allow-remote` off unless the workers are on other machines.
+**Safety.** A broadcast reaches every client at once, so only read-only, cosmetic and non-combat
+tuning commands are allowed to broadcast (`status`, `save`, `hud`, `profile`, `target`, `settings`,
+`notify`, and `set` of a setting that does not belong to a combat module). Lifecycle changes
+(`start`, `stop`, …) and anything that would arm combat on the whole fleet are refused unless you
+tick **allow-combat-broadcast** on the host; a single-worker `send` that arms combat only warns.
+`emergency-stop` is always allowed, and the host sends it to the fleet on its own emergency stop
+before the link is torn down. The token is a shared secret: set the same value on the host and every
+worker, and leave `allow-remote` off unless the workers are on other machines.
 
 The protocol is newline-delimited JSON over TCP and is documented in
 `core/swarm/SwarmProtocol.java`, so a non-Meteor client can be written against it.

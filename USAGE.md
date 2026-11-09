@@ -392,9 +392,11 @@ Quick start:
    `.swarm send <worker> <command>` for one worker.
 
 A worker applies exactly the command the host sends, through the same control layer as the local
-player, so `.swarm send 1 target add Griefer01` adds a target on worker 1. Only read-only and
-cosmetic commands may be broadcast; lifecycle and combat changes must be sent to one worker at a
-time, or the host must opt in to `allow-combat-broadcast`. `emergency-stop` always broadcasts.
+player, so `.swarm send 1 target add Griefer01` adds a target on worker 1. Only read-only, cosmetic
+and non-combat tuning commands may be broadcast; lifecycle and combat changes must be sent to one
+worker at a time, or the host must opt in to `allow-combat-broadcast`. A single-worker send that
+would arm combat only warns. `emergency-stop` always broadcasts, and the host sends it to the fleet
+on its own emergency stop.
 
 ---
 
