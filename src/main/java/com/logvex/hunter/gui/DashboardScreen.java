@@ -42,6 +42,7 @@ public class DashboardScreen extends TabScreen {
     private WButton stopButton;
     private WTable eventsTable;
     private WTable modulesTable;
+    private long lastEventsRevision = -1;
 
     public DashboardScreen(GuiTheme theme, meteordevelopment.meteorclient.gui.tabs.Tab tab) {
         super(theme, tab == null ? new com.logvex.hunter.gui.HunterTab() : tab);
@@ -230,6 +231,12 @@ public class DashboardScreen extends TabScreen {
 
     private void refreshEvents(HunterCore core) {
         if (eventsTable == null) return;
+        // Rebuilding a WTable every tick discards and recreates its widgets, which drops clicks and
+        // churns allocations. The core bumps a revision whenever an event is recorded, so only
+        // rebuild when that changes.
+        long revision = core.statistics().eventRevision();
+        if (revision == lastEventsRevision) return;
+        lastEventsRevision = revision;
         eventsTable.clear();
         List<CombatEvent> events = core.statistics().recentEvents(10);
         if (events.isEmpty()) {

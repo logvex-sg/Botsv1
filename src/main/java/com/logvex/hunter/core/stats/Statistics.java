@@ -36,6 +36,7 @@ public final class Statistics {
     private final Map<String, Integer> killsByTarget = new LinkedHashMap<>();
     private final List<SessionRecord> sessionHistory = new ArrayList<>();
     private final List<CombatEvent> recentEvents = new ArrayList<>();
+    private long eventRevision;
 
     // ------------------------------------------------------------ counters
 
@@ -169,7 +170,17 @@ public final class Statistics {
     public void addEvent(CombatEvent event) {
         if (event == null) return;
         recentEvents.add(event);
+        eventRevision++;
         while (recentEvents.size() > MAX_EVENTS) recentEvents.remove(0);
+    }
+
+    /**
+     * Bumped every time an event is recorded. A dashboard that mirrors {@link #recentEvents()} can
+     * compare this against the value it last rendered and skip rebuilding its rows when nothing
+     * changed, instead of re-creating widgets on every tick.
+     */
+    public long eventRevision() {
+        return eventRevision;
     }
 
     public List<CombatEvent> recentEvents() {

@@ -23,7 +23,7 @@ public class HunterStatusHud extends HunterHudElement {
     @Override
     public void render(HudRenderer renderer) {
         HunterCore core = core();
-        List<String> lines = new ArrayList<>();
+        beginBlock();
         String state = core.config().emergencyStop() ? "EMERGENCY STOP" : (core.running() ? "running" : "stopped");
         lines.add("State: " + state);
         lines.add("Profile: " + core.config().activeProfileName());

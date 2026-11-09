@@ -25,6 +25,7 @@ public class StatisticsScreen extends HunterScreen {
     private WTable sessionTable;
     private WTable breakdownTable;
     private WTable eventsTable;
+    private int tableCooldown;
 
     public StatisticsScreen(GuiTheme theme, net.minecraft.client.gui.screens.Screen parent) {
         super(theme, "Statistics");
@@ -88,6 +89,11 @@ public class StatisticsScreen extends HunterScreen {
             stats.totalKills(), stats.totalDeaths(), stats.kdRatio(), stats.sessions(),
             stats.playerEncounters(), stats.targetsTracked(), stats.manualTargetSwitches(),
             Time.duration(stats.totalPlaytimeMillis())));
+
+        // Three tables and two sort passes are far too much to redo every tick; refresh them twice a
+        // second. The totals label above stays live.
+        if (tableCooldown-- > 0) return;
+        tableCooldown = 10;
 
         sessionTable.clear();
         List<SessionRecord> sessions = stats.sessionHistory();

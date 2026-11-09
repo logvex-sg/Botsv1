@@ -30,7 +30,7 @@ public class SwarmHud extends HunterHudElement {
     @Override
     public void render(HudRenderer renderer) {
         SwarmModule module = HunterRegistry.swarm();
-        List<String> lines = new ArrayList<>();
+        beginBlock();
         Color titleColor;
 
         if (module == null) {

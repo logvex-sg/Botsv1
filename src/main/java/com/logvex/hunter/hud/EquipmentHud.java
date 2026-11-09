@@ -35,7 +35,7 @@ public class EquipmentHud extends HunterHudElement {
         EquipmentSnapshot equipment = com.logvex.hunter.mc.HunterRuntime.get().equipment();
         InventoryStatus inventory = com.logvex.hunter.mc.HunterRuntime.get().inventory();
 
-        List<String> lines = new ArrayList<>();
+        beginBlock();
         lines.add("Armor: " + equipment.equippedArmorPieces() + " pieces / " + equipment.armorPoints() + " pts");
         lines.add("Totems: " + inventory.totems + "  Food: " + inventory.food);
         lines.add("Free slots: " + inventory.freeSlots);

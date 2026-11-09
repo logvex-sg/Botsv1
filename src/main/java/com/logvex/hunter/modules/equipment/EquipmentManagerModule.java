@@ -62,6 +62,8 @@ public class EquipmentManagerModule extends HunterModule {
 
     private long lastAnnounce;
     private String lastWarning = "";
+    private List<EquipmentAdvisor.Warning> cachedWarnings = List.of();
+    private int warningsAge = 10;
 
     public EquipmentManagerModule() {
         super(HunterAddon.CATEGORY, "equipment-manager", "Monitors armour, durability, totems, food and weapons.");
@@ -88,7 +90,15 @@ public class EquipmentManagerModule extends HunterModule {
     }
 
     public List<EquipmentAdvisor.Warning> warnings() {
-        return EquipmentAdvisor.evaluate(snapshot(), inventory(), effectiveProfile());
+        // Called from the equipment screen every tick and from the tick handler below; evaluate at most
+        // a few times a second instead of on every tick.
+        if (warningsAge >= 10) {
+            cachedWarnings = EquipmentAdvisor.evaluate(snapshot(), inventory(), effectiveProfile());
+            warningsAge = 0;
+        } else {
+            warningsAge++;
+        }
+        return cachedWarnings;
     }
 
     @EventHandler

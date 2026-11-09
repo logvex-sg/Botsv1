@@ -34,6 +34,7 @@ public class InstancesScreen extends HunterScreen {
     private WTextBox portBox;
     private WTextBox tokenBox;
     private WDropdown<InstanceTransport> transportDropdown;
+    private long lastSignature = -1;
 
     public InstancesScreen(GuiTheme theme, net.minecraft.client.gui.screens.Screen parent) {
         super(theme, "Instances");
@@ -108,10 +109,22 @@ public class InstancesScreen extends HunterScreen {
     private void rebuild() {
         if (table == null) return;
         InstanceManagerModule module = HunterRegistry.instances();
-        table.clear();
-        if (module == null) return;
+        if (module == null) {
+            if (lastSignature != 0) {
+                lastSignature = 0;
+                table.clear();
+            }
+            return;
+        }
 
         var registry = core().instances();
+        // The table holds live checkboxes and buttons; rebuilding it every tick would discard the
+        // widget under the cursor and drop clicks. Rebuild only when the rendered rows change.
+        long signature = instancesSignature(registry);
+        if (signature == lastSignature) return;
+        lastSignature = signature;
+        table.clear();
+
         if (registry.size() == 0) {
             table.add(theme.label("No instances registered yet.")).expandCellX();
             table.row();
@@ -166,6 +179,21 @@ public class InstancesScreen extends HunterScreen {
 
             table.row();
         }
+    }
+
+    /** Cheap change detector over the columns the table renders. */
+    private static long instancesSignature(com.logvex.hunter.core.instances.InstanceRegistry registry) {
+        long signature = registry.size();
+        for (InstanceRecord record : registry.all()) {
+            signature = signature * 31 + record.id().hashCode();
+            signature = signature * 31 + record.status().ordinal();
+            signature = signature * 31 + (record.enabled() ? 1 : 0);
+            signature = signature * 31 + record.lastLatencyMillis();
+            signature = signature * 31 + record.lastSeen();
+            Object kills = record.lastStats().get("kills");
+            signature = signature * 31 + (kills == null ? 0 : kills.hashCode());
+        }
+        return signature;
     }
 
     private void info(String message) {

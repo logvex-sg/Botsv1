@@ -17,6 +17,7 @@ public class StasisScreen extends HunterScreen {
     private WLabel levelLabel;
     private WLabel readinessLabel;
     private WTable reasonsTable;
+    private final java.util.List<String> lastReasons = new java.util.ArrayList<>();
 
     public StasisScreen(GuiTheme theme, net.minecraft.client.gui.screens.Screen parent) {
         super(theme, "Defensive Stasis");
@@ -69,7 +70,10 @@ public class StasisScreen extends HunterScreen {
             levelLabel.set("Module disabled");
             levelLabel.color = Color.GRAY;
             readinessLabel.set("");
-            reasonsTable.clear();
+            if (!lastReasons.isEmpty()) {
+                lastReasons.clear();
+                reasonsTable.clear();
+            }
             return;
         }
 
@@ -83,6 +87,11 @@ public class StasisScreen extends HunterScreen {
         };
         readinessLabel.set("Readiness score: " + module.readiness() + "%");
 
+        // Only rebuild the reasons table when the reason set changes; rebuilding every tick churns
+        // widgets and allocations for text that is usually identical.
+        if (assessment.reasons().equals(lastReasons)) return;
+        lastReasons.clear();
+        lastReasons.addAll(assessment.reasons());
         reasonsTable.clear();
         if (assessment.reasons().isEmpty()) {
             reasonsTable.add(theme.label("No issues detected.")).expandCellX();

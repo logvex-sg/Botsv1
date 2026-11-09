@@ -162,4 +162,16 @@ class StatisticsTest {
         assertNotNull(durations.get(0));
         assertEquals(2.0, durations.get(0), 1e-9);
     }
+
+    @Test
+    void eventRevisionBumpsOnlyWhenAnEventIsRecorded() {
+        Statistics stats = new Statistics();
+        long start = stats.eventRevision();
+        assertEquals(start, stats.eventRevision());
+        stats.addEvent(CombatEvent.now(CombatEvent.Kind.KILL, "x", ""));
+        assertTrue(stats.eventRevision() > start);
+        long afterFirst = stats.eventRevision();
+        stats.addEvent(null);
+        assertEquals(afterFirst, stats.eventRevision());
+    }
 }

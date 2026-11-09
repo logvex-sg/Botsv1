@@ -42,6 +42,17 @@ public abstract class HunterHudElement extends HudElement {
         super(info);
     }
 
+    /**
+     * Reusable line buffer for {@link #renderBlock}. HUD elements render every frame, so building the
+     * text into a per-element list avoids allocating a fresh {@code ArrayList} 60 times a second.
+     * Only valid between the {@link #beginBlock()} call and the matching {@code renderBlock}.
+     */
+    protected final List<String> lines = new java.util.ArrayList<>();
+
+    protected void beginBlock() {
+        lines.clear();
+    }
+
     protected HunterCore core() {
         return HunterRuntime.get().core();
     }

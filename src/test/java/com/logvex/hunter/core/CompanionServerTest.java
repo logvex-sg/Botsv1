@@ -33,7 +33,7 @@ class CompanionServerTest {
         }
 
         @Override public HunterCore core() { return core; }
-        @Override public String version() { return "1.0.0"; }
+        @Override public String version() { return "1.1.0"; }
         @Override public boolean connected() { return true; }
         @Override public Map<String, Object> botView() { return Map.of("health", 20.0); }
         @Override public List<Map<String, Object>> playerViews() { return List.of(); }
@@ -77,7 +77,7 @@ class CompanionServerTest {
 
             HttpResponse<String> health = get(base + "/health", null);
             assertEquals(200, health.statusCode());
-            assertTrue(health.body().contains("1.0.0"));
+            assertTrue(health.body().contains("1.1.0"));
 
             HttpResponse<String> unauthorized = get(base + "/api/v1/snapshot", null);
             assertEquals(401, unauthorized.statusCode());

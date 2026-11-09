@@ -24,6 +24,8 @@ public class EquipmentScreen extends HunterScreen {
     private WTable equipmentTable;
     private WTable warningsTable;
     private WLabel inventoryLabel;
+    private String lastSignature = "";
+    private final java.util.List<EquipmentAdvisor.Warning> lastWarnings = new java.util.ArrayList<>();
 
     public EquipmentScreen(GuiTheme theme, net.minecraft.client.gui.screens.Screen parent) {
         super(theme, "Equipment");
@@ -65,22 +67,28 @@ public class EquipmentScreen extends HunterScreen {
         EquipmentSnapshot snapshot = HunterRuntime.get().equipment();
         InventoryStatus inventory = HunterRuntime.get().inventory();
 
-        equipmentTable.clear();
-        equipmentTable.add(theme.label("Slot")).expandCellX();
-        equipmentTable.add(theme.label("Item")).expandCellX();
-        equipmentTable.add(theme.label("Durability")).expandCellX();
-        equipmentTable.add(theme.label("Protection")).expandCellX();
-        equipmentTable.row();
-
-        for (EquipmentItem item : snapshot.all()) {
-            equipmentTable.add(theme.label(item.slot.displayName())).expandCellX();
-            equipmentTable.add(theme.label(item.isEmpty() ? "-" : item.nameOrId())).expandCellX();
-            String durability = item.damageable()
-                ? item.remainingDurability + "/" + item.maxDurability + " (" + Math.round(item.durabilityFraction() * 100) + "%)"
-                : "-";
-            equipmentTable.add(theme.label(durability)).expandCellX();
-            equipmentTable.add(theme.label(item.protection > 0 ? Integer.toString(item.protection) : "-")).expandCellX();
+        // The equipment and warning tables change rarely; rebuild only when the rows change so a tick
+        // does not throw away and recreate every widget.
+        String signature = equipmentSignature(snapshot, inventory);
+        if (!signature.equals(lastSignature)) {
+            lastSignature = signature;
+            equipmentTable.clear();
+            equipmentTable.add(theme.label("Slot")).expandCellX();
+            equipmentTable.add(theme.label("Item")).expandCellX();
+            equipmentTable.add(theme.label("Durability")).expandCellX();
+            equipmentTable.add(theme.label("Protection")).expandCellX();
             equipmentTable.row();
+
+            for (EquipmentItem item : snapshot.all()) {
+                equipmentTable.add(theme.label(item.slot.displayName())).expandCellX();
+                equipmentTable.add(theme.label(item.isEmpty() ? "-" : item.nameOrId())).expandCellX();
+                String durability = item.damageable()
+                    ? item.remainingDurability + "/" + item.maxDurability + " (" + Math.round(item.durabilityFraction() * 100) + "%)"
+                    : "-";
+                equipmentTable.add(theme.label(durability)).expandCellX();
+                equipmentTable.add(theme.label(item.protection > 0 ? Integer.toString(item.protection) : "-")).expandCellX();
+                equipmentTable.row();
+            }
         }
 
         inventoryLabel.set(String.format(Locale.ROOT,
@@ -88,9 +96,12 @@ public class EquipmentScreen extends HunterScreen {
             inventory.totems, inventory.food, inventory.freeSlots, inventory.usedSlots + inventory.freeSlots,
             inventory.weapons.isEmpty() ? "none" : String.join(", ", inventory.weapons)));
 
-        warningsTable.clear();
         EquipmentManagerModule module = HunterRegistry.equipment();
         List<EquipmentAdvisor.Warning> warnings = module == null ? List.of() : module.warnings();
+        if (warnings.equals(lastWarnings)) return;
+        lastWarnings.clear();
+        lastWarnings.addAll(warnings);
+        warningsTable.clear();
         if (warnings.isEmpty()) {
             warningsTable.add(theme.label("No equipment warnings.")).expandCellX();
             warningsTable.row();
@@ -105,6 +116,17 @@ public class EquipmentScreen extends HunterScreen {
             };
             warningsTable.row();
         }
+    }
+
+    /** Change detector over the equipment rows the table renders. */
+    private static String equipmentSignature(EquipmentSnapshot snapshot, InventoryStatus inventory) {
+        StringBuilder builder = new StringBuilder(64);
+        for (EquipmentItem item : snapshot.all()) {
+            builder.append(item.slot).append('|').append(item.isEmpty() ? '-' : item.nameOrId())
+                .append('|').append(item.remainingDurability).append('|').append(item.protection).append('\n');
+        }
+        builder.append(inventory.totems).append('|').append(inventory.food).append('|').append(inventory.freeSlots);
+        return builder.toString();
     }
 
     private void info(String message) {

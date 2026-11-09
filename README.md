@@ -72,7 +72,7 @@ to a client through the addon's local companion API (the *inbound* direction) â€
 
 1. Install Fabric Loader for Minecraft 1.21.11.
 2. Put Meteor Client in your `mods` folder.
-3. Build the addon (see below) and copy `build/libs/logvex-hunter-1.0.0.jar` into `mods`.
+3. Build the addon (see below) and copy `build/libs/logvex-hunter-1.1.0.jar` into `mods`.
 4. Launch the game. The addon registers a **Logvex Hunter** category and ClickGUI tab.
 
 ### Building
@@ -84,7 +84,7 @@ export JAVA_HOME=/path/to/jdk-25
 ./gradlew clean test build
 ```
 
-The remapped, release-ready jar is written to `build/libs/logvex-hunter-1.0.0.jar`.
+The remapped, release-ready jar is written to `build/libs/logvex-hunter-1.1.0.jar`.
 
 ### Commands
 

@@ -65,6 +65,9 @@ public class DefensiveStasisModule extends HunterModule {
         .defaultValue(false).build());
 
     private StasisLevel lastLevel = StasisLevel.SAFE;
+    private int assessedTick = -1;
+    private StasisMonitor.Assessment cachedAssessment;
+    private int cachedReadiness;
 
     public DefensiveStasisModule() {
         super(HunterAddon.CATEGORY, "defensive-stasis", "Monitors defensive readiness and danger thresholds.");
@@ -84,8 +87,13 @@ public class DefensiveStasisModule extends HunterModule {
     }
 
     public StasisMonitor.Assessment assess() {
-        return StasisMonitor.assess(runtime().equipment(), runtime().inventory(), runtime().localHealth(),
-            runtime().connected(), settings());
+        // Called from the HUD every frame and from the tick handler; one evaluation per tick is
+        // plenty, so reuse the cached result within a tick instead of re-allocating the reason list.
+        if (assessedTick == runtime().tickId() && cachedAssessment != null) return cachedAssessment;
+        assessedTick = runtime().tickId();
+        cachedAssessment = StasisMonitor.assess(runtime().equipment(), runtime().inventory(),
+            runtime().localHealth(), runtime().connected(), settings());
+        return cachedAssessment;
     }
 
     public StasisLevel level() {
@@ -93,8 +101,11 @@ public class DefensiveStasisModule extends HunterModule {
     }
 
     public int readiness() {
-        return StasisMonitor.readinessScore(runtime().equipment(), runtime().inventory(),
+        if (assessedTick == runtime().tickId()) return cachedReadiness;
+        assess();
+        cachedReadiness = StasisMonitor.readinessScore(runtime().equipment(), runtime().inventory(),
             core().config().activeProfile().equipmentProfile());
+        return cachedReadiness;
     }
 
     @EventHandler

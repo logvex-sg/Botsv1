@@ -25,7 +25,7 @@ public class StasisHud extends HunterHudElement {
     @Override
     public void render(HudRenderer renderer) {
         DefensiveStasisModule module = HunterRegistry.stasis();
-        List<String> lines = new ArrayList<>();
+        beginBlock();
         if (module == null || !module.isActive()) {
             if (isInEditor()) renderBlock(renderer, "Stasis", List.of("module disabled"), Color.GRAY);
             return;

@@ -8,6 +8,8 @@ Fleet Manager** desktop app. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-08
+
 ### Added
 - **In-game swarm: control many LogVex Hunter clients from one host, in the game.** A new `swarm`
   module makes one client the **host** and the rest **hunters**, in the spirit of Meteor's own
@@ -54,7 +56,26 @@ Fleet Manager** desktop app. The format follows
   all through the same control layer the API uses.
 - Dashboard quick-control row: an active-profile dropdown, Save profile and Reload buttons.
 
+### Performance
+- **The dashboard no longer rebuilds its widgets every tick.** Every screen refreshed its whole
+  widget tree 20 times a second — the dashboard's recent-events table, the instances table (which
+  holds live checkboxes and buttons), and the stasis, equipment and statistics tables all cleared and
+  re-created every row on every tick. Besides the allocation churn, this could drop a click on a
+  button that was recreated mid-press. Each table now rebuilds only when the data it shows actually
+  changes: the dashboard keys off a new `Statistics.eventRevision()` counter, the others off cheap
+  change signatures, and the statistics tables refresh twice a second. The visible text still updates
+  live.
+- **HUD elements no longer allocate per frame.** Each element built a fresh `ArrayList` (and the
+  statistics element a `String.format`) on every frame; lines are now assembled into one reusable
+  buffer per element.
+- **Stasis assessment runs once per tick instead of once per frame plus once per tick.** The HUD
+  reads the cached assessment and readiness for the tick it is drawn in.
+- **Equipment warnings are evaluated at most ten times a second** instead of on every tick and every
+  equipment-screen refresh.
+
 ### Changed
+- **Fabric Loader 0.19.5 to 0.20.1** (latest stable).
+- Mod version **1.0.0 to 1.1.0**.
 - **Consolidated to a single mod with two swarm modes, Host and Hunter.** The standalone
   `worker-mod/` Fabric mod has been removed; controlling other clients is done entirely in game by
   the one LogVex Hunter addon. In the swarm, the former **worker** mode is now **hunter** mode and is
@@ -150,4 +171,5 @@ local companion API for the Logvex Fleet Manager.
   own.
 - Requires Meteor Client 1.21.11-SNAPSHOT and Fabric Loader 0.19.5.
 
+[1.1.0]: https://github.com/logvex-sg/Botsv1/releases/tag/v1.1.0
 [1.0.0]: https://github.com/logvex-sg/Botsv1/releases/tag/v1.0.0

@@ -76,7 +76,7 @@ an event log, and a connection to one or more Hunter clients.
    # The mod itself is compiled to Java 21 bytecode and runs on Java 21.
    export JAVA_HOME=/path/to/jdk-25
    ./gradlew clean test build
-   cp build/libs/logvex-hunter-1.0.0.jar ~/.minecraft/mods/
+   cp build/libs/logvex-hunter-1.1.0.jar ~/.minecraft/mods/
    ```
 
 4. Start the game. A **Logvex Hunter** category appears in Meteor's ClickGUI.

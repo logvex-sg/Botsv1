@@ -41,7 +41,7 @@ public class TargetHud extends HunterHudElement {
         }
 
         PlayerSnapshot snapshot = target.snapshot;
-        List<String> lines = new ArrayList<>();
+        beginBlock();
         lines.add(String.format(Locale.ROOT, "Distance: %.1fm", target.distance));
         if (showHealth.get()) {
             lines.add(String.format(Locale.ROOT, "Health: %.1f / %.1f", snapshot.health(), snapshot.maxHealth()));
