@@ -10,6 +10,7 @@
   --text-faint: #6b7490;
   --accent: #6d5efc;
   --accent-hover: #7f72ff;
+  --accent-contrast: #ffffff;
   --gearer: #4fd1c5;
   --stasis: #9f7aea;
   --hunter: #f56565;
@@ -20,8 +21,30 @@
   --radius: 10px;
   --radius-sm: 6px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --sidebar-w: 236px;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
+}
+
+/* Light theme overrides — applied by setting data-theme on <html>. */
+html[data-theme='light'] {
+  --bg: #f5f6fa;
+  --bg-elevated: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-hover: #eef0f7;
+  --border: #e2e5ef;
+  --border-bright: #cfd4e6;
+  --text: #1a1d29;
+  --text-dim: #5a6178;
+  --text-faint: #8a90a6;
+  --accent: #5b4bf5;
+  --accent-hover: #4a3ce0;
+  --accent-contrast: #ffffff;
+  --success: #2f9e5f;
+  --warning: #b8860b;
+  --error: #d64545;
+  --info: #2b7fc4;
+  --shadow: 0 4px 20px rgba(20, 24, 40, 0.12);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -239,3 +262,107 @@ tr:hover td { background: var(--bg-hover); }
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; background: var(--bg-hover); font-size: 11px; }
 .chip button { background: none; border: none; color: var(--text-faint); padding: 0; font-size: 13px; line-height: 1; }
 .chip button:hover { color: var(--error); }
+
+/* --------------------------------------------------------------- onboarding */
+.welcome {
+  background: linear-gradient(120deg, rgba(109, 94, 252, 0.18), rgba(109, 94, 252, 0.04));
+  border: 1px solid var(--border-bright);
+}
+.welcome h3 { font-size: 18px; margin-bottom: 6px; }
+
+.checklist { display: flex; flex-direction: column; gap: 8px; }
+.step {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.step.done { border-color: rgba(72, 187, 120, 0.35); }
+.step.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.step.blocked { opacity: 0.7; }
+.step-mark {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+  background: var(--bg-hover); color: var(--text-dim);
+}
+.step.done .step-mark { background: var(--success); color: #fff; }
+.step.current .step-mark { background: var(--accent); color: var(--accent-contrast); }
+.step-body { flex: 1; min-width: 0; }
+.step-title { font-size: 13px; font-weight: 600; }
+.step-desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+/* ------------------------------------------------------------------ callouts */
+.callout {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg-elevated);
+}
+.callout.info { border-left: 3px solid var(--info); }
+.callout.success { border-left: 3px solid var(--success); }
+.callout.warning { border-left: 3px solid var(--warning); }
+.callout.error { border-left: 3px solid var(--error); }
+.callout-icon { font-size: 16px; line-height: 1.2; }
+.callout-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.callout-body { font-size: 12.5px; color: var(--text-dim); }
+.callout-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* --------------------------------------------------------------- mode toggle */
+.segmented { display: inline-flex; border: 1px solid var(--border-bright); border-radius: 20px; overflow: hidden; }
+.segmented button {
+  border: none; background: transparent; color: var(--text-dim);
+  padding: 5px 14px; font-size: 12px; font-weight: 600;
+}
+.segmented button.active { background: var(--accent); color: var(--accent-contrast); }
+
+/* --------------------------------------------------------------------- help */
+.help-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.faq { border-bottom: 1px solid var(--border); padding: 12px 0; }
+.faq:last-child { border-bottom: none; }
+.faq-q { font-weight: 600; font-size: 13px; }
+.faq-a { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; }
+
+/* --------------------------------------------------------------- dashboard */
+.hero {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  background: linear-gradient(120deg, rgba(109, 94, 252, 0.16), rgba(109, 94, 252, 0.03));
+  border: 1px solid var(--border-bright);
+}
+.hero .grow { flex: 1; min-width: 220px; }
+.hero .ring { flex-shrink: 0; }
+
+.action-tile {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  padding: 16px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-panel); text-align: left; width: 100%;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.action-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+.action-tile .t { font-size: 14px; font-weight: 600; }
+.action-tile .d { font-size: 12px; color: var(--text-dim); }
+.action-tile .ico { font-size: 20px; }
+
+.field-tip { position: relative; display: inline-flex; align-items: center; }
+.field-tip .tip {
+  visibility: hidden; opacity: 0; transition: opacity 0.12s;
+  position: absolute; left: 0; top: 100%; margin-top: 6px; z-index: 50;
+  width: 260px; padding: 8px 10px; font-size: 11.5px; line-height: 1.5;
+  background: var(--bg-hover); color: var(--text); border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow);
+}
+.field-tip:hover .tip { visibility: visible; opacity: 1; }
+.field-tip .q { width: 15px; height: 15px; border-radius: 50%; background: var(--bg-hover);
+  color: var(--text-dim); font-size: 10px; display: inline-flex; align-items: center;
+  justify-content: center; cursor: help; margin-left: 6px; }
+
+/* ------------------------------------------------------------- responsive */
+@media (max-width: 980px) {
+  .grid.cols-3, .grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 760px) {
+  :root { --sidebar-w: 64px; }
+  .sidebar { width: var(--sidebar-w); }
+  .brand h1, .brand .sub, .nav-section, .nav-item span.label { display: none; }
+  .nav-item { justify-content: center; }
+  .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+  .content { padding: 14px; }
+}

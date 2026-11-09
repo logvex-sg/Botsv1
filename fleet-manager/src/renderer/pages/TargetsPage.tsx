@@ -9,6 +9,7 @@ import { useStore } from '../lib/store';
 import { fleet } from '../lib/api';
 import { Button, Card, Empty, Field, Modal, Pill } from '../components/ui';
 import { relativeTime } from '../lib/format';
+import { toFriendlyError } from '../lib/errors';
 import type { TargetEntry } from '../../shared/types';
 
 interface Props { push: (message: string, tone?: string) => void }
@@ -48,7 +49,7 @@ export function TargetsPage({ push }: Props) {
       setEditing(null);
       await store.refreshTargets();
     } catch (error) {
-      push((error as Error).message, 'error');
+      push(toFriendlyError(error).title, 'error');
     }
   };
 

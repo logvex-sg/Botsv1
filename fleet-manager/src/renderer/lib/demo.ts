@@ -20,7 +20,7 @@ const now = Date.now();
 const settings: AppSettings = {
   apiEnabled: true, apiHost: '127.0.0.1', apiPort: 8791, hunterAddonUrl: 'http://127.0.0.1:8720',
   hunterAddonToken: '', autosave: true, notify: true, maxMemoryMb: 4096, backupIntervalMinutes: 60,
-  logLevel: 'info', theme: 'dark',
+  logLevel: 'info', theme: 'dark', uiMode: 'beginner',
 };
 
 const health: HealthReport = {
@@ -158,13 +158,29 @@ export function createDemoApi(): FleetApi {
   const api = {
     getHealth: async () => clone(health),
     getSettings: async () => clone(settings),
-    saveSettings: async (patch: Partial<AppSettings>) => ({ ...clone(settings), ...patch }),
+    saveSettings: async (patch: Partial<AppSettings>) => Object.assign(settings, patch),
     getApiToken: async () => 'demo-token-0123456789abcdef',
     regenerateApiToken: async () => 'demo-token-fedcba9876543210',
     getDiagnostics: async () => ({ host: '6b6t.org', dns: { host: '6b6t.org', addresses: ['1.2.3.4'], durationMs: 12, error: null }, latency: { reachable: true, latencyMs: 38, error: null }, interfaces: [{ name: 'eth0', address: '10.0.0.5', family: 'IPv4', internal: false }], timestamp: now }),
     exportConfig: async () => ({ path: '/tmp/logvex-config.json' }),
     importConfig: async () => ({ imported: 0 }),
     backupDatabase: async () => ({ path: '/tmp/logvex-backup.sqlite' }),
+
+    getSetupReport: async () => ({
+      ready: false,
+      completion: 0.5,
+      nextStepId: 'deploy',
+      nextHint: 'Launch a deployment to bring your bots online.',
+      steps: [
+        { id: 'server', title: 'Add a server', description: 'Tell the app which server your bots should join.', status: 'done', page: 'servers', actionLabel: 'Add server', optional: false },
+        { id: 'account', title: 'Add an account', description: 'Each bot needs its own account.', status: 'done', page: 'accounts', actionLabel: 'Add account', optional: false },
+        { id: 'credential', title: 'Add a password where needed', description: 'Online servers need a stored password.', status: 'todo', page: 'accounts', actionLabel: 'Fix accounts', optional: false },
+        { id: 'deploy', title: 'Start your bots', description: 'Launch a deployment to bring your bots online.', status: 'todo', page: 'tasks', actionLabel: 'Start bots', optional: false },
+        { id: 'hunter', title: 'Connect Logvex Hunter (optional)', description: 'Link the Hunter addon.', status: 'done', page: 'settings', actionLabel: 'Connect', optional: true },
+      ],
+    }),
+    quickSetup: async (input: { username: string; host: string }) => ({ serverProfileId: 'srv-1', accountId: 'acc-1', created: { server: false, account: true } }),
+    quickDeploy: async () => ({ ok: true, report: clone(preview.report), deploymentId: 'dep-1' }),
 
     listAccounts: async () => clone(accounts),
     createAccount: async (input: Partial<Account>) => ({ ...clone(accounts[0]), ...input, id: `acc-${Date.now()}`, deployable: true, blockedReason: null } as AccountView),

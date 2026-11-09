@@ -236,13 +236,18 @@ export interface AppSettings {
   apiEnabled: boolean;
   hunterAddonUrl: string;
   hunterAddonToken: string;
-  theme: 'dark';
+  theme: ThemeName;
+  /** 'beginner' hides advanced controls and uses simpler language. */
+  uiMode: UiMode;
   autosave: boolean;
   backupIntervalMinutes: number;
   maxMemoryMb: number;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   notify: boolean;
 }
+
+export type ThemeName = 'dark' | 'light';
+export type UiMode = 'beginner' | 'advanced';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   apiPort: 8787,
@@ -251,12 +256,56 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hunterAddonUrl: 'http://127.0.0.1:8720',
   hunterAddonToken: '',
   theme: 'dark',
+  uiMode: 'beginner',
   autosave: true,
   backupIntervalMinutes: 30,
   maxMemoryMb: 4096,
   logLevel: 'info',
   notify: true,
 };
+
+/** One step of the guided first-run checklist shown on the dashboard. */
+export interface SetupStep {
+  id: string;
+  title: string;
+  description: string;
+  status: 'done' | 'todo' | 'blocked';
+  /** Page id the user should visit to complete this step. */
+  page: string;
+  actionLabel: string;
+  /** Optional steps never block the fleet from being ready. */
+  optional: boolean;
+}
+
+export interface SetupReport {
+  ready: boolean;
+  /** Fraction (0..1) of required steps that are complete. */
+  completion: number;
+  steps: SetupStep[];
+  nextStepId: string | null;
+  /** Human sentence describing what to do next. */
+  nextHint: string;
+}
+
+export interface QuickSetupInput {
+  username: string;
+  host: string;
+  port?: number;
+  version?: string;
+  role?: BotRole;
+}
+
+export interface QuickDeployInput {
+  accountIds: string[];
+  serverProfileId?: string | null;
+  role?: BotRole;
+  maxConcurrent?: number;
+  name?: string;
+  /** Explicitly authorise combat testing for HUNTER accounts (never implied). */
+  authorizeCombat?: boolean;
+  /** Optional target allow-list applied to HUNTER accounts. */
+  allowlist?: string[];
+}
 
 export interface HealthReport {
   ok: boolean;

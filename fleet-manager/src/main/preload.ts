@@ -22,6 +22,11 @@ const api = {
   importConfig: () => invoke('system:import'),
   backupDatabase: () => invoke('system:backup'),
 
+  // guided setup
+  getSetupReport: () => invoke('system:setup'),
+  quickSetup: (input: unknown) => invoke('system:quick-setup', input),
+  quickDeploy: (input: unknown) => invoke('system:quick-deploy', input),
+
   // accounts
   listAccounts: () => invoke('accounts:list'),
   createAccount: (input: unknown) => invoke('accounts:create', input),

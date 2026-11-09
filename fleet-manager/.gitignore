@@ -3,3 +3,5 @@ dist/
 release/
 *.log
 coverage/
+
+.chrome-profile/

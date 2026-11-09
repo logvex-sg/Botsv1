@@ -9,6 +9,7 @@ import { useStore } from '../lib/store';
 import { fleet } from '../lib/api';
 import { Button, Card, Empty, Field, Modal, Pill } from '../components/ui';
 import type { EquipmentProfileRecord } from '../../shared/types';
+import { toFriendlyError } from '../lib/errors';
 import type { EquipmentEvaluation, InventorySnapshot } from '../../main/services/equipment/equipment-manager';
 
 interface Props { push: (message: string, tone?: string) => void }
@@ -49,7 +50,7 @@ export function GearerPage({ push }: Props) {
       setEditing(null);
       await store.refresh();
     } catch (error) {
-      push((error as Error).message, 'error');
+      push(toFriendlyError(error).title, 'error');
     }
   };
 

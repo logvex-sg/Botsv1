@@ -9,6 +9,7 @@ import { useStore } from '../lib/store';
 import { fleet } from '../lib/api';
 import { Button, Card, Dot, Empty, Field, Modal, Pill, ProgressBar, RolePill, Expandable } from '../components/ui';
 import { formatUptime, formatBytes } from '../lib/format';
+import { toFriendlyError } from '../lib/errors';
 import type { RoleDefinition } from '../../main/services/roles/roles';
 import type { InstanceRecord } from '../../shared/types';
 
@@ -40,7 +41,7 @@ export function InstancesPage({ push }: Props) {
       push(`${kind} requested`, 'success');
       await store.refreshInstances();
     } catch (error) {
-      push((error as Error).message, 'error');
+      push(toFriendlyError(error).title, 'error');
     }
   };
 

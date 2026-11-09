@@ -36,6 +36,9 @@ export function registerIpc(context: AppContext, api: ApiServer, getWindow: () =
   });
   handle('system:export', async () => exportConfig(context));
   handle('system:import', async () => importConfig(context, getWindow()));
+  handle('system:setup', () => context.setupReport());
+  handle('system:quick-setup', (input: import('../../shared/types').QuickSetupInput) => context.quickSetup(input));
+  handle('system:quick-deploy', (input: import('../../shared/types').QuickDeployInput) => context.quickDeploy(input));
   handle('system:backup', async () => {
     const win = getWindow();
     const result = win

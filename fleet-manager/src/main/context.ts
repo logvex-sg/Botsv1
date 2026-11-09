@@ -36,8 +36,9 @@ import { EquipmentManager } from './services/equipment/equipment-manager';
 import { WorkerSupervisor } from './mineflayer/worker-supervisor';
 import { createCredentialVault, type CredentialVault } from './security/credential-vault';
 import { ROLE_DEFINITIONS, roleDefinition } from './services/roles/roles';
+import { buildSetupReport, type SetupSnapshot } from './services/setup/setup-advisor';
 import { join as joinPath } from 'node:path';
-import { BOT_ROLES, DEFAULT_SETTINGS, type Account, type AppSettings, type BotRole, type DeploymentConfig, type Group, type HealthReport, type ServerProfile, type TargetEntry } from '../shared/types';
+import { BOT_ROLES, DEFAULT_SETTINGS, type Account, type AppSettings, type BotRole, type DeploymentConfig, type Group, type HealthReport, type QuickDeployInput, type QuickSetupInput, type ServerProfile, type SetupReport, type TargetEntry } from '../shared/types';
 
 export interface AppContextOptions {
   databasePath?: string;
@@ -220,6 +221,129 @@ export class AppContext {
       database: { ok: true, path: this.db.path },
       hunter: { connected: health.ok, url: this.hunter.baseUrl, lastSync: this.hunter.lastSyncAt() },
     };
+  }
+
+  /** Builds the guided first-run checklist from the current fleet state. */
+  async setupReport(): Promise<SetupReport> {
+    const health = await this.hunter.health().catch(() => ({ ok: false }));
+    const accounts = await this.accounts.listWithStatus();
+    const snapshot: SetupSnapshot = {
+      servers: this.servers.list().length,
+      accounts: accounts.length,
+      deployableAccounts: accounts.filter((a) => a.deployable).length,
+      instances: this.instances.list().length,
+      runningInstances: this.instances.runningCount(),
+      hunterConnected: health.ok,
+    };
+    return buildSetupReport(snapshot);
+  }
+
+  /**
+   * One-click setup: creates the server profile and account (if missing) so a brand-new user can
+   * go from an empty app to a deployable account in a single step. Existing records are reused
+   * rather than duplicated.
+   */
+  async quickSetup(input: QuickSetupInput): Promise<{ serverProfileId: string; accountId: string; created: { server: boolean; account: boolean } }> {
+    const username = input.username.trim();
+    const host = input.host.trim();
+    if (!username) throw new Error('Enter a username for the account.');
+    if (!host) throw new Error('Enter the server address your bots should join.');
+
+    let server = this.servers.list().find((s) => s.host === host);
+    let createdServer = false;
+    if (!server) {
+      server = this.servers.create({
+        name: host,
+        host,
+        port: input.port ?? 25565,
+        version: input.version ?? '',
+        authMode: 'offline',
+        connectionTimeoutMs: 15000,
+        options: {},
+      });
+      createdServer = true;
+    }
+
+    let account = this.accountRepo.findByUsername(username);
+    let createdAccount = false;
+    if (!account) {
+      account = await this.accounts.create({
+        username,
+        displayName: username,
+        authMode: 'offline',
+        role: input.role ?? 'HUNTER',
+        serverProfileId: server.id,
+      } as never);
+      createdAccount = true;
+    }
+
+    this.emitEvent('SYSTEM', `Quick setup prepared ${username} on ${host}`);
+    return { serverProfileId: server.id, accountId: account.id, created: { server: createdServer, account: createdAccount } };
+  }
+
+  /**
+   * One-click deploy: creates a deployment for the given accounts (using each account's own server
+   * profile unless one is given) and starts it immediately. This is the "just make my bots run"
+   * path for beginners — no queue building required.
+   */
+  async quickDeploy(input: QuickDeployInput): Promise<{ ok: boolean; report: import('../shared/types').ValidationReport; deploymentId?: string }> {
+    const ids = [...new Set(input.accountIds.filter(Boolean))];
+    if (ids.length === 0) {
+      return { ok: false, report: { ok: false, issues: [{ level: 'error', code: 'empty', message: 'Select at least one account to start.' }] } };
+    }
+
+    const accounts = ids.map((id) => this.accountRepo.get(id)).filter((a): a is Account => Boolean(a));
+    if (accounts.length === 0) {
+      return { ok: false, report: { ok: false, issues: [{ level: 'error', code: 'account-missing', message: 'None of the selected accounts could be found.' }] } };
+    }
+
+    const serverProfileId = input.serverProfileId
+      ?? accounts.find((a) => a.serverProfileId)?.serverProfileId
+      ?? this.servers.list()[0]?.id
+      ?? null;
+
+    if (!serverProfileId) {
+      return { ok: false, report: { ok: false, issues: [{ level: 'error', code: 'server', message: 'Add a server first so the bots know where to connect.' }] } };
+    }
+
+    const entries = accounts.map((account, index) => {
+      const role = input.role ?? account.role;
+      const roleConfig: Record<string, unknown> = {};
+      if (role === 'HUNTER') {
+        // Combat stays off unless the caller explicitly authorises it.
+        roleConfig.authorizedCombat = input.authorizeCombat === true;
+        if (input.allowlist && input.allowlist.length > 0) roleConfig.allowlist = input.allowlist;
+      }
+      return {
+        accountId: account.id,
+        role,
+        instanceName: `${account.username}`.slice(0, 24) || `bot-${index + 1}`,
+        delayMs: index * 2000,
+        roleConfig,
+      };
+    });
+
+    const config = this.deployments.create({
+      name: input.name ?? `Quick start (${accounts.length} bot${accounts.length === 1 ? '' : 's'})`,
+      description: 'Created from the dashboard one-click start.',
+      serverProfileId,
+      entries,
+      maxConcurrent: input.maxConcurrent ?? 1,
+      connectionTimeoutMs: 15000,
+      retryAttempts: 2,
+      retryDelayMs: 5000,
+      manualApproval: false,
+      pauseBetweenMs: 4000,
+      resourceLimitMb: 4096,
+      notifyOnEvent: true,
+    });
+
+    const result = await this.engine.start(config);
+    if (!result.ok) {
+      // Keep the config so the user can fix and retry, but report why it did not start.
+      return { ok: false, report: result.report, deploymentId: config.id };
+    }
+    return { ok: true, report: result.report, deploymentId: config.id };
   }
 
   /** Polls an instance until it is RUNNING or the timeout elapses. */

@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { fleet } from './api';
 import type {
   Account, AppSettings, DeploymentConfig, EquipmentProfileRecord, FleetEvent, Group,
-  HealthReport, InstanceRecord, NotificationItem, ServerProfile, StasisLocation, TargetEntry,
+  HealthReport, InstanceRecord, NotificationItem, ServerProfile, SetupReport, StasisLocation, TargetEntry,
 } from '../../shared/types';
 import type { AccountView } from '../../main/services/accounts/account-manager';
 import type { RuntimeInstance } from '../../main/services/instances/instance-manager';
@@ -30,6 +30,7 @@ export interface AppState {
   events: FleetEvent[];
   notifications: NotificationItem[];
   hunterConnected: boolean;
+  setup: SetupReport | null;
 }
 
 const initialState: AppState = {
@@ -48,6 +49,7 @@ const initialState: AppState = {
   events: [],
   notifications: [],
   hunterConnected: false,
+  setup: null,
 };
 
 interface StoreValue extends AppState {
@@ -57,6 +59,7 @@ interface StoreValue extends AppState {
   refreshTargets: () => Promise<void>;
   refreshDeployments: () => Promise<void>;
   refreshEvents: () => Promise<void>;
+  refreshSetup: () => Promise<void>;
   emergencyStop: () => Promise<void>;
   clearEmergency: () => Promise<void>;
 }
@@ -69,7 +72,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [health, settings, accounts, servers, groups, instances, targets, stasis, equipment, deployments, events, notifications, hunter] =
+      const [health, settings, accounts, servers, groups, instances, targets, stasis, equipment, deployments, events, notifications, hunter, setup] =
         await Promise.all([
           fleet.getHealth(),
           fleet.getSettings(),
@@ -84,11 +87,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           fleet.listEvents(200),
           fleet.listNotifications(),
           fleet.hunterStatus().catch(() => ({ connected: false, url: '', lastSync: null })),
+          fleet.getSetupReport().catch(() => null),
         ]);
       if (!mounted.current) return;
       setState({
         ready: true, error: null, health, settings, accounts, servers, groups, instances,
         targets, stasis, equipment, deployments, events, notifications, hunterConnected: hunter.connected,
+        setup,
       });
     } catch (error) {
       if (!mounted.current) return;
@@ -115,6 +120,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const refreshEvents = useCallback(async () => {
     const [events, notifications] = await Promise.all([fleet.listEvents(200), fleet.listNotifications()]);
     if (mounted.current) setState((prev) => ({ ...prev, events, notifications }));
+  }, []);
+
+  const refreshSetup = useCallback(async () => {
+    const setup = await fleet.getSetupReport().catch(() => null);
+    if (mounted.current) setState((prev) => ({ ...prev, setup }));
   }, []);
 
   const emergencyStop = useCallback(async () => {
@@ -157,8 +167,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const value = useMemo<StoreValue>(
-    () => ({ ...state, refresh, refreshInstances, refreshAccounts, refreshTargets, refreshDeployments, refreshEvents, emergencyStop, clearEmergency }),
-    [state, refresh, refreshInstances, refreshAccounts, refreshTargets, refreshDeployments, refreshEvents, emergencyStop, clearEmergency],
+    () => ({ ...state, refresh, refreshInstances, refreshAccounts, refreshTargets, refreshDeployments, refreshEvents, refreshSetup, emergencyStop, clearEmergency }),
+    [state, refresh, refreshInstances, refreshAccounts, refreshTargets, refreshDeployments, refreshEvents, refreshSetup, emergencyStop, clearEmergency],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

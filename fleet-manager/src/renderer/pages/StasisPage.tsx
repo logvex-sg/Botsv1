@@ -8,6 +8,7 @@ import { useStore } from '../lib/store';
 import { fleet } from '../lib/api';
 import { Button, Card, Empty, Field, Modal, Pill } from '../components/ui';
 import { formatDateTime } from '../lib/format';
+import { toFriendlyError } from '../lib/errors';
 import type { StasisLocation, StasisState } from '../../shared/types';
 import type { StasisChange } from '../../main/services/stasis/stasis-manager';
 
@@ -41,7 +42,7 @@ export function StasisPage({ push }: Props) {
       setEditing(null);
       await store.refresh();
     } catch (error) {
-      push((error as Error).message, 'error');
+      push(toFriendlyError(error).title, 'error');
     }
   };
 

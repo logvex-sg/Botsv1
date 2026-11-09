@@ -9,6 +9,7 @@ import { useStore } from '../lib/store';
 import { fleet } from '../lib/api';
 import { Button, Card, Empty, Field, Modal, Pill } from '../components/ui';
 import type { ServerProfile } from '../../shared/types';
+import { toFriendlyError } from '../lib/errors';
 import type { DiagnosticsReport } from '../../main/services/network/network-diagnostics';
 
 interface Props { push: (message: string, tone?: string) => void }
@@ -33,7 +34,7 @@ export function ServersPage({ push }: Props) {
       setEditing(null);
       await store.refresh();
     } catch (error) {
-      push((error as Error).message, 'error');
+      push(toFriendlyError(error).title, 'error');
     }
   };
 
@@ -49,7 +50,7 @@ export function ServersPage({ push }: Props) {
       const report = await fleet.testServer(server.id);
       setDiagnostics({ name: server.name, report });
     } catch (error) {
-      push((error as Error).message, 'error');
+      push(toFriendlyError(error).title, 'error');
     } finally {
       setTesting(null);
     }

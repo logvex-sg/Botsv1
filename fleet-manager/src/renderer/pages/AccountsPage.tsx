@@ -9,6 +9,7 @@ import { useStore } from '../lib/store';
 import { fleet } from '../lib/api';
 import { Button, Card, Empty, Field, Modal, Pill, RolePill, Dot } from '../components/ui';
 import { relativeTime } from '../lib/format';
+import { toFriendlyError } from '../lib/errors';
 import { BOT_ROLES, type Account, type AuthMode, type BotRole } from '../../shared/types';
 import type { AccountView } from '../../main/services/accounts/account-manager';
 
@@ -46,7 +47,7 @@ export function AccountsPage({ push }: Props) {
       setEditing(null);
       await store.refreshAccounts();
     } catch (error) {
-      push((error as Error).message, 'error');
+      push(toFriendlyError(error).title, 'error');
     }
   };
 
@@ -73,7 +74,7 @@ export function AccountsPage({ push }: Props) {
       push(`Credential stored for ${credentialFor.username}`, 'success');
       await store.refreshAccounts();
     } catch (error) {
-      push((error as Error).message, 'error');
+      push(toFriendlyError(error).title, 'error');
     }
   };
 

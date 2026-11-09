@@ -16,7 +16,10 @@ import type {
   HealthReport,
   InstanceRecord,
   NotificationItem,
+  QuickDeployInput,
+  QuickSetupInput,
   ServerProfile,
+  SetupReport,
   StasisLocation,
   TargetEntry,
   ValidationReport,
@@ -57,6 +60,11 @@ export interface FleetApi {
   exportConfig(): Promise<{ path: string }>;
   importConfig(): Promise<{ imported: number } | null>;
   backupDatabase(): Promise<{ path: string } | null>;
+
+  // guided setup (beginner onboarding)
+  getSetupReport(): Promise<SetupReport>;
+  quickSetup(input: QuickSetupInput): Promise<{ serverProfileId: string; accountId: string; created: { server: boolean; account: boolean } }>;
+  quickDeploy(input: QuickDeployInput): Promise<{ ok: boolean; report: ValidationReport; deploymentId?: string }>;
 
   // accounts
   listAccounts(): Promise<AccountView[]>;

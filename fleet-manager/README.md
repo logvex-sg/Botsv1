@@ -1,54 +1,66 @@
 # Logvex Fleet Manager
 
-A desktop command center for running and supervising a fleet of Minecraft bot instances. It
-manages accounts, servers, groups and deployments, assigns each bot a role
-(**GEARER**, **STASIS** or **HUNTER**), tracks a target database, and connects to one or more
-**LogVex Hunter** Meteor clients over their companion API.
+A desktop command center for running and supervising a fleet of Minecraft bot instances. Add an
+account and a server, press **Start**, and the app handles connecting, reconnecting and reporting.
+Bots can take one of three roles (**GEARER**, **STASIS** or **HUNTER**), and the app can connect to
+one or more **LogVex Hunter** Meteor clients over their companion API.
 
 Built with **Electron + React + TypeScript + Vite**. Each bot runs in its own isolated Node worker
 process, so one crashing or hanging bot never takes down the application.
 
-![Overview](docs/screenshots/01-overview.png)
+![Dashboard](docs/screenshots/01-dashboard.png)
+
+---
+
+## Getting started in 60 seconds
+
+1. **Open the app.** The Dashboard tells you exactly what to do next.
+2. **Add an account.** Use *Quick start* on the Dashboard (or the Accounts page) to add an account
+   and a server in one step.
+3. **Press Start.** Pick the accounts you want online and press **Start my bots**.
+4. **Watch it work.** The Dashboard and the Activity page show live status, events and statistics.
+
+Everything has sensible defaults. You never have to edit a configuration file to get going.
+
+### Beginner and Advanced modes
+
+The app starts in **Beginner mode**: simple screens, plain language and only the options that
+matter. Switch to **Advanced mode** (top-right, or in Settings) to reveal the full deployment
+builder, queue editor, role configuration and technical settings. Both modes are the same
+application — no features are removed, only revealed.
 
 ---
 
 ## Features
 
-### Command Center
-- **Overview** — fleet health at a glance: instance counts, connection states, recent events and
-  live notifications.
-- **Deployment Center** — build a deployment from accounts, a server profile and roles; validate
-  it, preview the plan, then start, pause, resume, cancel, retry individual items and export/import
-  presets.
-- **Instance Manager** — create, start, stop, restart and command individual bot instances; view
-  per-instance logs and metrics.
-- **Account Manager** — register offline/Microsoft/Mojang accounts, store credentials in the OS
-  keychain (with an encrypted-file fallback), and prepare logins.
+Navigation is deliberately small — seven sections, each with a clear job:
 
-### Bot Roles
-- **Gearer Manager** — equipment profiles and inventory evaluation for GEARER bots.
-- **Stasis Manager** — track stasis locations and their state (READY / UNAVAILABLE / ACTIVE /
-  UNKNOWN / ERROR) with a change history.
-- **Hunter Manager** — the bridge to LogVex Hunter clients: connection health, live snapshot
-  (bot state, players, targets, modules, stats) and remote commands.
-
-### Data
-- **Target Database** — a local target list that syncs bidirectionally with connected Hunter
-  clients.
-- **Event Center** — a searchable stream of fleet events and a notification inbox.
-- **Server Profiles** — the servers the bots connect to.
-
-### System
-- **Configuration** — application settings, API token, import/export of the whole configuration.
-- **Logs & Statistics** — aggregated logs and statistics.
+- **Dashboard** — what is happening now, a guided setup checklist, one-click *Start my bots*, the
+  live state of every bot and recent activity.
+- **Main Features** — the fleet's capabilities behind one set of tabs: **Hunter** (LogVex Hunter
+  link and combat readiness), **Targets** (the shared target list), **Gear** (equipment profiles
+  and warnings), **Stasis** (defensive locations) and **Servers** (connection profiles).
+- **Tasks** — start and manage bots. Beginner mode is a single "pick and press start" flow;
+  Advanced mode exposes the full deployment builder, queue, validation preview and live monitor.
+- **Accounts** — register offline/Microsoft accounts, store credentials in the OS keychain (with an
+  encrypted-file fallback) and prepare logins.
+- **Activity** — the event feed, notification inbox, statistics and live per-bot logs.
+- **Settings** — grouped, plain-language options with tooltips, an optional Advanced section and a
+  **Restore defaults** button.
+- **Help** — a short guide, a glossary and answers to common questions.
 
 ### Cross-cutting
-- **Emergency stop** — one control halts every instance, cancels deployments and engages the
-  coordinator's stop state; per-instance stop is also available.
+- **One-click operations** — *Quick start* creates a server + account; *Start my bots* builds and
+  launches a deployment; *Stop everything* halts the whole fleet.
+- **Friendly errors** — technical failures are translated into a plain explanation and a suggested
+  fix, with a **Copy technical details** option for debugging.
+- **Emergency stop** — one control halts every instance and cancels deployments; every destructive
+  action asks for confirmation first.
 - **Local HTTP + WebSocket API** — the same functionality as the UI, for automation, at
   `/api/v1/*` with `/events` for the event stream (token-authenticated).
 - **Resilient Hunter integration** — an unreachable addon degrades to "disconnected" instead of
   throwing into the UI.
+- **Light and dark themes**, remembered between sessions, with a responsive layout.
 
 ---
 
@@ -56,18 +68,14 @@ process, so one crashing or hanging bot never takes down the application.
 
 | | |
 | --- | --- |
-| ![Deployment](docs/screenshots/02-deployment.png) | ![Instances](docs/screenshots/03-instances.png) |
-| Deployment Center | Instance Manager |
-| ![Accounts](docs/screenshots/04-accounts.png) | ![Gearer](docs/screenshots/05-gearer.png) |
-| Account Manager | Gearer Manager |
-| ![Stasis](docs/screenshots/06-stasis.png) | ![Hunter](docs/screenshots/07-hunter.png) |
-| Stasis Manager | Hunter Manager |
-| ![Targets](docs/screenshots/08-targets.png) | ![Events](docs/screenshots/09-events.png) |
-| Target Database | Event Center |
-| ![Servers](docs/screenshots/10-servers.png) | ![Settings](docs/screenshots/11-settings.png) |
-| Server Profiles | Configuration |
-| ![Logs](docs/screenshots/12-logs.png) | |
-| Logs & Statistics | |
+| ![Dashboard](docs/screenshots/01-dashboard.png) | ![Features](docs/screenshots/02-features-hunter.png) |
+| Dashboard | Main Features |
+| ![Tasks](docs/screenshots/03-tasks.png) | ![Accounts](docs/screenshots/04-accounts.png) |
+| Tasks | Accounts & Profiles |
+| ![Activity](docs/screenshots/05-activity.png) | ![Settings](docs/screenshots/06-settings.png) |
+| Activity | Settings |
+| ![Help](docs/screenshots/07-help.png) | |
+| Help | |
 
 The screenshots are captured from the renderer in demo mode (`?demo`), so they render without a
 live backend. To regenerate them:
@@ -78,8 +86,10 @@ npm run screenshots                                   # in another
 ```
 
 The script (`scripts/capture-screenshots.mjs`) drives headless Chromium over the DevTools
-Protocol, visiting each page via `?demo&page=<id>` at 1600x1000. Set `CHROME` if Chromium is not
-on the default path, or `BASE_URL` to point at a different dev server.
+Protocol, visiting each page via `?demo&page=<id>` at 1600x1000. Old page ids (such as
+`?page=overview` or `?page=deployment`) are still accepted and redirect to the matching new
+section. Set `CHROME` if Chromium is not on the default path, or `BASE_URL` to point at a different
+dev server.
 
 ---
 

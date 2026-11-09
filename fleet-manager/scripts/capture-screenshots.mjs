@@ -25,18 +25,13 @@ const BASE_URL = process.env.BASE_URL ?? 'http://127.0.0.1:5173';
 const PORT = Number(process.env.DEBUG_PORT ?? 9333);
 
 const PAGES = [
-  ['01-overview', 'overview'],
-  ['02-deployment', 'deployment'],
-  ['03-instances', 'instances'],
+  ['01-dashboard', 'dashboard'],
+  ['02-features-hunter', 'features'],
+  ['03-tasks', 'tasks'],
   ['04-accounts', 'accounts'],
-  ['05-gearer', 'gearer'],
-  ['06-stasis', 'stasis'],
-  ['07-hunter', 'hunter'],
-  ['08-targets', 'targets'],
-  ['09-events', 'events'],
-  ['10-servers', 'servers'],
-  ['11-settings', 'settings'],
-  ['12-logs', 'logs'],
+  ['05-activity', 'activity'],
+  ['06-settings', 'settings'],
+  ['07-help', 'help'],
 ];
 
 function findChrome() {

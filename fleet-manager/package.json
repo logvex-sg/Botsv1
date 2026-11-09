@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "Logvex Fleet Manager - multi-instance Minecraft bot management desktop application",
   "main": "dist/main/index.js",
-  "author": "Logvex",
+  "author": {
+    "name": "Logvex",
+    "email": "logvex@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/logvex-sg/Botsv1",
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -22,7 +26,7 @@
     "package:win": "npm run build && electron-builder --win nsis"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
+    "better-sqlite3": "^11.10.0",
     "mineflayer": "^4.23.0",
     "ws": "^8.18.0"
   },
@@ -56,11 +60,24 @@
       "package.json"
     ],
     "linux": {
-      "target": ["AppImage", "deb"],
-      "category": "Utility"
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility",
+      "maintainer": "Logvex <logvex@users.noreply.github.com>"
     },
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     }
+  },
+  "allowScripts": {
+    "better-sqlite3@11.10.0": true,
+    "electron@33.4.11": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.21.5": true,
+    "keytar@7.9.0": true
   }
 }
