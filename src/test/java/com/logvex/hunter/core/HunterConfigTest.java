@@ -44,6 +44,46 @@ class HunterConfigTest {
     }
 
     @Test
+    void swarmSettingsRoundTrip() {
+        HunterConfig config = new HunterConfig();
+        assertEquals(6969, config.swarmHostPort());
+        assertEquals("", config.swarmHostToken());
+        assertTrue(config.swarmHostMode());
+        assertTrue(config.swarmAutoConnect());
+        assertFalse(config.swarmAllowCombatBroadcast());
+
+        config.setSwarmHostPort(7000);
+        config.setSwarmHostToken("fleet-secret");
+        config.setSwarmHostAllowRemote(true);
+        config.setSwarmWorkerHost("10.0.0.5");
+        config.setSwarmWorkerPort(7001);
+        config.setSwarmAllowCombatBroadcast(true);
+        config.setSwarmAutoConnect(false);
+        config.setSwarmHostMode(false);
+
+        HunterConfig reloaded = HunterConfig.fromJson(config.toJson());
+        assertEquals(7000, reloaded.swarmHostPort());
+        assertEquals("fleet-secret", reloaded.swarmHostToken());
+        assertTrue(reloaded.swarmHostAllowRemote());
+        assertEquals("10.0.0.5", reloaded.swarmWorkerHost());
+        assertEquals(7001, reloaded.swarmWorkerPort());
+        assertTrue(reloaded.swarmAllowCombatBroadcast());
+        assertFalse(reloaded.swarmAutoConnect());
+        assertFalse(reloaded.swarmHostMode());
+    }
+
+    @Test
+    void swarmPortIsClampedAndHostIsNeverBlank() {
+        HunterConfig config = new HunterConfig();
+        config.setSwarmHostPort(-5);
+        assertEquals(1, config.swarmHostPort());
+        config.setSwarmWorkerPort(999_999);
+        assertEquals(65535, config.swarmWorkerPort());
+        config.setSwarmWorkerHost("   ");
+        assertEquals("127.0.0.1", config.swarmWorkerHost());
+    }
+
+    @Test
     void portIsClamped() {
         HunterConfig config = new HunterConfig();
         config.setCompanionPort(0);

@@ -23,10 +23,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
     and a broadcast box.
   - **Swarm HUD** (`logvex-swarm`): host/worker state, port and live worker list.
   - Chat commands: `.swarm host|join|stop|connections|send|broadcast|kick|token|port|status|gui`.
-  - **Safety.** Broadcasts are limited to read-only and cosmetic commands; lifecycle changes and
-    anything that would arm combat on the whole fleet are refused unless `allow-combat-broadcast` is
-    on. `emergency-stop` always broadcasts. The link requires a shared token and binds to loopback
-    unless `allow-remote` is enabled.
+  - **Safety.** Broadcasts are limited to read-only, cosmetic and non-combat tuning commands
+    (`status`, `save`, `settings`, `set` of a non-combat setting, `profile`, `hud`, `target`,
+    `notify`); lifecycle changes and anything that would arm combat on the whole fleet are refused
+    unless `allow-combat-broadcast` is on. A single-worker send that arms combat still warns.
+    `emergency-stop` always broadcasts, and the host sends it to the fleet on its own emergency stop
+    before the link is torn down. The link requires a shared token and binds to loopback unless
+    `allow-remote` is enabled.
   - Config gains `swarmHostPort`, `swarmHostToken`, `swarmHostAllowRemote`, `swarmWorkerHost`,
     `swarmWorkerPort`, `swarmAllowCombatBroadcast`, `swarmAutoConnect` and `swarmHostMode`.
 - **Full remote control surface for the Hunter, shared by chat and the Fleet Manager.** A new
