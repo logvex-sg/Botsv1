@@ -92,6 +92,24 @@ describe('HTTP API', () => {
   });
 });
 
+describe('multiverse and statistics routes', () => {
+  it('lists the multiverse collections', async () => {
+    for (const path of ['/api/v1/servers', '/api/v1/templates', '/api/v1/presets', '/api/v1/schedules', '/api/v1/rules', '/api/v1/containers', '/api/v1/audit', '/api/v1/tags']) {
+      const response = await get(path);
+      expect(response.status, path).toBe(200);
+    }
+  });
+
+  it('serves a statistics report shaped like the renderer expects', async () => {
+    const response = await get('/api/v1/statistics');
+    expect(response.status).toBe(200);
+    const body = await response.json() as { workers: { total: number }; tasks: { completion: { value: unknown } }; activity: { buckets: unknown[] } };
+    expect(body.workers.total).toBe(0);
+    expect(body.tasks.completion.value).toBeNull();
+    expect(body.activity.buckets).toHaveLength(24);
+  });
+});
+
 describe('worker control route', () => {
   it('forwards a control action to a connected worker and validates the action', async () => {
     const port = await ctx.context.workers.server.start();

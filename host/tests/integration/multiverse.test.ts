@@ -205,7 +205,7 @@ describe('containers and inventory history', () => {
   it('saves a container and updates it in place on re-inspection', () => {
     const mv = ctx.context.multiverse;
     const first = mv.saveContainer({ workerId: 'w-1', label: 'Chest', x: 1, y: 2, z: 3, dimension: 'overworld', items: [], inspectedAt: 1 });
-    const second = mv.saveContainer({ workerId: 'w-1', label: 'Chest', x: 1, y: 2, z: 3, dimension: 'overworld', items: [{ id: 'minecraft:stone', name: 'Stone', count: 5 }], inspectedAt: 2 });
+    const second = mv.saveContainer({ workerId: 'w-1', label: 'Chest', x: 1, y: 2, z: 3, dimension: 'overworld', items: [{ id: 'minecraft:stone', name: 'Stone', count: 5, slot: 0, damage: 0, maxDamage: 0, damageable: false }], inspectedAt: 2 });
     expect(second.id).toBe(first.id);
     expect(mv.listContainers('w-1')).toHaveLength(1);
     expect(mv.listContainers('w-1')[0].items).toHaveLength(1);
@@ -219,7 +219,6 @@ describe('containers and inventory history', () => {
     expect(trend.map((point) => point.count)).toEqual([10, 25]);
   });
 });
-
 describe('audit trail', () => {
   it('records an entry for a mutating operation', () => {
     const mv = ctx.context.multiverse;

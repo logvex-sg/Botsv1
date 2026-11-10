@@ -100,6 +100,15 @@ Navigation is small on purpose — each page has one job:
   optional target coordinates, mode and minimum height) to one worker or many, with a live history
   (status, duration, result/error). Mutating kinds are exclusive per worker, so a flight and a regear
   can never race.
+- **Multiverse** — the organisational half of the product, in seven tabs. **Servers** holds named
+  server profiles (host, port, version, environment, tags) that workers can be assigned to.
+  **Templates** are group blueprints that create a group and its default task and equipment presets
+  in one step. **Task presets** are reusable dispatch bundles you can run against a preset's own
+  target set. **Schedules** fire a preset on an interval or a daily time, with a missed-fire count.
+  **Automation** maps a host event (worker registered, task failed, and so on) to an action with an
+  optional cooldown and run cap. **Containers** lists the container captures workers have reported.
+  **Audit** is the append-only trail of every create, update and delete, so a change is never
+  anonymous. Every tab talks to the real service through the preload bridge.
 - **Consoles** — the log lines a worker forwarded about itself (connect, register, task outcomes,
   errors), newest last, with a clear button. This is the client's own view, not the Host's guess.
 - **Inventory** — a worker's last *reported* inventory (with its capture time) and a fleet-wide item
@@ -108,6 +117,12 @@ Navigation is small on purpose — each page has one job:
   what was sent and what each worker answered.
 - **Regear** — loadout presets and a per-worker comparison between the preset and the last reported
   inventory, plus a fleet sweep. Moves are **off** by default (a dry run that only reports).
+- **Statistics** — one honest report over the Host's own records: worker counts by status, group and
+  version; task outcomes (completion rate, failure rate, average duration) computed over *finished*
+  tasks only; a 24-hour activity histogram of tasks and commands; breakdowns of tasks by kind,
+  status and actor, of events by type and of audit entries by action; and inventory totals. A metric
+  with no data behind it reads **"no data"** rather than a zero, because a 0% completion rate and
+  "nothing has finished yet" mean very different things. Export the whole report as JSON or CSV.
 - **Settings** — grouped, plain-language options, the worker server address, tokens, and a
   **Restore defaults** button.
 
@@ -178,6 +193,16 @@ The same functionality as the UI, for scripts, at `/api/v1/*` with a bearer toke
 | GET | `/api/v1/workers/tasks` | recent task history |
 | GET | `/api/v1/workers/commands` | the command audit log |
 | GET | `/api/v1/workers/presets` | regear presets |
+| GET | `/api/v1/servers` | server profiles (`?archived=true` includes archived) |
+| GET | `/api/v1/templates` | group templates |
+| GET | `/api/v1/presets` | task presets |
+| POST | `/api/v1/presets/{id}/run` | run a task preset against its own target set |
+| GET | `/api/v1/schedules` | schedules, each with its missed-fire count |
+| GET | `/api/v1/rules` | automation rules |
+| GET | `/api/v1/containers` | container records (`?workerId=` filters) |
+| GET | `/api/v1/audit` | the audit trail (`?limit=` up to 1000) |
+| GET | `/api/v1/tags` | every tag in use |
+| GET | `/api/v1/statistics` | the full statistics report the Statistics page renders |
 
 ---
 
@@ -189,11 +214,13 @@ The same functionality as the UI, for scripts, at `/api/v1/*` with a bearer toke
 | Dashboard | Workers |
 | ![Groups](docs/screenshots/03-groups.png) | ![Tasks](docs/screenshots/04-tasks.png) |
 | Groups | Tasks |
-| ![Inventory](docs/screenshots/05-inventory.png) | ![Regear](docs/screenshots/06-regear.png) |
-| Inventory | Regear |
-| ![Commands](docs/screenshots/07-commands.png) | ![Consoles](docs/screenshots/08-consoles.png) |
-| Commands | Consoles |
-| ![Worker Mode](docs/screenshots/09-worker-mode.png) | ![Settings](docs/screenshots/10-settings.png) |
+| ![Multiverse](docs/screenshots/05-multiverse-servers.png) | ![Inventory](docs/screenshots/06-inventory.png) |
+| Multiverse | Inventory |
+| ![Regear](docs/screenshots/07-regear.png) | ![Commands](docs/screenshots/08-commands.png) |
+| Regear | Commands |
+| ![Consoles](docs/screenshots/09-consoles.png) | ![Statistics](docs/screenshots/10-statistics.png) |
+| Consoles | Statistics |
+| ![Worker Mode](docs/screenshots/11-worker-mode.png) | ![Settings](docs/screenshots/12-settings.png) |
 | Worker Mode | Settings |
 
 The screenshots are captured from the renderer in demo mode (`?demo`), so they render without a live
@@ -253,7 +280,10 @@ src/
 │   ├── db/            SQLite schema/migrations and typed repositories.
 │   ├── api/           Local HTTP + WebSocket API and its token auth.
 │   ├── ipc/           IPC handlers exposed to the renderer through the preload bridge.
-│   ├── services/      The event bus (the one event stream).
+│   ├── packages/      Pure, Minecraft-free engines (scheduler, rule-engine, statistics, telemetry,
+│   │                  task/group/inventory/equipment engines). No Electron, no I/O — unit-tested.
+│   ├── services/      The event bus (the one event stream) and MultiverseService (servers,
+│   │                  presets, schedules, rules, containers, tags, audit).
 │   └── workers/       The worker WebSocket server and WorkerService (the control plane).
 └── renderer/          React UI (Vite).
     ├── App.tsx        Shell: sidebar navigation, top bar, toasts.

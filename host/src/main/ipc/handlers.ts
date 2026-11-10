@@ -11,6 +11,7 @@ import type { AppContext } from '../context';
 import type { ApiServer } from '../api/server';
 import type { RegearPreset, WorkerInventorySnapshot, WorkerModePatch } from '../../shared/types';
 import type { ControlAction, TaskKind } from '../../shared/workers';
+import { buildStatistics, statisticsToCsv, type StatisticsInput } from '../packages/statistics';
 
 export function registerIpc(context: AppContext, api: ApiServer, getWindow: () => BrowserWindow | null): void {
   const handle = <T>(channel: string, fn: (...args: never[]) => T | Promise<T>): void => {
@@ -192,6 +193,44 @@ export function registerIpc(context: AppContext, api: ApiServer, getWindow: () =
 
   // audit
   handle('mv:audit:list', (limit?: number) => mv.listAudit(limit ?? 200));
+
+  // --------------------------------------------------------------- statistics
+  handle('stats:get', () => buildStatistics(statisticsInput(context)));
+  handle('stats:export', (format: 'json' | 'csv') => exportStatistics(context, getWindow(), format));
+}
+
+function statisticsInput(context: AppContext): StatisticsInput {
+  return {
+    workers: context.workers.list(),
+    tasks: context.workers.listTasks(1000),
+    commands: context.workers.listCommands(1000),
+    events: context.events.list(1000),
+    inventory: context.workerInventory.all(),
+    schedules: context.multiverse.listSchedules(),
+    rules: context.multiverse.listRules(),
+    containers: context.multiverse.listContainers(),
+    audit: context.multiverse.listAudit(1000),
+  };
+}
+
+async function exportStatistics(
+  context: AppContext,
+  win: BrowserWindow | null,
+  format: 'json' | 'csv',
+): Promise<{ path: string } | null> {
+  const report = buildStatistics(statisticsInput(context));
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const result = win
+    ? await dialog.showSaveDialog(win, {
+        defaultPath: `logvex-statistics-${stamp}.${format}`,
+        filters: format === 'csv' ? [{ name: 'CSV', extensions: ['csv'] }] : [{ name: 'JSON', extensions: ['json'] }],
+      })
+    : { canceled: false, filePath: `logvex-statistics-${stamp}.${format}` };
+  if (result.canceled || !result.filePath) return null;
+
+  const body = format === 'csv' ? statisticsToCsv(report) : JSON.stringify(report, null, 2);
+  writeFileSync(result.filePath, body);
+  return { path: result.filePath };
 }
 
 function exportConfig(context: AppContext, win: BrowserWindow | null): { path: string } | null {

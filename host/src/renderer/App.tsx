@@ -22,20 +22,24 @@ import { CommandsPage } from './pages/CommandsPage';
 import { ConsolesPage } from './pages/ConsolesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { WorkerModePage } from './pages/WorkerModePage';
+import { MultiversePage } from './pages/multiverse/MultiversePage';
+import { StatisticsPage } from './pages/StatisticsPage';
 import type { UiMode } from '../shared/types';
 
 export type PageId =
-  | 'dashboard' | 'workers' | 'groups' | 'tasks' | 'inventory' | 'regear' | 'commands' | 'consoles' | 'worker-mode' | 'settings';
+  | 'dashboard' | 'workers' | 'groups' | 'tasks' | 'multiverse' | 'inventory' | 'regear' | 'commands' | 'consoles' | 'statistics' | 'worker-mode' | 'settings';
 
 const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '◉' },
   { id: 'workers', label: 'Workers', icon: '⛭' },
   { id: 'groups', label: 'Groups', icon: '◫' },
   { id: 'tasks', label: 'Tasks', icon: '▤' },
+  { id: 'multiverse', label: 'Multiverse', icon: '❖' },
   { id: 'inventory', label: 'Inventory', icon: '▦' },
   { id: 'regear', label: 'Regear', icon: '⛊' },
   { id: 'commands', label: 'Commands', icon: '⌘' },
   { id: 'consoles', label: 'Consoles', icon: '▷' },
+  { id: 'statistics', label: 'Statistics', icon: '▥' },
   { id: 'worker-mode', label: 'Worker Mode', icon: '⇄' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
 ];
@@ -45,15 +49,17 @@ const TITLES: Record<PageId, string> = {
   workers: 'Workers',
   groups: 'Groups',
   tasks: 'Tasks',
+  multiverse: 'Multiverse',
   inventory: 'Inventory',
   regear: 'Regear',
   commands: 'Commands',
   consoles: 'Consoles',
+  statistics: 'Statistics',
   'worker-mode': 'Worker Mode',
   settings: 'Settings',
 };
 
-const PAGE_IDS: PageId[] = ['dashboard', 'workers', 'groups', 'tasks', 'inventory', 'regear', 'commands', 'consoles', 'worker-mode', 'settings'];
+const PAGE_IDS: PageId[] = ['dashboard', 'workers', 'groups', 'tasks', 'multiverse', 'inventory', 'regear', 'commands', 'consoles', 'statistics', 'worker-mode', 'settings'];
 
 /** Old ids from earlier versions map onto the new sections. */
 const ALIASES: Record<string, PageId> = {
@@ -61,6 +67,11 @@ const ALIASES: Record<string, PageId> = {
   fleet: 'workers',
   swarm: 'workers',
   features: 'tasks',
+  fleet2: 'multiverse',
+  servers: 'multiverse',
+  automation: 'multiverse',
+  stats: 'statistics',
+  metrics: 'statistics',
   accounts: 'settings',
   activity: 'consoles',
   console: 'consoles',
@@ -206,6 +217,8 @@ function Shell() {
           {page === 'workers' && <WorkersPage push={push} />}
           {page === 'groups' && <GroupsPage push={push} />}
           {page === 'tasks' && <TasksPage push={push} />}
+          {page === 'multiverse' && <MultiversePage push={push} />}
+          {page === 'statistics' && <StatisticsPage push={push} />}
           {page === 'inventory' && <InventoryPage push={push} />}
           {page === 'regear' && <RegearPage push={push} />}
           {page === 'commands' && <CommandsPage push={push} />}

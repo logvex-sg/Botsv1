@@ -11,6 +11,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { AppContext } from '../context';
 import { CONTROL_ACTIONS, isControlAction } from '../../shared/workers';
 import { ApiAuth, RateLimiter } from './auth';
+import { buildStatistics } from '../packages/statistics';
 
 export interface ApiServerOptions {
   host: string;
@@ -187,6 +188,45 @@ export class ApiServer {
         const sent = ctx.workers.sendControl(workerId, requested);
         return sent ? { body: { ok: true, action: requested } } : { status: 409, body: { error: 'worker is not connected' } };
       }
+    }
+
+    // ------------------------------------------------------------- multiverse
+    if (path === '/api/v1/servers' && method === 'GET') {
+      return { body: { servers: ctx.multiverse.listServers(query.get('archived') === 'true') } };
+    }
+    if (path === '/api/v1/templates' && method === 'GET') return { body: { templates: ctx.multiverse.listGroupTemplates() } };
+    if (path === '/api/v1/presets' && method === 'GET') return { body: { presets: ctx.multiverse.listTaskPresets() } };
+    if (path === '/api/v1/schedules' && method === 'GET') {
+      return { body: { schedules: ctx.multiverse.listSchedules().map((s) => ({ ...s, missed: ctx.multiverse.missedFor(s) })) } };
+    }
+    if (path === '/api/v1/rules' && method === 'GET') return { body: { rules: ctx.multiverse.listRules() } };
+    if (path === '/api/v1/containers' && method === 'GET') {
+      return { body: { containers: ctx.multiverse.listContainers(query.get('workerId') ?? undefined) } };
+    }
+    if (path === '/api/v1/audit' && method === 'GET') {
+      const limit = Number.parseInt(query.get('limit') ?? '', 10);
+      return { body: { entries: ctx.multiverse.listAudit(Number.isFinite(limit) ? limit : 200) } };
+    }
+    if (path === '/api/v1/tags' && method === 'GET') return { body: { tags: ctx.workers.allTags() } };
+
+    const presetRun = /^\/api\/v1\/presets\/([^/]+)\/run$/.exec(path);
+    if (presetRun && method === 'POST') {
+      return { body: await ctx.multiverse.runTaskPreset(decodeURIComponent(presetRun[1])) };
+    }
+
+    // ------------------------------------------------------------- statistics
+    if (path === '/api/v1/statistics' && method === 'GET') {
+      return { body: buildStatistics({
+        workers: ctx.workers.list(),
+        tasks: ctx.workers.listTasks(1000),
+        commands: ctx.workers.listCommands(1000),
+        events: ctx.events.list(1000),
+        inventory: ctx.workerInventory.all(),
+        schedules: ctx.multiverse.listSchedules(),
+        rules: ctx.multiverse.listRules(),
+        containers: ctx.multiverse.listContainers(),
+        audit: ctx.multiverse.listAudit(1000),
+      }) };
     }
 
     return undefined;

@@ -4,6 +4,44 @@ All notable changes to **Logvex Fleet Manager** (the desktop application) are do
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — Multiverse: organisational layer & statistics
+
+The Host grew the half of the product that is about *organisation* rather than live control: named
+server profiles, reusable presets, schedules, event-driven automation, a container ledger and an
+append-only audit trail — plus a statistics page that reports only what the Host actually recorded.
+
+### Added
+- **Multiverse page** (`src/renderer/pages/multiverse/`) — one page, seven tabs: Servers,
+  Templates, Task presets, Schedules, Automation, Containers and Audit. Each tab reads and writes
+  through the real Host service over the preload bridge; there are no placeholder controls.
+- **`MultiverseService`** (`src/main/services/multiverse/multiverse-service.ts`) — the single code
+  path behind every tab: `listServers`/`createServer`/`updateServer`/`removeServer`/`assignServer`,
+  `listGroupTemplates`/`createGroupFromTemplate`, `listTaskPresets`/`runTaskPreset`, schedules
+  (`createSchedule`, `missedFor`, `tickSchedules`), automation rules, container records,
+  inventory history (`inventoryTrend`, `inventoryCaptures`), tags and `listAudit`.
+- **Statistics package** (`src/main/packages/statistics/`) — a pure, unit-tested `buildStatistics`
+  that turns the Host's own records (workers, tasks, commands, events, inventory, schedules, rules,
+  containers, audit) into one report, and a `statisticsToCsv` exporter that mirrors it exactly.
+- **Statistics page** (`src/renderer/pages/StatisticsPage.tsx`) — worker counts by status/group/
+  version, task outcomes (completion, failure, average duration) over finished tasks only, a 24-hour
+  activity histogram, breakdowns by kind/status/actor and event/audit action, and inventory totals.
+  A metric with no data reads **"no data"**, never a zero. Export the report as JSON or CSV.
+- **HTTP routes** — `/api/v1/servers`, `/api/v1/templates`, `/api/v1/presets`,
+  `POST /api/v1/presets/{id}/run`, `/api/v1/schedules`, `/api/v1/rules`, `/api/v1/containers`,
+  `/api/v1/audit`, `/api/v1/tags` and `/api/v1/statistics`.
+- **IPC** — `stats:get` and `stats:export` channels, with a save-dialog export on the main process.
+
+### Notes
+- The Host remains a control plane: it never joins a world, so it never reports combat. The
+  statistics page says so plainly rather than inventing a kill count.
+
+### Tests
+- `tests/unit/statistics.test.ts` — 8 tests: empty-fleet "no data" behaviour, worker/status/group
+  breakdowns, completion and failure over finished tasks, inventory aggregation, activity bucketing,
+  schedule and rule totals, percentage formatting and CSV escaping.
+- Two API tests covering the multiverse collections and the statistics report shape.
+- Suite: **262 tests**.
+
 ## [Unreleased] — Simplicity & user experience overhaul
 
 A ground-up redesign of the interface around three goals: **simplicity, ease of use and

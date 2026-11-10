@@ -6,13 +6,15 @@
  * data so every screen renders with realistic values and every button has something to act on. It
  * is never shipped in the production bundle.
  */
-import type { FleetApi, WorkerServerStatus } from '../../shared/ipc';
+import type { BulkResult, FleetApi, WorkerServerStatus } from '../../shared/ipc';
 import type {
-  AppSettings, FleetEvent, ItemCountReport, PairingCode, RegearComparison, RegearPreset,
+  AppSettings, AuditEntry, AutomationRule, ContainerRecord, FleetEvent, GroupTemplate, ItemCountReport,
+  PairingCode, RegearComparison, RegearPreset, ScheduleRecord, ServerProfile, TaskPreset,
   WorkerCommandRecord, WorkerConsoleLine, WorkerGroup, WorkerInventorySnapshot, WorkerOverview,
   WorkerTaskRecord, WorkerView,
 } from '../../shared/types';
 import { emptySnapshot, TASK_KINDS, type TaskKind, type WorkerItem, type WorkerTaskResult } from '../../shared/workers';
+import { buildStatistics } from '../../main/packages/statistics';
 
 const now = Date.now();
 
@@ -70,12 +72,17 @@ function makeWorker(index: number, username: string, online: boolean, groupId: s
     busy: false,
     paused: false,
     stopped: false,
+    tags: index % 2 === 0 ? ['farmer'] : ['miner'],
+    serverProfileId: index === 1 ? 's1' : null,
+    fabricVersion: '0.16.9',
+    meteorVersion: '1.21.11-SNAPSHOT',
+    archived: false,
   };
 }
 
 const groups: WorkerGroup[] = [
-  { id: 'g1', name: 'Farmers', description: 'Farming crew', color: '#3fb950', createdAt: now },
-  { id: 'g2', name: 'Miners', description: 'Mining crew', color: '#6d5efc', createdAt: now },
+  { id: 'g1', name: 'Farmers', description: 'Farming crew', color: '#3fb950', createdAt: now, defaultTaskPresetIds: [], defaultEquipmentPresetIds: [], permissions: [], archived: false },
+  { id: 'g2', name: 'Miners', description: 'Mining crew', color: '#6d5efc', createdAt: now, defaultTaskPresetIds: [], defaultEquipmentPresetIds: [], permissions: [], archived: false },
 ];
 
 let workers: WorkerView[] = [
@@ -84,8 +91,51 @@ let workers: WorkerView[] = [
   makeWorker(3, 'LogvexThree', false, null),
 ];
 
-let tasks: WorkerTaskRecord[] = [];
-let commands: WorkerCommandRecord[] = [];
+// ------------------------------------------------------------ multiverse seed data
+let servers: ServerProfile[] = [
+  { id: 's1', name: '6b6t', host: 'mc.6b6t.org', port: 25565, version: '1.21.11', environment: 'production', notes: 'Anarchy main', tags: ['anarchy', 'pvp'], archived: false, createdAt: now, updatedAt: now },
+  { id: 's2', name: 'Test sandbox', host: '127.0.0.1', port: 25566, version: '1.21.11', environment: 'testing', notes: 'Local dev server', tags: ['local'], archived: false, createdAt: now, updatedAt: now },
+];
+
+let templates: GroupTemplate[] = [
+  { id: 'tpl1', name: 'Mining crew', description: 'Dig and store', color: '#6d5efc', defaultTaskPresetIds: [], defaultEquipmentPresetIds: [], permissions: ['run-task'], createdAt: now },
+];
+
+let taskPresets: TaskPreset[] = [
+  { id: 'tp1', name: 'Inventory sweep', description: 'Report inventory from every farmer', kind: 'inventory', params: {}, targetWorkerIds: ['w1'], targetGroupIds: [], createdAt: now, updatedAt: now },
+  { id: 'tp2', name: 'Position ping', description: 'Ask each miner for its coordinates', kind: 'position', params: {}, targetWorkerIds: [], targetGroupIds: ['g2'], createdAt: now, updatedAt: now },
+];
+
+let schedules: ScheduleRecord[] = [
+  { id: 'sc1', name: 'Hourly inventory', presetId: 'tp1', kind: 'inventory', params: {}, targetWorkerIds: ['w1'], targetGroupIds: [], scheduleKind: 'interval', startAt: now, intervalMs: 3_600_000, timeOfDay: null, stopAt: null, enabled: true, lastFiredAt: now - 1_800_000, fireCount: 12, createdAt: now, updatedAt: now },
+  { id: 'sc2', name: 'Nightly position check', presetId: 'tp2', kind: 'position', params: {}, targetWorkerIds: [], targetGroupIds: ['g2'], scheduleKind: 'daily', startAt: now, intervalMs: null, timeOfDay: '02:00', stopAt: null, enabled: false, lastFiredAt: null, fireCount: 0, createdAt: now, updatedAt: now },
+];
+
+let rules: AutomationRule[] = [
+  { id: 'r1', name: 'Inventory on join', event: 'WORKER_REGISTERED', conditions: [], action: 'inventory', cooldownMs: 60_000, maxRuns: null, enabled: true, runCount: 4, lastRunAt: now - 900_000, createdAt: now, updatedAt: now },
+  { id: 'r2', name: 'Regear when low on totems', event: 'WORKER_INVENTORY', conditions: [{ field: 'totems', operator: 'lt', value: '2' }], action: 'regear', cooldownMs: 300_000, maxRuns: null, enabled: false, runCount: 0, lastRunAt: null, createdAt: now, updatedAt: now },
+];
+
+let containers: ContainerRecord[] = [
+  { id: 'ct1', workerId: 'w1', label: 'Base chest', x: 120, y: 64, z: -300, dimension: 'minecraft:overworld', items: [item('diamond', 'Diamond', 64, 0), item('iron_ingot', 'Iron Ingot', 128, 1)], inspectedAt: now - 600_000 },
+];
+
+const audit: AuditEntry[] = [
+  { id: 'a1', at: now - 900_000, actor: 'operator', action: 'server.create', target: 's1', detail: 'created server profile "6b6t"' },
+  { id: 'a2', at: now - 800_000, actor: 'operator', action: 'rule.create', target: 'r1', detail: 'created rule "Inventory on join"' },
+];
+
+let tasks: WorkerTaskRecord[] = [
+  { id: 't1', workerId: 'w1', kind: 'inventory', status: 'SUCCEEDED', params: {}, result: {}, error: null, createdAt: now - 3_600_000, dispatchedAt: now - 3_600_000, completedAt: now - 3_599_000, durationMs: 1000, actor: 'operator' },
+  { id: 't2', workerId: 'w2', kind: 'position', status: 'SUCCEEDED', params: {}, result: {}, error: null, createdAt: now - 1_800_000, dispatchedAt: now - 1_800_000, completedAt: now - 1_799_400, durationMs: 600, actor: 'schedule:sc1' },
+  { id: 't3', workerId: 'w1', kind: 'regear', status: 'FAILED', params: {}, result: null, error: 'missing totems', createdAt: now - 900_000, dispatchedAt: now - 900_000, completedAt: now - 899_200, durationMs: 800, actor: 'rule:r1' },
+  { id: 't4', workerId: 'w2', kind: 'inventory', status: 'PENDING', params: {}, result: null, error: null, createdAt: now - 60_000, dispatchedAt: null, completedAt: null, durationMs: null, actor: 'operator' },
+];
+let commands: WorkerCommandRecord[] = [
+  { id: 'c1', workerId: 'w1', kind: 'chat', line: 'hello', ok: true, response: 'sent', createdAt: now - 2_400_000 },
+  { id: 'c2', workerId: 'w2', kind: 'command', line: '/home', ok: true, response: 'sent', createdAt: now - 1_200_000 },
+  { id: 'c3', workerId: 'w1', kind: 'command', line: '/spawn', ok: false, response: 'worker offline', createdAt: now - 600_000 },
+];
 let presets: RegearPreset[] = [
   {
     id: 'p1', name: 'Standard PvP', description: 'Diamond kit',
@@ -206,7 +256,7 @@ export function createDemoApi(): FleetApi {
 
     listWorkerGroups: async () => groups,
     createWorkerGroup: async (name, description = '', color = '#6d5efc') => {
-      const g: WorkerGroup = { id: `g${groups.length + 1}`, name, description, color, createdAt: Date.now() };
+      const g: WorkerGroup = { id: `g${groups.length + 1}`, name, description, color, createdAt: Date.now(), defaultTaskPresetIds: [], defaultEquipmentPresetIds: [], permissions: [], archived: false };
       groups.push(g);
       return g;
     },
@@ -272,6 +322,141 @@ export function createDemoApi(): FleetApi {
     listNotifications: async () => [],
     markNotificationRead: async () => true,
     markAllNotificationsRead: async () => true,
+
+    // ------------------------------------------------------------ multiverse
+    listServers: async () => servers.map((s) => ({
+      ...s,
+      workers: workers.filter((w) => w.serverProfileId === s.id).length,
+      online: workers.filter((w) => w.serverProfileId === s.id && w.online).length,
+      connectedToIt: workers.filter((w) => w.serverProfileId === s.id && w.online).length,
+    })),
+    getServer: async (id) => {
+      const s = servers.find((x) => x.id === id);
+      if (!s) return undefined;
+      return {
+        ...s,
+        workers: workers.filter((w) => w.serverProfileId === s.id).length,
+        online: workers.filter((w) => w.serverProfileId === s.id && w.online).length,
+        connectedToIt: workers.filter((w) => w.serverProfileId === s.id && w.online).length,
+      };
+    },
+    createServer: async (input) => {
+      const profile: ServerProfile = {
+        id: `s${servers.length + 1}`, name: input.name, host: input.host ?? '', port: input.port ?? 25565,
+        version: input.version ?? '', environment: input.environment ?? 'production', notes: input.notes ?? '',
+        tags: input.tags ?? [], archived: false, createdAt: Date.now(), updatedAt: Date.now(),
+      };
+      servers = [...servers, profile];
+      return profile;
+    },
+    updateServer: async (id, patch) => {
+      const s = servers.find((x) => x.id === id);
+      if (s) Object.assign(s, patch, { updatedAt: Date.now() });
+      return s;
+    },
+    deleteServer: async (id) => {
+      servers = servers.filter((s) => s.id !== id);
+      for (const w of workers) if (w.serverProfileId === id) w.serverProfileId = null;
+      return true;
+    },
+    assignServer: async (ids, profileId) => {
+      for (const id of ids) { const w = workers.find((x) => x.id === id); if (w) w.serverProfileId = profileId; }
+      return ids.length;
+    },
+
+    listGroupTemplates: async () => templates,
+    createGroupTemplate: async (input) => {
+      const t: GroupTemplate = { ...input, id: `tpl${templates.length + 1}`, createdAt: Date.now() };
+      templates = [...templates, t];
+      return t;
+    },
+    deleteGroupTemplate: async (id) => { templates = templates.filter((t) => t.id !== id); return true; },
+    applyGroupTemplate: async (templateId, groupName) => {
+      const t = templates.find((x) => x.id === templateId);
+      const g: WorkerGroup = {
+        id: `g${groups.length + 1}`, name: groupName || t?.name || 'New group',
+        description: t?.description ?? '', color: t?.color ?? '#6d5efc', createdAt: Date.now(),
+        defaultTaskPresetIds: t?.defaultTaskPresetIds ?? [], defaultEquipmentPresetIds: t?.defaultEquipmentPresetIds ?? [],
+        permissions: t?.permissions ?? [], archived: false,
+      };
+      groups.push(g);
+      return g;
+    },
+
+    listTaskPresets: async () => taskPresets,
+    createTaskPreset: async (input) => {
+      const p: TaskPreset = { ...input, id: `tp${taskPresets.length + 1}`, createdAt: Date.now(), updatedAt: Date.now() };
+      taskPresets = [...taskPresets, p];
+      return p;
+    },
+    updateTaskPreset: async (id, patch) => { const p = taskPresets.find((x) => x.id === id); if (p) Object.assign(p, patch, { updatedAt: Date.now() }); return p; },
+    deleteTaskPreset: async (id) => { taskPresets = taskPresets.filter((p) => p.id !== id); return true; },
+    runTaskPreset: async (id): Promise<BulkResult> => {
+      const preset = taskPresets.find((p) => p.id === id);
+      const targets = workers.filter((w) => preset?.targetWorkerIds.includes(w.id));
+      const outcomes = targets.map((w) => ({ workerId: w.id, label: w.label || w.username, ok: w.online, outcome: w.online ? 'completed' : 'disconnected', detail: w.online ? 'done' : 'not connected' }));
+      const completed = outcomes.filter((o) => o.outcome === 'completed').length;
+      return {
+        ok: outcomes.length > 0 && completed === outcomes.length, total: outcomes.length, completed,
+        failed: 0, disconnected: outcomes.length - completed, skipped: 0,
+        message: `${completed} completed, ${outcomes.length - completed} disconnected`, outcomes,
+      };
+    },
+
+    listSchedules: async () => schedules.map((s) => ({ ...s, missed: 0 })),
+    createSchedule: async (input) => {
+      const record: ScheduleRecord = {
+        id: `sc${schedules.length + 1}`, name: input.name, presetId: input.presetId ?? null, kind: input.kind,
+        params: input.params ?? {}, targetWorkerIds: input.targetWorkerIds ?? [], targetGroupIds: input.targetGroupIds ?? [],
+        scheduleKind: input.scheduleKind, startAt: input.startAt ?? Date.now(), intervalMs: input.intervalMs ?? null,
+        timeOfDay: input.timeOfDay ?? null, stopAt: input.stopAt ?? null, enabled: input.enabled ?? true,
+        lastFiredAt: null, fireCount: 0, createdAt: Date.now(), updatedAt: Date.now(),
+      };
+      schedules = [...schedules, record];
+      return record;
+    },
+    updateSchedule: async (id, patch) => { const s = schedules.find((x) => x.id === id); if (s) Object.assign(s, patch, { updatedAt: Date.now() }); return s; },
+    deleteSchedule: async (id) => { schedules = schedules.filter((s) => s.id !== id); return true; },
+    tickSchedules: async () => [],
+
+    listRules: async () => rules,
+    createRule: async (input) => {
+      const rule: AutomationRule = {
+        id: `r${rules.length + 1}`, name: input.name, event: input.event, conditions: input.conditions ?? [],
+        action: input.action, cooldownMs: input.cooldownMs ?? 0, maxRuns: input.maxRuns ?? null,
+        enabled: input.enabled ?? true, runCount: 0, lastRunAt: null, createdAt: Date.now(), updatedAt: Date.now(),
+      };
+      rules = [...rules, rule];
+      return rule;
+    },
+    updateRule: async (id, patch) => { const r = rules.find((x) => x.id === id); if (r) Object.assign(r, patch, { updatedAt: Date.now() }); return r; },
+    deleteRule: async (id) => { rules = rules.filter((r) => r.id !== id); return true; },
+
+    listContainers: async (workerId) => (workerId ? containers.filter((c) => c.workerId === workerId) : containers),
+    deleteContainer: async (id) => { containers = containers.filter((c) => c.id !== id); return true; },
+    inventoryTrend: async () => [
+      { at: now - 3 * 3600_000, count: 12 }, { at: now - 2 * 3600_000, count: 20 },
+      { at: now - 3600_000, count: 18 }, { at: now, count: 30 },
+    ],
+    inventoryCaptures: async () => [now, now - 3600_000, now - 2 * 3600_000],
+    addWorkerTag: async (id, tag) => { const w = workers.find((x) => x.id === id); if (w && !w.tags.includes(tag)) w.tags.push(tag); return true; },
+    removeWorkerTag: async (id, tag) => { const w = workers.find((x) => x.id === id); if (w) w.tags = w.tags.filter((t) => t !== tag); return true; },
+    setWorkerTags: async (id, tags) => { const w = workers.find((x) => x.id === id); if (w) w.tags = tags; return true; },
+    listAllTags: async () => [...new Set(workers.flatMap((w) => w.tags))].sort(),
+    listAudit: async () => audit,
+
+    getStatistics: async () => buildStatistics({
+      workers,
+      tasks,
+      commands,
+      events,
+      inventory: [...inventories.values()],
+      schedules,
+      rules,
+      containers,
+      audit,
+    }),
+    exportStatistics: async () => ({ path: '/demo/logvex-statistics.json' }),
 
     onEvent: () => () => {},
   };

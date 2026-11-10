@@ -245,6 +245,9 @@ export function baseSnapshot(workerId: string): WorkerSnapshot {
     distinctItems: 2,
     freeSlots: 20,
     capabilities: ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position', 'efly'],
+    fabricVersion: '0.16.9',
+    meteorVersion: '1.21.11-SNAPSHOT',
+    modVersion: '2.0.0',
   };
 }
 

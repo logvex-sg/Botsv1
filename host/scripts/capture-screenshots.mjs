@@ -30,12 +30,14 @@ const PAGES = [
   ['02-workers', 'workers'],
   ['03-groups', 'groups'],
   ['04-tasks', 'tasks'],
-  ['05-inventory', 'inventory'],
-  ['06-regear', 'regear'],
-  ['07-commands', 'commands'],
-  ['08-consoles', 'consoles'],
-  ['09-worker-mode', 'worker-mode'],
-  ['10-settings', 'settings'],
+  ['05-multiverse-servers', 'multiverse'],
+  ['06-inventory', 'inventory'],
+  ['07-regear', 'regear'],
+  ['08-commands', 'commands'],
+  ['09-consoles', 'consoles'],
+  ['10-statistics', 'statistics'],
+  ['11-worker-mode', 'worker-mode'],
+  ['12-settings', 'settings'],
 ];
 
 function findChrome() {

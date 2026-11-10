@@ -101,6 +101,54 @@ const api = {
   markNotificationRead: (id: string) => invoke('notifications:read', id),
   markAllNotificationsRead: () => invoke('notifications:read-all'),
 
+  // multiverse: server profiles
+  listServers: (includeArchived?: boolean) => invoke('mv:servers:list', includeArchived),
+  getServer: (id: string) => invoke('mv:servers:get', id),
+  createServer: (input: unknown) => invoke('mv:servers:create', input),
+  updateServer: (id: string, patch: unknown) => invoke('mv:servers:update', id, patch),
+  deleteServer: (id: string) => invoke('mv:servers:delete', id),
+  assignServer: (workerIds: string[], profileId: string | null) => invoke('mv:servers:assign', workerIds, profileId),
+
+  // multiverse: group templates
+  listGroupTemplates: () => invoke('mv:templates:list'),
+  createGroupTemplate: (input: unknown) => invoke('mv:templates:create', input),
+  deleteGroupTemplate: (id: string) => invoke('mv:templates:delete', id),
+  applyGroupTemplate: (templateId: string, groupName: string) => invoke('mv:templates:apply', templateId, groupName),
+
+  // multiverse: task presets
+  listTaskPresets: () => invoke('mv:presets:list'),
+  createTaskPreset: (input: unknown) => invoke('mv:presets:create', input),
+  updateTaskPreset: (id: string, patch: unknown) => invoke('mv:presets:update', id, patch),
+  deleteTaskPreset: (id: string) => invoke('mv:presets:delete', id),
+  runTaskPreset: (id: string) => invoke('mv:presets:run', id),
+
+  // multiverse: schedules
+  listSchedules: () => invoke('mv:schedules:list'),
+  createSchedule: (input: unknown) => invoke('mv:schedules:create', input),
+  updateSchedule: (id: string, patch: unknown) => invoke('mv:schedules:update', id, patch),
+  deleteSchedule: (id: string) => invoke('mv:schedules:delete', id),
+  tickSchedules: () => invoke('mv:schedules:tick'),
+
+  // multiverse: automation rules
+  listRules: () => invoke('mv:rules:list'),
+  createRule: (input: unknown) => invoke('mv:rules:create', input),
+  updateRule: (id: string, patch: unknown) => invoke('mv:rules:update', id, patch),
+  deleteRule: (id: string) => invoke('mv:rules:delete', id),
+
+  // multiverse: containers, history, tags, audit
+  listContainers: (workerId?: string) => invoke('mv:containers:list', workerId),
+  deleteContainer: (id: string) => invoke('mv:containers:delete', id),
+  inventoryTrend: (workerId: string, itemId: string, limit?: number) => invoke('mv:history:trend', workerId, itemId, limit),
+  inventoryCaptures: (workerId: string, limit?: number) => invoke('mv:history:captures', workerId, limit),
+  addWorkerTag: (workerId: string, tag: string) => invoke('mv:tags:add', workerId, tag),
+  removeWorkerTag: (workerId: string, tag: string) => invoke('mv:tags:remove', workerId, tag),
+  setWorkerTags: (workerId: string, tags: string[]) => invoke('mv:tags:set', workerId, tags),
+  listAllTags: () => invoke('mv:tags:all'),
+  listAudit: (limit?: number) => invoke('mv:audit:list', limit),
+
+  getStatistics: () => invoke('stats:get'),
+  exportStatistics: (format: 'json' | 'csv') => invoke('stats:export', format),
+
   // live events
   onEvent: (callback: (event: unknown) => void) => {
     const listener = (_event: unknown, payload: unknown): void => callback(payload);
