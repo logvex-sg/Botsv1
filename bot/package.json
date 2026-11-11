@@ -1,6 +1,6 @@
 {
   "name": "@logvex/bot",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "description": "Logvex autonomous Minecraft worker - Mineflayer-first bot runtime",
   "license": "MIT",
   "private": true,
