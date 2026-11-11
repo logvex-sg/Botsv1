@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logvex — Hunter, Worker &amp; Fleet Manager</title>
+<meta name="description" content="A Meteor Client addon, a worker mod and a desktop Fleet Manager host for Minecraft 1.21.11. Download the latest release for Windows or Linux.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c0e;
+    --panel:#111417;
+    --panel-2:#171b1f;
+    --line:#232a30;
+    --line-2:#2f383f;
+    --ink:#e8edf1;
+    --ink-dim:#8b98a3;
+    --ink-faint:#5b666f;
+    --amber:#ffb545;
+    --amber-deep:#e08a1e;
+    --signal:#4fd18b;
+    --blue:#5aa9e6;
+    --red:#ff5f56;
+    --display:"Chakra Petch",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --body:"IBM Plex Sans",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);
+    font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(900px 500px at 82% -8%,rgba(255,181,69,.09),transparent 60%),
+      radial-gradient(700px 460px at 8% 4%,rgba(90,169,230,.07),transparent 62%),
+      linear-gradient(transparent 95%,rgba(255,255,255,.017) 95%),
+      linear-gradient(90deg,transparent 95%,rgba(255,255,255,.017) 95%);
+    background-size:auto,auto,26px 26px,26px 26px;
+  }
+  a{color:inherit}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 24px}
+  .mono{font-family:var(--mono)}
+
+  /* ---------- top bar ---------- */
+  header.bar{
+    position:sticky;top:0;z-index:50;backdrop-filter:blur(10px);
+    background:rgba(10,12,14,.82);border-bottom:1px solid var(--line);
+  }
+  .bar-in{display:flex;align-items:center;gap:18px;height:62px}
+  .brand{font-family:var(--display);font-weight:700;letter-spacing:.14em;font-size:15px;text-transform:uppercase}
+  .brand b{color:var(--amber)}
+  .brand .v{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--ink-faint);
+    border:1px solid var(--line-2);border-radius:3px;padding:2px 7px;margin-left:10px;letter-spacing:.06em}
+  .bar nav{margin-left:auto;display:flex;gap:6px;align-items:center}
+  .bar nav a{font-family:var(--mono);font-size:12.5px;color:var(--ink-dim);text-decoration:none;
+    padding:7px 11px;border-radius:4px;letter-spacing:.02em}
+  .bar nav a:hover{color:var(--ink);background:var(--panel-2)}
+  .bar nav a.cta{color:#0a0c0e;background:var(--amber);font-weight:600}
+  .bar nav a.cta:hover{background:#ffc76b}
+
+  /* ---------- hero ---------- */
+  .hero{padding:78px 0 30px;position:relative}
+  .kicker{font-family:var(--mono);font-size:12.5px;color:var(--amber);letter-spacing:.22em;
+    text-transform:uppercase;display:flex;align-items:center;gap:12px}
+  .kicker::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,var(--amber),transparent)}
+  h1{font-family:var(--display);font-weight:700;font-size:clamp(2.4rem,6.4vw,4.6rem);
+    line-height:.98;margin:22px 0 0;letter-spacing:-.01em}
+  h1 .g{color:var(--amber)}
+  .lede{font-size:clamp(1.02rem,2vw,1.2rem);color:var(--ink-dim);max-width:60ch;margin:22px 0 0}
+  .lede b{color:var(--ink);font-weight:600}
+
+  .stat-row{display:flex;flex-wrap:wrap;gap:10px;margin:30px 0 0}
+  .chip{font-family:var(--mono);font-size:12px;color:var(--ink-dim);border:1px solid var(--line-2);
+    border-radius:3px;padding:5px 10px;background:var(--panel)}
+  .chip b{color:var(--signal);font-weight:600}
+
+  /* ---------- downloads ---------- */
+  section{padding:44px 0}
+  .sec-head{display:flex;align-items:baseline;gap:16px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:26px}
+  .sec-head h2{font-family:var(--display);font-weight:600;font-size:clamp(1.3rem,3vw,1.75rem);
+    margin:0;letter-spacing:.01em}
+  .sec-head .idx{font-family:var(--mono);font-size:12px;color:var(--ink-faint);letter-spacing:.1em}
+  .sec-head .link{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--amber);text-decoration:none}
+  .sec-head .link:hover{text-decoration:underline}
+
+  .grid{display:grid;gap:16px}
+  .dl{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);
+    border-radius:8px;padding:22px;position:relative;overflow:hidden;
+    transition:border-color .18s,transform .18s}
+  .card::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--accent,var(--amber));opacity:.85}
+  .card:hover{border-color:var(--line-2);transform:translateY(-2px)}
+  .card .plat{font-family:var(--display);font-weight:600;font-size:1.12rem;display:flex;align-items:center;gap:10px}
+  .card .plat svg{width:20px;height:20px;flex:none}
+  .card .desc{color:var(--ink-dim);font-size:14px;margin:10px 0 18px;min-height:44px}
+  .card .meta{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);margin-bottom:16px}
+  .btns{display:flex;flex-wrap:wrap;gap:9px}
+  a.btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;
+    text-decoration:none;padding:10px 15px;border-radius:5px;border:1px solid var(--line-2);
+    color:var(--ink);background:var(--panel-2);transition:all .16s;white-space:nowrap}
+  a.btn:hover{border-color:var(--amber);color:var(--amber)}
+  a.btn.primary{background:var(--amber);color:#0a0c0e;border-color:var(--amber);font-weight:600}
+  a.btn.primary:hover{background:#ffc76b;border-color:#ffc76b;color:#0a0c0e}
+  a.btn .sz{color:var(--ink-faint);font-size:11px}
+  a.btn.primary .sz{color:rgba(10,12,14,.6)}
+
+  /* ---------- install steps ---------- */
+  .steps{counter-reset:s;display:grid;gap:14px}
+  .step{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+  .step::before{counter-increment:s;content:counter(s,decimal-leading-zero);
+    font-family:var(--mono);font-size:13px;color:var(--amber);border:1px solid var(--line-2);
+    border-radius:4px;padding:4px 9px;line-height:1.2;background:var(--panel-2)}
+  .step h3{margin:0 0 4px;font-family:var(--display);font-weight:600;font-size:1rem}
+  .step p{margin:0;color:var(--ink-dim);font-size:14px}
+  code{font-family:var(--mono);font-size:.86em;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:4px;padding:2px 6px;color:var(--amber)}
+  pre{background:#0d1013;border:1px solid var(--line);border-left:3px solid var(--signal);
+    border-radius:6px;padding:14px 16px;overflow-x:auto;margin:12px 0 0}
+  pre code{background:none;border:none;padding:0;color:#cfe3d7;font-size:12.5px;line-height:1.6}
+
+  /* ---------- shots ---------- */
+  .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  figure{margin:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+  figure img{display:block;width:100%;height:auto}
+  figcaption{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);padding:10px 13px;
+    border-top:1px solid var(--line);background:var(--panel-2)}
+
+  /* ---------- note ---------- */
+  .note{border:1px solid var(--line-2);border-left:3px solid var(--blue);background:var(--panel);
+    border-radius:6px;padding:16px 18px;color:var(--ink-dim);font-size:14px}
+  .note b{color:var(--ink)}
+  .warn{border-left-color:var(--amber)}
+
+  footer{border-top:1px solid var(--line);margin-top:26px;padding:34px 0 46px;color:var(--ink-faint);font-size:13px}
+  footer .cols{display:flex;flex-wrap:wrap;gap:26px}
+  footer a{color:var(--ink-dim);text-decoration:none}
+  footer a:hover{color:var(--amber)}
+  footer .sp{margin-left:auto}
+
+  .reveal{opacity:0;transform:translateY(14px);animation:rise .6s cubic-bezier(.22,1,.36,1) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.reveal{animation:none;opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap bar-in">
+    <span class="brand">LOG<b>VEX</b><span class="v" id="barver">v6.0.0</span></span>
+    <nav>
+      <a href="#download">Download</a>
+      <a href="#install">Install</a>
+      <a href="#shots">Screenshots</a>
+      <a href="#verify">Verify</a>
+      <a class="cta" href="https://github.com/logvex-sg/Botsv1/releases/latest">Latest release ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <div class="kicker reveal" style="animation-delay:.02s">Minecraft 1.21.11 · Fabric · Meteor Client</div>
+    <h1 class="reveal" style="animation-delay:.08s">Hunter, Worker<br>&amp; the <span class="g">Fleet Manager</span>.</h1>
+    <p class="lede reveal" style="animation-delay:.14s">
+      A Meteor Client addon for target tracking and coordinated combat, a worker mod that lets one
+      host drive many clients, and an Electron desktop app that runs the whole swarm —
+      <b>including HIVE MODE</b>, where a roster of bots becomes one coordinated unit.
+    </p>
+    <div class="stat-row reveal" style="animation-delay:.2s">
+      <span class="chip"><b id="chipver">v6.0.0</b> latest</span>
+      <span class="chip"><b>533</b> host tests</span>
+      <span class="chip"><b>256</b> bot tests</span>
+      <span class="chip"><b>264</b> Java tests</span>
+      <span class="chip">Windows <b>·</b> Linux</span>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="sec-head">
+      <span class="idx">01</span><h2>Download</h2>
+      <a class="link" href="https://github.com/logvex-sg/Botsv1/releases/latest">all releases ↗</a>
+    </div>
+
+    <div class="grid dl">
+      <article class="card reveal" style="--accent:var(--blue);animation-delay:.05s">
+        <div class="plat">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10 4.6v7.1H3V5.5Zm0 13 7 .9v-7H3v6.1Zm8 1 10 1.4V12.5H11v7Zm0-16.6v7.1h10V1.5l-10 1.4Z"/></svg>
+          Windows
+        </div>
+        <p class="desc">The Fleet Manager desktop host. Installs for the current user — no admin prompt.</p>
+        <div class="meta">NSIS installer · x64 · <span class="js-size" data-asset="win">86.9 MB</span></div>
+        <div class="btns">
+          <a class="btn primary" id="dl-win" href="https://github.com/logvex-sg/Botsv1/releases/download/v6.0.0/Logvex-Fleet-Manager-v6.0.0-windows-x64-setup.exe">
+            Setup .exe <span class="sz js-size" data-asset="win"></span>
+          </a>
+        </div>
+      </article>
+
+      <article class="card reveal" style="--accent:var(--amber);animation-delay:.1s">
+        <div class="plat">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C7.6 2 4 3.3 4 4.9c0 1 .9 1.8 2.3 2.4-.2.9-.3 1.8-.2 2.7.3 3.6 2.4 6.6 3 9.9h5.8c.6-3.3 2.7-6.3 3-9.9.1-.9 0-1.8-.2-2.7C19.1 6.7 20 5.9 20 4.9 20 3.3 16.4 2 12 2Zm-4.5 3a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Zm9 0a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Z"/></svg>
+          Linux — Debian / Ubuntu
+        </div>
+        <p class="desc">The Fleet Manager host as a native package. <code>apt</code> resolves the dependencies for you.</p>
+        <div class="meta">.deb · amd64 · <span class="js-size" data-asset="deb">74.6 MB</span></div>
+        <div class="btns">
+          <a class="btn primary" id="dl-deb" href="https://github.com/logvex-sg/Botsv1/releases/download/v6.0.0/Logvex-Fleet-Manager-v6.0.0-linux-x86_64.deb">
+            .deb package <span class="sz js-size" data-asset="deb"></span>
+          </a>
+          <a class="btn" id="dl-appimage" href="https://github.com/logvex-sg/Botsv1/releases/download/v6.0.0/Logvex-Fleet-Manager-v6.0.0-linux-x86_64.AppImage">
+            AppImage <span class="sz js-size" data-asset="appimage"></span>
+          </a>
+        </div>
+      </article>
+
+      <article class="card reveal" style="--accent:var(--signal);animation-delay:.15s">
+        <div class="plat">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm3.2 4.2L4.9 9.5l2.3 2.3 1-1-1.3-1.3 1.3-1.3-1-1Zm4.1.3-1.6 6.6 1.4.3 1.6-6.6-1.4-.3Zm3.4 3.7-1 1 1.3 1.3-1.3 1.3 1 1 2.3-2.3-2.3-2.3Z"/></svg>
+          Minecraft mods — any OS
+        </div>
+        <p class="desc">Both mods are platform-independent Java. Drop them into your <code>mods</code> folder on Windows, macOS or Linux.</p>
+        <div class="meta">Fabric · MC 1.21.11 · Java 21</div>
+        <div class="btns">
+          <a class="btn primary" id="dl-hunter" href="https://github.com/logvex-sg/Botsv1/releases/download/v6.0.0/logvex-hunter-v6.0.0.jar">
+            Hunter addon <span class="sz js-size" data-asset="hunter"></span>
+          </a>
+          <a class="btn" id="dl-worker" href="https://github.com/logvex-sg/Botsv1/releases/download/v6.0.0/logvex-worker-v6.0.0.jar">
+            Worker mod <span class="sz js-size" data-asset="worker"></span>
+          </a>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="sec-head">
+      <span class="idx">02</span><h2>What to do with it</h2>
+      <a class="link" href="https://github.com/logvex-sg/Botsv1/blob/main/docs/RELEASE.md">full guide ↗</a>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+      <div>
+        <h3 style="font-family:var(--display);margin:0 0 14px;font-size:1.05rem">Fleet Manager — Windows</h3>
+        <div class="steps">
+          <div class="step"><div><h3>Run the installer</h3><p><code>Logvex-Fleet-Manager-v6.0.0-windows-x64-setup.exe</code>. It installs per-user and adds a Start Menu entry.</p></div></div>
+          <div class="step"><div><h3>Launch &amp; choose Host</h3><p>On first run the app asks whether this machine is the <b>Host</b> or a <b>Worker</b>. Choose Host.</p></div></div>
+          <div class="step"><div><h3>Clear SmartScreen once</h3><p>The build is self-signed, so Windows may warn the first time. Choose <b>More info → Run anyway</b>.</p></div></div>
+        </div>
+      </div>
+
+      <div>
+        <h3 style="font-family:var(--display);margin:0 0 14px;font-size:1.05rem">Fleet Manager — Debian / Ubuntu</h3>
+        <div class="steps">
+          <div class="step"><div><h3>Install the .deb</h3><pre><code>sudo apt install ./Logvex-Fleet-Manager-v6.0.0-linux-x86_64.deb
+logvex-fleet-manager</code></pre></div></div>
+          <div class="step"><div><h3>Or run the AppImage</h3><pre><code>chmod +x Logvex-Fleet-Manager-v6.0.0-linux-x86_64.AppImage
+./Logvex-Fleet-Manager-v6.0.0-linux-x86_64.AppImage</code></pre></div></div>
+          <div class="step"><div><h3>No FUSE? Extract and run</h3><p>Append <code>--appimage-extract-and-run</code> if the AppImage refuses to start.</p></div></div>
+        </div>
+      </div>
+
+      <div>
+        <h3 style="font-family:var(--display);margin:0 0 14px;font-size:1.05rem">The Minecraft mods</h3>
+        <div class="steps">
+          <div class="step"><div><h3>Install Fabric Loader</h3><p>For Minecraft <b>1.21.11</b>.</p></div></div>
+          <div class="step"><div><h3>Add Meteor Client</h3><p>Put Meteor Client <code>1.21.11-SNAPSHOT</code> in your <code>mods</code> folder.</p></div></div>
+          <div class="step"><div><h3>Add the jars</h3><p><code>logvex-hunter-v6.0.0.jar</code>, plus <code>logvex-worker-v6.0.0.jar</code> on any client the Fleet Manager should drive.</p></div></div>
+          <div class="step"><div><h3>Launch</h3><p>The addon registers a <b>Logvex Hunter</b> ClickGUI category. Java 21 is required at runtime — a stock 1.21.11 install already uses it.</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:20px">
+      <b>Connecting a bot to the Fleet Manager.</b> Open <b>Dashboard → Generate pairing code</b> and
+      copy the short code. In the bot client's <code>config/logvex-worker.json</code>, set
+      <code>host</code>, <code>port</code> and <code>pairingCode</code>, then start the client. It
+      appears on the Dashboard — drive it from <b>Workers</b>, <b>Tasks</b>, <b>Commands</b>,
+      <b>Regear</b> and <b>HIVE MODE</b>.
+    </div>
+  </section>
+
+  <section id="shots">
+    <div class="sec-head">
+      <span class="idx">03</span><h2>Screenshots</h2>
+      <a class="link" href="https://github.com/logvex-sg/Botsv1/tree/main/host/docs/screenshots">all 17 ↗</a>
+    </div>
+    <div class="shots">
+      <figure class="reveal" style="animation-delay:.04s"><img src="screenshots/17-hive.png" alt="HIVE MODE page: live canvas map of the swarm with roles, objective queue and shared intelligence" loading="lazy"><figcaption>HIVE MODE — one roster, one coordinated unit</figcaption></figure>
+      <figure class="reveal" style="animation-delay:.08s"><img src="screenshots/01-dashboard.png" alt="Fleet Manager dashboard with worker totals and recent events" loading="lazy"><figcaption>Dashboard — fleet state at a glance</figcaption></figure>
+      <figure class="reveal" style="animation-delay:.12s"><img src="screenshots/02-workers.png" alt="Workers page with live per-worker state" loading="lazy"><figcaption>Workers — live state per client</figcaption></figure>
+      <figure class="reveal" style="animation-delay:.16s"><img src="screenshots/04-tasks.png" alt="Tasks page dispatching a task to workers" loading="lazy"><figcaption>Tasks — dispatch and read back results</figcaption></figure>
+      <figure class="reveal" style="animation-delay:.2s"><img src="screenshots/13-storage-overview.png" alt="Storage overview page" loading="lazy"><figcaption>Storage — networks, categories and structures</figcaption></figure>
+      <figure class="reveal" style="animation-delay:.24s"><img src="screenshots/10-statistics.png" alt="Statistics page with graphs" loading="lazy"><figcaption>Statistics — history with JSON/CSV export</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="verify">
+    <div class="sec-head"><span class="idx">04</span><h2>Verify your download</h2></div>
+    <p style="color:var(--ink-dim);margin:0 0 6px">Every release ships <code>SHA256SUMS.txt</code>. Check a file against it:</p>
+    <pre><code># Linux
+sha256sum -c SHA256SUMS.txt
+
+# Windows PowerShell
+Get-FileHash .\Logvex-Fleet-Manager-v6.0.0-windows-x64-setup.exe -Algorithm SHA256</code></pre>
+    <div class="note warn" style="margin-top:18px">
+      <b>About code signing.</b> The Windows installer is signed with a <b>self-signed</b> certificate
+      generated for this project. That proves the file was not altered after signing, but it is not
+      issued by a public certificate authority, so Windows SmartScreen will still warn until you
+      either trust the certificate or the project buys a CA-issued one. Verify the checksum above for
+      a stronger guarantee.
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap cols">
+    <span>Logvex · MIT licensed</span>
+    <a href="https://github.com/logvex-sg/Botsv1">Repository</a>
+    <a href="https://github.com/logvex-sg/Botsv1/releases">Releases</a>
+    <a href="https://github.com/logvex-sg/Botsv1/blob/main/README.md">README</a>
+    <a href="https://github.com/logvex-sg/Botsv1/blob/main/USAGE.md">Usage</a>
+    <a href="https://github.com/logvex-sg/Botsv1/blob/main/CHANGELOG.md">Changelog</a>
+    <span class="sp">Built by an AI agent (OpenHands) on behalf of logvex-sg.</span>
+  </div>
+</footer>
+
+<script>
+/* Progressive enhancement: if the GitHub API answers, repoint every download at the
+   newest release and show its real file sizes. The hardcoded v6.0.0 links stay valid
+   if the request fails or is rate-limited. */
+(function(){
+  var REPO="logvex-sg/Botsv1";
+  var MAP={
+    win:"windows-x64-setup.exe",
+    deb:"linux-x86_64.deb",
+    appimage:"linux-x86_64.AppImage",
+    hunter:"logvex-hunter-v",
+    worker:"logvex-worker-v"
+  };
+  function mb(b){return (b/1048576).toFixed(1)+" MB";}
+  fetch("https://api.github.com/repos/"+REPO+"/releases/latest",{headers:{Accept:"application/vnd.github+json"}})
+    .then(function(r){if(!r.ok)throw 0;return r.json();})
+    .then(function(rel){
+      if(!rel||!rel.tag_name||!rel.assets)return;
+      var tag=rel.tag_name;
+      document.getElementById("barver").textContent=tag;
+      document.getElementById("chipver").textContent=tag;
+      document.querySelectorAll("a[id^=dl-]").forEach(function(a){
+        var key=a.id.slice(3), frag=MAP[key]; if(!frag)return;
+        var hit=rel.assets.filter(function(x){return x.name.indexOf(frag)>=0;})[0];
+        if(!hit)return;
+        a.href=hit.browser_download_url;
+        document.querySelectorAll('.js-size[data-asset="'+key+'"]').forEach(function(s){s.textContent=mb(hit.size);});
+      });
+    })
+    .catch(function(){/* keep the hardcoded fallback links */});
+})();
+</script>
+</body>
+</html>

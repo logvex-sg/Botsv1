@@ -34,3 +34,8 @@ release/
 *.log
 coverage/
 .openhands/
+
+# code-signing private material — never commit
+.signing/*.key
+.signing/*.p12
+.signing/*.pfx

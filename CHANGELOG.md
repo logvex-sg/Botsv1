@@ -91,6 +91,13 @@ Fleet Manager** desktop app. The format follows
   explaining which file to pick. `electron-builder`'s output moved to `release/` so a build no longer
   packages its own previous artifacts, and the app now declares its repository so update-info
   generation does not fail.
+- **Packaging: a landing page and a code-signing certificate.** [`docs/index.html`](docs/index.html)
+  is a GitHub Pages download page (published at <https://logvex-sg.github.io/Botsv1/>) that links
+  every artifact for the current release and repoints itself at the newest release through the
+  GitHub API. The Windows installer is now Authenticode-signed with a self-signed project certificate
+  and a DigiCert timestamp — see [`docs/SIGNING.md`](docs/SIGNING.md) and
+  [`scripts/sign-windows.sh`](scripts/sign-windows.sh). The certificate proves the file is unmodified
+  but, being self-signed, does not remove the SmartScreen warning.
 
 ### Changed
 - **The Fleet Manager is now a host, not a bot runner.** `host/` was rebuilt around one

@@ -73,7 +73,8 @@ see [In-game swarm](#in-game-swarm-control-many-clients-from-one). The companion
 ### Installation
 
 The easiest way is to download a prebuilt file from the
-[**Releases**](https://github.com/logvex-sg/Botsv1/releases) page — see
+[**Releases**](https://github.com/logvex-sg/Botsv1/releases) page, or from the landing page at
+<https://logvex-sg.github.io/Botsv1/> — see
 [`docs/RELEASE.md`](docs/RELEASE.md) for which file to pick and what to do with it. In short:
 
 - **Minecraft addon:** drop `logvex-hunter-<version>.jar` into your `mods` folder.

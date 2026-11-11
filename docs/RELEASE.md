@@ -39,8 +39,9 @@ Fleet Manager host that coordinates several bot clients.
 3. Launch **Logvex Fleet Manager**. On first run it asks whether this machine is the **Host**;
    choose Host.
 
-The installer is unsigned, so Windows SmartScreen may warn you the first time. Choose
-**More info → Run anyway**.
+The installer is signed with the project's self-signed certificate, so Windows SmartScreen may warn
+the first time. Choose **More info → Run anyway**. See [`SIGNING.md`](SIGNING.md) for what the
+signature does and does not prove, and how to verify it.
 
 ### Minecraft mods
 
