@@ -6,7 +6,7 @@ Fleet Manager** desktop app. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [6.0.0] - 2026-11-11
 
 ### Fixed
 - **Hunter addon: the event pipeline now actually reaches the modules.** Core events were posted
@@ -31,6 +31,27 @@ Fleet Manager** desktop app. The format follows
   implements.
 
 ### Added
+- **Fleet Manager: HIVE MODE — coordinated multi-bot command (spec §7).** A new swarm command layer
+  turns the roster from many independent workers into one coordinated unit. `packages/hive/` holds
+  the Minecraft-free, unit-tested engine: a closed instruction parser (`commands.ts`), formation
+  geometry (`formations.ts`), sector planning and summarising (`sectors.ts`), and observation models
+  (`observations.ts`). `HiveService` is the stateful coordinator: it assigns roles, elects a
+  commander, computes formation offsets, derives role-appropriate objectives, hands each objective to
+  exactly one worker, records shared observations and keeps a command history. Migration
+  `0010_hive_mode` adds `hive_roles`, `hive_objectives`, `hive_observations`, `hive_commands`,
+  `hive_sectors` and `hive_state`, round-tripped by `HiveRepository`. Crucially, an order is
+  dispatched through the **same** task path the UI uses, so a hive command is validated and reported
+  exactly like a hand-sent task. The renderer gains a **HIVE MODE** page: a live canvas map (worker
+  positions, formation targets, explored sectors, shared sightings), the swarm roster with per-worker
+  role and health, the shared objective queue, the shared intelligence, a role manager and the
+  command history, with Start/Stop and a one-click **Emergency stop**. IPC channels `hive:*`, a
+  `fleet.hive*` bridge and REST routes under `/api/v1/hive/*` expose the whole surface. New events:
+  `HIVE_STATE`, `HIVE_COMMANDER`, `HIVE_ROLE`, `HIVE_FORMATION`, `HIVE_COMMAND`,
+  `HIVE_EMERGENCY_STOP`, `HIVE_OBSERVATION`.
+- **Fleet Manager: the `nl-task` wire kind is now first-class.** The natural-language task kind the
+  Worker mod and the bot runner already implement is defined in the task library, mapped in
+  `capabilities.ts`, and added to the mod's `TaskCatalog`, so the Host can offer it and the protocol
+  drift check stays green.
 - **Fleet Manager: the structure registry (spec §9) is now wired end to end.** The
   `structure-registry` engine — region validation, point-in-structure tests and change-impact
   previews — was implemented and unit-tested but only reachable from tests. It now has a persistent
@@ -64,6 +85,12 @@ Fleet Manager** desktop app. The format follows
   class for every module, and the runtime publishes `ConnectionChanged` and `LocalHealthChanged`.
 - **Hunter addon: configurable elimination announcements.** `NotificationModule` gained
   `notify-eliminated`, and the dashboard gained `detect-eliminations` and `elimination-window`.
+- **Packaging: one release per version, with per-platform installers.** The Fleet Manager now
+  publishes a Windows NSIS installer and Debian Linux `.deb` + `.AppImage` alongside the two
+  platform-independent mod jars, with checksums and a [`docs/RELEASE.md`](docs/RELEASE.md) guide
+  explaining which file to pick. `electron-builder`'s output moved to `release/` so a build no longer
+  packages its own previous artifacts, and the app now declares its repository so update-info
+  generation does not fail.
 
 ### Changed
 - **The Fleet Manager is now a host, not a bot runner.** `host/` was rebuilt around one
@@ -152,9 +179,7 @@ Fleet Manager** desktop app. The format follows
   ones the host's control frames call, so the two paths cannot diverge; a regression test drives both
   and asserts they gate tasks identically.
 
-## [1.2.0] - 2026-11-08
 
-### Added
 - **The Logvex Worker mod is back, as the Fleet Manager's outbound half.** A second, independent
   Fabric mod under `worker-mod/` dials the Fleet Manager host over a WebSocket and answers a closed
   set of named tasks. It is outbound only (the host never connects to the worker), it dispatches a

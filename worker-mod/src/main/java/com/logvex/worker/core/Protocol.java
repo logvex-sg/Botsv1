@@ -12,7 +12,7 @@ public final class Protocol {
     private Protocol() {}
 
     /** Bumped whenever the envelope or a payload changes shape; mismatches are refused. */
-    public static final int VERSION = 3;
+    public static final int VERSION = 4;
 
     // worker -> host
     public static final String HELLO = "hello";
@@ -33,6 +33,7 @@ public final class Protocol {
     public static final String PING = "ping";
     public static final String KICK = "kick";
     public static final String CONTROL = "control";
+    public static final String CONFIG = "config";
 
     // task kinds (the "task" message's payload.kind)
     public static final String TASK_STATUS = "status";
@@ -52,6 +53,7 @@ public final class Protocol {
     public static final String TASK_SHULKER_PACK = "shulker-pack";
     public static final String TASK_RESTOCK = "restock";
     public static final String TASK_PORTAL_SCAN = "portal-scan";
+    public static final String TASK_NL_TASK = "nl-task";
 
     // payload fields shared by more than one task
     public static final String FIELD_PAIRING_CODE = "pairingCode";
@@ -96,6 +98,9 @@ public final class Protocol {
     public static final String FIELD_EMPTY = "empty";
     public static final String FIELD_SHULKERS = "shulkers";
     public static final String FIELD_PORTALS = "portals";
+    public static final String FIELD_INSTRUCTION = "instruction";
+    public static final String FIELD_RUNTIME = "runtime";
+    public static final String FIELD_CONFIG = "config";
 
     // control actions (the "control" message's payload.action). The worker owns its own
     // connection, so only it can drop it or dial it again; these make the host's Connect /

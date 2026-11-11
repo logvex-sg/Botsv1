@@ -83,6 +83,15 @@ removed, only revealed.
 
 Navigation is small on purpose — each page has one job:
 
+- **HIVE MODE** — the swarm command layer. It coordinates the connected workers as one unit instead
+  of one at a time: enable it, assign each worker a **role**, pick a **formation**, and steer the
+  whole group with a plain instruction ("Everyone follow me", "Scout the surrounding area", "Send
+  two Workers to explore the northern area"). The page shows a live canvas map of the swarm (worker
+  positions, formation targets, explored sectors, shared sightings), the roster with per-worker role
+  and health, the shared **objective queue** (one queue for the whole hive, so two workers never
+  hold the same objective), the shared intelligence the swarm has reported, and the command history.
+  A commander anchors the formation; every other worker follows its own role. Emergency stop
+  cancels every objective at once. See [HIVE MODE](#hive-mode) below.
 - **Dashboard** — what is happening now: worker totals (online/offline/degraded), active tasks,
   tracked items, a per-group breakdown, the pairing-code panel and the recent events.
 - **Workers** — every client that has connected, with live state, a per-worker inspector and the
@@ -135,6 +144,41 @@ Navigation is small on purpose — each page has one job:
 
 ---
 
+## HIVE MODE
+
+HIVE MODE coordinates the connected workers as **one unit** rather than one at a time. It is a
+coordinator, not a second control path: every order it issues is dispatched through the *same* task
+and command plumbing the Workers page uses, so a hive order behaves exactly like a hand-sent task —
+same validation, same per-worker exclusivity, same reported result.
+
+The model is four ideas:
+
+- **Roles.** Each worker has one role — `COMMANDER`, `ESCORT`, `SCOUT`, `BUILDER`, `MINER`,
+  `LOGISTICS`, `STORAGE`, `GUARD`, `SUPPORT` or `GENERALIST`. A role is what the worker *is for*; it
+  decides which objectives the hive will offer it (a `SCOUT` gets scouting, a `MINER` gets mining,
+  and so on). Roles are stored per worker and survive a restart.
+- **Formations.** `follow`, `circle`, `line`, `diamond`, `escort` and `scatter`. Each non-commander
+  worker is given a formation offset relative to the commander, computed by a pure function
+  (`packages/hive/formations.ts`) so the geometry is unit-tested and deterministic.
+- **Objectives.** One shared queue. Objectives are derived from a role, its needs and the area to
+  cover, then handed out **one at a time** — two workers never hold the same objective. Scout orders
+  divide the surrounding area into sectors (`packages/hive/sectors.ts`) and mark each as assigned or
+  explored.
+- **Observations.** Shared intelligence: what a worker saw and where. A sighting is whatever a
+  worker reported from normal play — the hive never invents a position or pretends to see through
+  another client's eyes.
+
+Commands are understood by a small, closed parser (`packages/hive/commands.ts`) — the phrasings are
+listed on the page. An instruction the parser does not recognise is **refused** with a reason rather
+than guessed at, and the refusal is written to the command history like any other.
+
+Everything the hive does is recorded: `hive_roles`, `hive_objectives`, `hive_observations`,
+`hive_commands`, `hive_sectors` and `hive_state` (migration `0010_hive_mode`). The page polls the
+coordinator every two seconds; **Emergency stop** cancels every objective and disables the hive in
+one action.
+
+---
+
 ## Pairing and authentication
 
 There are two credentials, both generated on the Host and both regenerable from Settings:
@@ -162,7 +206,7 @@ the two agree, so a drift fails the build rather than reaching a user.
 | --- | --- |
 | worker → host | `hello`, `register`, `status`, `inventory`, `equipment`, `result`, `progress`, `pong`, `error`, `log` |
 | host → worker | `hello-ack`, `command`, `task`, `ping`, `kick` |
-| task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position`, `efly`, `container-read`, `container-move`, `shulker-read`, `shulker-pack`, `shulker-unpack`, `restock`, `portal-scan` |
+| task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position`, `efly`, `container-read`, `container-move`, `shulker-read`, `shulker-pack`, `shulker-unpack`, `restock`, `portal-scan`, `nl-task` |
 
 The task kinds are a **closed set**. The Host never sends code, a class name or a shell command; it
 sends one of these kinds with a validated payload, and the worker dispatches it through a fixed
@@ -208,6 +252,20 @@ The same functionality as the UI, for scripts, at `/api/v1/*` with a bearer toke
 | GET | `/api/v1/storage/structures/counts` | structure count by kind |
 | POST | `/api/v1/storage/structures/preview-change` | what a proposed change in a region would touch (`{ "region": { ... } }`) |
 | PATCH/DELETE | `/api/v1/storage/structures/{id}` | edit or remove a structure |
+| GET | `/api/v1/hive`, `/api/v1/hive/overview` | the whole hive state (members, objectives, observations, commands) |
+| GET | `/api/v1/hive/map` | positions, formation targets, sectors and sightings for the live map |
+| GET | `/api/v1/hive/roles` | the role catalogue |
+| GET | `/api/v1/hive/objectives` | the shared objective queue |
+| GET | `/api/v1/hive/observations` | shared sightings (players, structures) |
+| GET | `/api/v1/hive/commands` | the command history (`?limit=`) |
+| POST | `/api/v1/hive/state` | enable or disable the hive (`{ "enabled": true }`) |
+| POST | `/api/v1/hive/formation` | set the formation (`{ "kind": "circle", "radius": 6 }`) |
+| POST | `/api/v1/hive/command` | give the hive a plain instruction (`{ "instruction": "Everyone follow me." }`) |
+| POST | `/api/v1/hive/emergency-stop` | cancel every objective and disable the hive |
+| POST | `/api/v1/hive/observation` | record a shared sighting |
+| POST | `/api/v1/hive/commander` | elect the commander (`{ "workerId": "w1" }`) |
+| PUT/DELETE | `/api/v1/hive/roles/{workerId}` | assign a role or clear it |
+| DELETE | `/api/v1/hive/objectives/{id}` | drop an objective from the queue |
 
 ---
 
@@ -229,8 +287,10 @@ The same functionality as the UI, for scripts, at `/api/v1/*` with a bearer toke
 | Worker Mode | Settings |
 | ![Storage overview](docs/screenshots/13-storage-overview.png) | ![Storage categories](docs/screenshots/14-storage-categories.png) |
 | Storage — overview | Storage — item categories |
-| ![Category editor](docs/screenshots/15-storage-category-editor.png) | |
-| Editing a category's classifier rules | |
+| ![Category editor](docs/screenshots/15-storage-category-editor.png) | ![Storage structures](docs/screenshots/16-storage-structures.png) |
+| Editing a category's classifier rules | Storage — the structure registry |
+| ![HIVE MODE](docs/screenshots/17-hive.png) | |
+| HIVE MODE — the swarm command layer | |
 
 The screenshots are captured from the renderer in demo mode (`?demo`), so they render without a live
 backend or a connected worker. To regenerate them:
@@ -256,9 +316,14 @@ path, or `BASE_URL` to point at a different dev server.
 
 ```bash
 npm run build          # type-check main, bundle the renderer into dist/
-npm run package:linux  # AppImage + deb
-npm run package:win    # NSIS installer
+npm run package:linux  # AppImage + .deb  -> release/
+npm run package:win    # NSIS installer   -> release/
 ```
+
+Artifacts are written to `host/release/`. The Windows NSIS target needs Wine when built from
+Linux (`apt-get install wine wine64`); the Linux targets need no extra tooling. `electron-builder`
+reads the output directory from `build.directories.output`, so keep `release/` distinct from the
+`dist/` bundle that goes *into* the app — otherwise each build packages the previous one.
 
 ## Test & type-check
 

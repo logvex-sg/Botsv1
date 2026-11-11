@@ -129,7 +129,7 @@ remote party, so the worker must decide for itself what it is willing to do.
 ## Installation
 
 1. Install Fabric Loader for Minecraft 1.21.11.
-2. Put `logvex-worker-1.2.0.jar` (from `worker-mod/build/libs`) into the client's `mods` folder.
+2. Put `logvex-worker-6.0.0.jar` (from `worker-mod/build/libs`) into the client's `mods` folder.
 3. Start the client once; a config file is written to `config/logvex-worker.json`.
 4. In the Fleet Manager, open the Dashboard and press **Generate pairing code** (or **Settings →
    Worker server** for the shared token and the port).
@@ -162,7 +162,7 @@ export JAVA_HOME=/path/to/jdk-25   # JDK 25 is required by Fabric Loom
 ./gradlew :worker-mod:clean :worker-mod:test :worker-mod:build
 ```
 
-The jar lands in `worker-mod/build/libs/logvex-worker-1.2.0.jar`.
+The jar lands in `worker-mod/build/libs/logvex-worker-6.0.0.jar`.
 
 ## Tests
 

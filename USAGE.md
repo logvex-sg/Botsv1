@@ -80,7 +80,7 @@ results. See [`worker-mod/README.md`](worker-mod/README.md) and
    # The mod itself is compiled to Java 21 bytecode and runs on Java 21.
    export JAVA_HOME=/path/to/jdk-25
    ./gradlew clean test build
-   cp build/libs/logvex-hunter-1.2.0.jar ~/.minecraft/mods/
+   cp build/libs/logvex-hunter-6.0.0.jar ~/.minecraft/mods/
    ```
 
 4. Start the game. A **Logvex Hunter** category appears in Meteor's ClickGUI.
@@ -531,6 +531,8 @@ The app starts in **Beginner mode** with a small, focused navigation. Switch to 
 | **Regear** | Loadout presets and a per-worker comparison against the last reported inventory, plus a fleet sweep (dry-run by default). |
 | **Commands** | Send a server command or chat line to many workers at once, with the audit log of what each answered. |
 | **Consoles** | The log lines a worker forwarded about itself, newest last. |
+| **HIVE MODE** | Coordinates the whole roster as one unit: assign roles, pick a formation, and steer the group with a plain instruction. Shows a live canvas map of the swarm, the shared objective queue, the shared intelligence and the command history, with **Start/Stop** and **Emergency stop**. |
+| **Storage** | The storage networks, item categories and the structure registry the workers report. |
 | **Settings** | Grouped, plain-language options, the worker server address, tokens, and **Restore defaults**. |
 
 ### Typical workflow
@@ -557,10 +559,24 @@ GET    /health
 GET    /api/v1/status | workers | workers/overview | workers/{id}
      | workers/{id}/inventory | workers/{id}/console | workers/count?item=totem
      | workers/groups | workers/tasks | workers/commands | workers/presets | events
+     | hive | hive/overview | hive/map | hive/roles | hive/objectives | hive/observations | hive/commands
 POST   /api/v1/workers/{id}/task | workers/{id}/line
-DELETE /api/v1/workers/{id}/console
+     | hive/state | hive/formation | hive/command | hive/emergency-stop | hive/observation | hive/commander
+PUT    /api/v1/hive/roles/{workerId}
+DELETE /api/v1/workers/{id}/console | hive/objectives/{id}
 WS     /events
 ```
+
+### HIVE MODE
+
+HIVE MODE is a coordinator over the same task plumbing: it does not add a second way to control a
+worker, it decides *who does what*. Enable it, give each worker a role (`COMMANDER`, `SCOUT`,
+`ESCORT`, `MINER`, `LOGISTICS`, `STORAGE`, `GUARD`, `SUPPORT`, `BUILDER` or `GENERALIST`), pick a
+formation (`follow`, `circle`, `line`, `diamond`, `escort`, `scatter`) and type an instruction — the
+phrasings are listed on the page. The engine derives role-appropriate objectives, hands each to
+exactly one worker, and records what every worker reports as shared intelligence. An instruction the
+parser does not recognise is refused with a reason, not guessed at. **Emergency stop** cancels every
+objective and disables the hive in one action.
 
 ---
 

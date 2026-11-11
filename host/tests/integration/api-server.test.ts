@@ -168,6 +168,55 @@ describe('structure registry routes', () => {
   });
 });
 
+describe('hive routes', () => {
+  it('reports the hive state and map', async () => {
+    const overview = await get('/api/v1/hive/overview');
+    expect(overview.status).toBe(200);
+    const body = await overview.json() as { enabled: boolean; formation: { kind: string }; members: unknown[] };
+    expect(body.formation.kind).toBeTruthy();
+    expect(Array.isArray(body.members)).toBe(true);
+
+    const map = await get('/api/v1/hive/map');
+    const mapBody = await map.json() as { sectors: unknown[]; members: unknown[] };
+    expect(Array.isArray(mapBody.sectors)).toBe(true);
+  });
+
+  it('enables the hive, sets a formation and refuses an unknown command', async () => {
+    const enable = await post('/api/v1/hive/state', { enabled: true });
+    expect((await enable.json() as { enabled: boolean }).enabled).toBe(true);
+
+    const formation = await post('/api/v1/hive/formation', { kind: 'diamond', spacing: 3 });
+    const formationBody = await formation.json() as { formation: { kind: string } };
+    expect(formationBody.formation.kind).toBe('diamond');
+
+    const refused = await post('/api/v1/hive/command', { instruction: 'make me a sandwich' });
+    const refusedBody = await refused.json() as { accepted: boolean; message: string };
+    expect(refusedBody.accepted).toBe(false);
+    expect(refusedBody.message).toMatch(/recognise/i);
+  });
+
+  it('assigns a role and elects a commander', async () => {
+    const role = await fetch(`${base}/api/v1/hive/roles/route-worker`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'SCOUT' }),
+    });
+    const roleBody = await role.json() as { workerId: string; role: string };
+    expect(roleBody.workerId).toBe('route-worker');
+    expect(roleBody.role).toBe('SCOUT');
+
+    const commander = await post('/api/v1/hive/commander', { workerId: 'route-worker' });
+    expect((await commander.json() as { commanderId: string }).commanderId).toBe('route-worker');
+  });
+
+  it('validates the required fields', async () => {
+    const noInstruction = await post('/api/v1/hive/command', {});
+    expect(noInstruction.status).toBe(400);
+    const noWorker = await post('/api/v1/hive/commander', {});
+    expect(noWorker.status).toBe(400);
+  });
+});
+
 describe('worker control route', () => {
   it('forwards a control action to a connected worker and validates the action', async () => {
     const port = await ctx.context.workers.server.start();

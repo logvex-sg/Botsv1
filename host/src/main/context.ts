@@ -51,6 +51,8 @@ import {
   WorkflowRepository,
 } from './db/storage-repositories';
 import { PairingService, type PairingCodeView, type PairingStatus } from './pairing/pairing-service';
+import { HiveRepository } from './db/hive-repositories';
+import { HiveService } from './hive/hive-service';
 import { aggregate } from './packages/inventory-engine';
 import { DEFAULT_SETTINGS, type AppSettings, type HealthReport } from '../shared/types';
 
@@ -103,12 +105,15 @@ export class AppContext {
   readonly storagePlans: StoragePlanRepository;
   readonly storageActivity: StorageActivityRepository;
   readonly storageProfiles: StorageProfileRepository;
+  private readonly hiveRepo: HiveRepository;
 
   readonly bus: EventBus;
   readonly workers: WorkerService;
   readonly workerMode: WorkerModeService;
   readonly multiverse: MultiverseService;
   readonly storage: StorageService;
+  /** HIVE MODE: the coordinator over every worker. */
+  readonly hive: HiveService;
   /** Owns the pairing code and the per-worker tokens; the worker server asks it to authenticate. */
   readonly pairing: PairingService;
 
@@ -153,6 +158,7 @@ export class AppContext {
     this.storagePlans = new StoragePlanRepository(this.db);
     this.storageActivity = new StorageActivityRepository(this.db);
     this.storageProfiles = new StorageProfileRepository(this.db);
+    this.hiveRepo = new HiveRepository(this.db);
 
     this.bus = new EventBus(this.events, this.notifications);
     this.settings = this.loadSettings();
@@ -252,6 +258,14 @@ export class AppContext {
       workerIds: () => this.workerRepo.list().map((worker) => worker.id),
     });
 
+    // HIVE MODE sits above the worker service: it reads worker state and dispatches through the
+    // same task path as the UI, so a hive assignment and a hand-clicked task are one operation.
+    this.hive = new HiveService({
+      repository: this.hiveRepo,
+      workers: this.workers,
+      emit: (type, message, payload) => this.emitEvent(type, message, payload),
+    });
+
     // Every worker event is offered to the rule engine exactly once, here, so a rule fires from the
     // same event stream the Activity view shows.
     this.bus.subscribe((event) => {
@@ -282,6 +296,8 @@ export class AppContext {
     } catch (error) {
       this.emitEvent('SYSTEM', `Could not seed storage defaults: ${(error as Error).message}`);
     }
+    // The hive reconcile loop only runs while HIVE MODE is enabled; starting the timer is cheap.
+    this.hive.start();
     if (this.startWorkerServer) void this.startWorkerServerNow();
     if (this.workerMode.getSettings().autoConnect) {
       void this.workerMode.connect().catch(() => {
@@ -291,6 +307,7 @@ export class AppContext {
   }
 
   async shutdown(): Promise<void> {
+    this.hive.stop();
     this.workerMode.disconnect();
     await this.workers.server.stop();
     this.db.close();

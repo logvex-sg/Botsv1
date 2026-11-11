@@ -741,4 +741,93 @@ export const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: '0010_hive_mode',
+    up: (db) => {
+      // HIVE MODE: one coordinator over many workers. `hive_state` is a single row holding the
+      // commander, the active formation and the current objective; the other tables are the shared
+      // state the hive distributes — roles, a persistent objective queue, scouting sectors,
+      // observations and the command history. Everything is durable so the hive survives a restart
+      // and a reconnecting worker finds the task it was holding.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS hive_state (
+          id TEXT PRIMARY KEY,
+          enabled INTEGER NOT NULL DEFAULT 0,
+          commander_id TEXT,
+          formation TEXT NOT NULL DEFAULT '{"kind":"follow","spacing":3}',
+          active_objective TEXT NOT NULL DEFAULT '',
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS hive_roles (
+          worker_id TEXT PRIMARY KEY,
+          role TEXT NOT NULL DEFAULT 'GENERALIST',
+          extra_capabilities TEXT NOT NULL DEFAULT '[]',
+          is_commander INTEGER NOT NULL DEFAULT 0,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS hive_objectives (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL,
+          needs TEXT NOT NULL DEFAULT '[]',
+          x REAL,
+          y REAL,
+          z REAL,
+          priority INTEGER NOT NULL DEFAULT 0,
+          label TEXT NOT NULL DEFAULT '',
+          assigned_to TEXT,
+          state TEXT NOT NULL DEFAULT 'pending',
+          progress REAL NOT NULL DEFAULT 0,
+          detail TEXT NOT NULL DEFAULT '{}',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_hive_objectives_state ON hive_objectives(state);
+
+        CREATE TABLE IF NOT EXISTS hive_sectors (
+          id TEXT PRIMARY KEY,
+          dimension TEXT NOT NULL DEFAULT '',
+          col INTEGER NOT NULL DEFAULT 0,
+          row INTEGER NOT NULL DEFAULT 0,
+          min_x INTEGER NOT NULL DEFAULT 0,
+          min_z INTEGER NOT NULL DEFAULT 0,
+          max_x INTEGER NOT NULL DEFAULT 0,
+          max_z INTEGER NOT NULL DEFAULT 0,
+          center_x INTEGER NOT NULL DEFAULT 0,
+          center_z INTEGER NOT NULL DEFAULT 0,
+          state TEXT NOT NULL DEFAULT 'unexplored',
+          assigned_to TEXT,
+          explored_at INTEGER,
+          observations INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_hive_sectors_state ON hive_sectors(state);
+
+        CREATE TABLE IF NOT EXISTS hive_observations (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL,
+          worker_id TEXT NOT NULL,
+          x REAL NOT NULL DEFAULT 0,
+          y REAL NOT NULL DEFAULT 0,
+          z REAL NOT NULL DEFAULT 0,
+          dimension TEXT NOT NULL DEFAULT '',
+          at INTEGER NOT NULL,
+          label TEXT NOT NULL DEFAULT '',
+          detail TEXT NOT NULL DEFAULT '{}'
+        );
+        CREATE INDEX IF NOT EXISTS idx_hive_observations_at ON hive_observations(at DESC);
+
+        CREATE TABLE IF NOT EXISTS hive_commands (
+          id TEXT PRIMARY KEY,
+          at INTEGER NOT NULL,
+          instruction TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          accepted INTEGER NOT NULL DEFAULT 0,
+          payload TEXT NOT NULL DEFAULT '{}',
+          result TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_hive_commands_at ON hive_commands(at DESC);
+      `);
+    },
+  },
 ];

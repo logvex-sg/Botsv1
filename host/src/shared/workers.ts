@@ -32,7 +32,7 @@ export const WORKER_MODULES = [
   'PortalTask',
 ] as const;
 
-export const WORKER_PROTOCOL_VERSION = 3;
+export const WORKER_PROTOCOL_VERSION = 4;
 
 /** The WebSocket path workers dial. */
 export const WORKER_PATH = '/worker';
@@ -59,6 +59,7 @@ export const WorkerOutbound = {
   PING: 'ping',
   KICK: 'kick',
   CONTROL: 'control',
+  CONFIG: 'config',
 } as const;
 
 /**
@@ -96,6 +97,7 @@ export const TASK_KINDS = [
   'shulker-unpack',
   'restock',
   'portal-scan',
+  'nl-task',
 ] as const;
 
 export type TaskKind = (typeof TASK_KINDS)[number];

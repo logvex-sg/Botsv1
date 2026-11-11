@@ -270,6 +270,27 @@ export function registerIpc(context: AppContext, api: ApiServer, getWindow: () =
   handle('storage:profiles:list', () => storage.listProfiles());
   handle('storage:profiles:save', (name: string, description?: string) => storage.saveProfile(name, description));
   handle('storage:profiles:delete', (id: string) => storage.removeProfile(id));
+
+  // --------------------------------------------------------------- hive mode
+  const hive = context.hive;
+  handle('hive:overview', () => hive.overview());
+  handle('hive:map', () => hive.map());
+  handle('hive:state', (enabled: boolean) => {
+    hive.setEnabled(enabled);
+    return { ok: true, enabled };
+  });
+  handle('hive:formation', (formation: Parameters<typeof hive.setFormation>[0]) => ({ ok: true, formation: hive.setFormation(formation) }));
+  handle('hive:command', (instruction: string) => hive.runCommand(instruction));
+  handle('hive:roles:set', (workerId: string, role: Parameters<typeof hive.assignRole>[1], options?: Parameters<typeof hive.assignRole>[2]) => hive.assignRole(workerId, role, options));
+  handle('hive:commander', (workerId: string) => {
+    hive.setCommander(workerId);
+    return { ok: true, commanderId: workerId };
+  });
+  handle('hive:emergency-stop', (reason?: string) => {
+    hive.emergencyStop(reason || 'operator request');
+    return { ok: true };
+  });
+  handle('hive:export', (format: 'json' | 'csv') => exportHive(context, getWindow(), format));
 }
 
 function statisticsInput(context: AppContext): StatisticsInput {
@@ -310,6 +331,55 @@ function exportConfig(context: AppContext, win: BrowserWindow | null): { path: s
   const path = context.exportBundlePath();
   writeFileSync(path, JSON.stringify(context.exportBundle(), null, 2));
   return { path };
+}
+
+/**
+ * Writes the hive's shared state (members, roles, objectives, exploration, observations, command
+ * history) to a file. JSON is the full record; CSV flattens to one row per member so an operator can
+ * open the roster in a spreadsheet.
+ */
+async function exportHive(
+  context: AppContext,
+  win: BrowserWindow | null,
+  format: 'json' | 'csv',
+): Promise<{ path: string } | null> {
+  const overview = context.hive.overview();
+  const map = context.hive.map();
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const result = win
+    ? await dialog.showSaveDialog(win, {
+        defaultPath: `logvex-hive-${stamp}.${format}`,
+        filters: format === 'csv' ? [{ name: 'CSV', extensions: ['csv'] }] : [{ name: 'JSON', extensions: ['json'] }],
+      })
+    : { canceled: false, filePath: `logvex-hive-${stamp}.${format}` };
+  if (result.canceled || !result.filePath) return null;
+
+  if (format === 'csv') {
+    const lines = ['worker_id,label,role,commander,online,x,y,z,dimension,health,current_task,formation_x,formation_z'];
+    for (const member of overview.members) {
+      lines.push([
+        member.workerId, csvCell(member.label), member.role, member.isCommander, member.online,
+        member.position.x, member.position.y, member.position.z, member.dimension, member.health,
+        csvCell(member.currentTask), member.formationTarget?.x ?? '', member.formationTarget?.z ?? '',
+      ].join(','));
+    }
+    writeFileSync(result.filePath, lines.join('\n'));
+    return { path: result.filePath };
+  }
+
+  writeFileSync(result.filePath, JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    enabled: overview.enabled,
+    commanderId: overview.commanderId,
+    formation: overview.formation,
+    exploration: overview.exploration,
+    members: overview.members,
+    objectives: overview.objectives,
+    observations: overview.recentObservations,
+    commands: overview.commands,
+    map,
+  }, null, 2));
+  return { path: result.filePath };
 }
 
 function importConfig(context: AppContext, win: BrowserWindow | null): { imported: number } | null {

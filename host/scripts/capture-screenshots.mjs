@@ -40,7 +40,9 @@ const PAGES = [
   ['12-settings', 'settings'],
   ['13-storage-overview', 'storage'],
   ['14-storage-categories', 'storage', 'tab=categories'],
+  ['15-storage-category-editor', 'storage', 'tab=categories'],
   ['16-storage-structures', 'storage', 'tab=structures'],
+  ['17-hive', 'hive'],
 ];
 
 function findChrome() {

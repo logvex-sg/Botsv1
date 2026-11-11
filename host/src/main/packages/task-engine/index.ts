@@ -103,6 +103,7 @@ export const TASK_LIBRARY: readonly TaskDefinition[] = [
   define('shulker-unpack', 'Unpack a shulker box', 'Empty a carried shulker box into the worker\'s inventory.', 'Storage', ['shulker_unpack', 'container_move'], false, 30_000),
   define('restock', 'Restock from storage', 'Top the worker\'s inventory up to a minimum from a source container.', 'Storage', ['restock', 'container_move'], false, 30_000),
   define('portal-scan', 'Scan for portals', 'Find (or remove) nether and end portals near the worker.', 'Storage', ['portal_scan'], false, 20_000),
+  define('nl-task', 'Natural-language task', 'Interpret one plain-language instruction and run the checked plan it produces.', 'System', ['nl_task'], true, 60_000),
 ];
 
 const BY_KIND = new Map<TaskKind, TaskDefinition>(TASK_LIBRARY.map((def) => [def.kind, def]));

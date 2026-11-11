@@ -72,9 +72,19 @@ see [In-game swarm](#in-game-swarm-control-many-clients-from-one). The companion
 
 ### Installation
 
+The easiest way is to download a prebuilt file from the
+[**Releases**](https://github.com/logvex-sg/Botsv1/releases) page — see
+[`docs/RELEASE.md`](docs/RELEASE.md) for which file to pick and what to do with it. In short:
+
+- **Minecraft addon:** drop `logvex-hunter-<version>.jar` into your `mods` folder.
+- **Fleet Manager:** run the `...-windows-x64-setup.exe` on Windows, or the `.deb` / `.AppImage`
+  on Linux.
+
+To build from source instead:
+
 1. Install Fabric Loader for Minecraft 1.21.11.
 2. Put Meteor Client in your `mods` folder.
-3. Build the addon (see below) and copy `build/libs/logvex-hunter-1.2.0.jar` into `mods`.
+3. Build the addon (see below) and copy `build/libs/logvex-hunter-6.0.0.jar` into `mods`.
 4. Launch the game. The addon registers a **Logvex Hunter** category and ClickGUI tab.
 
 ### Building
@@ -86,7 +96,7 @@ export JAVA_HOME=/path/to/jdk-25
 ./gradlew clean test build
 ```
 
-The remapped, release-ready jar is written to `build/libs/logvex-hunter-1.2.0.jar`.
+The remapped, release-ready jar is written to `build/libs/logvex-hunter-6.0.0.jar`.
 
 ### Commands
 
@@ -288,6 +298,13 @@ position, efly) to one worker or many, reading back the result each client actua
 also send service **controls** (Connect, Pause, Resume, Restart, Disconnect) to a worker or a whole
 selection, and — through its **Worker Mode** page — act as a worker itself, so one machine can both
 drive a fleet and enrol into someone else's.
+
+Its **HIVE MODE** page coordinates the whole roster as one unit: assign each worker a role, pick a
+formation, and steer the group with a plain instruction ("Everyone follow me", "Scout the
+surrounding area"). The page shows a live canvas map of the swarm, the shared objective queue, the
+shared intelligence the workers reported, and the command history. Every hive order is dispatched
+through the *same* task plumbing the Workers page uses — it is a coordinator, not a second control
+path — and **Emergency stop** cancels every objective in one action.
 
 See [`host/README.md`](host/README.md) for the full feature list, architecture,
 build and packaging instructions, and screenshots in `host/docs/screenshots/`.

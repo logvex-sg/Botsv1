@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestContext, type TestContext } from '../helpers';
 import { DEFAULT_WORKER_MODE, WorkerModeService } from '../../src/main/worker-mode/worker-mode-service';
+import { WORKER_PROTOCOL_VERSION } from '../../src/shared/workers';
 
 let ctx: TestContext;
 let dir: string;
@@ -70,7 +71,7 @@ describe('worker config provisioning', () => {
     expect(result.path).toBe(join(dir, 'logvex-worker.json'));
     const written = JSON.parse(readFileSync(result.path, 'utf8'));
     expect(written).toMatchObject({ host: '192.168.1.50', port: 9000, label: 'Miner-1', group: 'Miners' });
-    expect(written.protocolVersion).toBe(3);
+    expect(written.protocolVersion).toBe(WORKER_PROTOCOL_VERSION);
     expect(written.modules).toBeTypeOf('object');
     // The permission keys are the ones WorkerConfig reads, so the mod honours them directly.
     expect(written.allowCommands).toBe(true);

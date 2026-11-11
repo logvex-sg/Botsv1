@@ -27,6 +27,7 @@ class TaskCatalogTest {
         assertTrue(kinds.contains(Protocol.TASK_SHULKER_PACK));
         assertTrue(kinds.contains(Protocol.TASK_RESTOCK));
         assertTrue(kinds.contains(Protocol.TASK_PORTAL_SCAN));
+        assertTrue(kinds.contains(Protocol.TASK_NL_TASK));
         for (String kind : kinds) {
             assertTrue(TaskCatalog.isSupported(kind), kind + " should be supported");
         }
@@ -42,7 +43,8 @@ class TaskCatalogTest {
                 Protocol.TASK_EQUIPMENT, Protocol.TASK_REGEAR, Protocol.TASK_COMMAND, Protocol.TASK_CHAT,
                 Protocol.TASK_POSITION, Protocol.TASK_EFLY, Protocol.TASK_CONTAINER_READ,
                 Protocol.TASK_CONTAINER_MOVE, Protocol.TASK_SHULKER_READ, Protocol.TASK_SHULKER_UNPACK,
-                Protocol.TASK_SHULKER_PACK, Protocol.TASK_RESTOCK, Protocol.TASK_PORTAL_SCAN
+                Protocol.TASK_SHULKER_PACK, Protocol.TASK_RESTOCK, Protocol.TASK_PORTAL_SCAN,
+                Protocol.TASK_NL_TASK
             ),
             TaskCatalog.all()
         );
@@ -71,6 +73,7 @@ class TaskCatalogTest {
         assertTrue(TaskCatalog.isMutating(Protocol.TASK_SHULKER_UNPACK));
         assertTrue(TaskCatalog.isMutating(Protocol.TASK_SHULKER_PACK));
         assertTrue(TaskCatalog.isMutating(Protocol.TASK_RESTOCK));
+        assertTrue(TaskCatalog.isMutating(Protocol.TASK_NL_TASK));
         assertFalse(TaskCatalog.isMutating(Protocol.TASK_STATUS));
         assertFalse(TaskCatalog.isMutating(Protocol.TASK_INVENTORY));
         assertFalse(TaskCatalog.isMutating(Protocol.TASK_COUNT));

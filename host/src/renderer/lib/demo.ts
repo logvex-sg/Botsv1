@@ -19,6 +19,8 @@ import { emptySnapshot, TASK_KINDS, type TaskKind, type WorkerItem, type WorkerT
 import { buildStatistics } from '../../main/packages/statistics';
 import { plan as planWithAi } from '../../main/packages/ai-planner';
 import { countByKind, fromPortal, issues as structureIssues, previewChange } from '../../main/packages/structure-registry';
+import type { FormationSpec } from '../../main/packages/hive';
+import type { HiveMapData, HiveOverview } from '../../main/hive/hive-service';
 
 const now = Date.now();
 
@@ -207,6 +209,68 @@ let workerModeStatus: WorkerClientStatus = {
   state: 'idle', connected: false, registered: false, workerId: '', username: '',
   protocolVersion: 3, grantedToken: '', lastError: '', paused: false, stopped: false, detail: 'Not connected',
 };
+
+let demoHiveEnabled = true;
+let demoFormation: FormationSpec = { kind: 'circle', spacing: 2, radius: 6 };
+
+/** A small static swarm for the demo Hive page. */
+function demoHiveOverview(): HiveOverview {
+  const members = [
+    { workerId: 'w1', label: 'Commander', role: 'COMMANDER' as const, isCommander: true, online: true, x: 124, z: 64 },
+    { workerId: 'w2', label: 'Scout Alpha', role: 'SCOUT' as const, isCommander: false, online: true, x: 132, z: 70 },
+    { workerId: 'w3', label: 'Scout Beta', role: 'SCOUT' as const, isCommander: false, online: true, x: 116, z: 70 },
+    { workerId: 'w4', label: 'Hauler', role: 'LOGISTICS' as const, isCommander: false, online: false, x: 120, z: 60 },
+  ].map((m) => ({
+    workerId: m.workerId,
+    label: m.label,
+    username: m.label,
+    role: m.role,
+    isCommander: m.isCommander,
+    online: m.online,
+    position: { x: m.x, y: 64, z: m.z },
+    dimension: 'minecraft:overworld',
+    health: 20,
+    maxHealth: 20,
+    currentTask: m.online ? (m.isCommander ? '' : 'Scout sector 2,1') : '',
+    busy: !m.isCommander && m.online,
+    formationTarget: m.isCommander ? null : { x: m.x, y: 64, z: m.z },
+    distanceToCommander: m.isCommander ? null : 12,
+    capabilities: ['navigate'],
+  }));
+  return {
+    enabled: demoHiveEnabled,
+    commanderId: 'w1',
+    formation: demoFormation,
+    activeObjective: 'Scout the surrounding area',
+    members,
+    online: members.filter((m) => m.online).length,
+    total: members.length,
+    objectives: [
+      { id: 'sector-0-0', kind: 'scout', needs: ['navigate'], position: { x: 124, y: 64, z: 64 }, priority: 20, label: 'Scout sector 0,0', assignedTo: 'w2', state: 'assigned', progress: 0.4, detail: {}, createdAt: now, updatedAt: now },
+      { id: 'sector-1-0', kind: 'scout', needs: ['navigate'], position: { x: 140, y: 64, z: 64 }, priority: 20, label: 'Scout sector 1,0', assignedTo: 'w3', state: 'assigned', progress: 0.1, detail: {}, createdAt: now, updatedAt: now },
+    ],
+    exploration: { total: 16, explored: 5, assigned: 2, unexplored: 9, percentComplete: 31, observations: 4 },
+    recentObservations: [
+      { id: 'obs-1', kind: 'structure', workerId: 'w2', x: 150, y: 64, z: 80, dimension: 'minecraft:overworld', at: now - 20_000, label: 'stone hut', detail: {} },
+      { id: 'obs-2', kind: 'player', workerId: 'w3', x: 110, y: 64, z: 40, dimension: 'minecraft:overworld', at: now - 5_000, label: 'Griefer99', detail: { name: 'Griefer99', distance: 22 } },
+    ],
+    commands: [
+      { id: 'c1', at: now - 60_000, instruction: 'Scout the surrounding area', kind: 'scout', accepted: true, payload: {}, result: 'Scouting 16 sectors (64 block radius).' },
+      { id: 'c2', at: now - 30_000, instruction: 'Circle around me', kind: 'circle', accepted: true, payload: {}, result: 'Everyone will circle the commander.' },
+    ],
+  };
+}
+
+function demoHiveMap(): HiveMapData {
+  const overview = demoHiveOverview();
+  return {
+    commander: { workerId: 'w1', position: { x: 124, y: 64, z: 64 }, dimension: 'minecraft:overworld' },
+    members: overview.members.map((m) => ({ workerId: m.workerId, label: m.label, role: m.role, position: m.position, target: m.formationTarget, dimension: m.dimension, online: m.online, busy: m.busy, color: '#4fc3f7' })),
+    sectors: Array.from({ length: 16 }, (_, i) => ({ id: `sector-${i % 4}-${Math.floor(i / 4)}`, minX: 100 + (i % 4) * 16, minZ: 40 + Math.floor(i / 4) * 16, maxX: 115 + (i % 4) * 16, maxZ: 55 + Math.floor(i / 4) * 16, state: i < 5 ? 'explored' : i < 7 ? 'assigned' : 'unexplored', assignedTo: i === 5 ? 'w2' : i === 6 ? 'w3' : null })),
+    landmarks: [{ id: 'obs-1', kind: 'structure', label: 'stone hut', position: { x: 150, y: 64, z: 80 }, at: now - 20_000 }],
+    players: [{ name: 'Griefer99', position: { x: 110, y: 64, z: 40 }, at: now - 5_000, distance: 22 }],
+  };
+}
 
 export function createDemoApi(): FleetApi {
   // In-memory storage subsystem, so the Storage page renders with realistic values under ?demo.
@@ -667,6 +731,22 @@ export function createDemoApi(): FleetApi {
     listStorageProfiles: async () => storageProfiles,
     saveStorageProfile: async (name, description) => { const p: StorageProfile = { id: `sp-${Date.now()}`, name, description: description ?? '', data: {}, createdAt: Date.now() }; storageProfiles.push(p); return p; },
     deleteStorageProfile: async (id) => { storageProfiles = storageProfiles.filter((p) => p.id !== id); return true; },
+
+    // hive mode (demo): a small, static swarm so the interface can be explored without a host.
+    hiveOverview: async (): Promise<HiveOverview> => demoHiveOverview(),
+    hiveMap: async (): Promise<HiveMapData> => demoHiveMap(),
+    hiveSetEnabled: async (enabled) => { demoHiveEnabled = enabled; return { ok: true, enabled }; },
+    hiveSetFormation: async (formation) => { demoFormation = { ...demoFormation, ...formation }; return { ok: true, formation: demoFormation }; },
+    hiveCommand: async (instruction) => ({
+      accepted: !instruction.includes('barrel'),
+      command: { kind: instruction.includes('barrel') ? 'unknown' : 'follow', instruction, everyone: true, confidence: instruction.includes('barrel') ? 0 : 0.9 },
+      message: instruction.includes('barrel') ? 'I did not recognise that instruction.' : 'Everyone will follow the commander.',
+      dispatched: [],
+    }),
+    hiveSetRole: async (workerId, role, options) => ({ workerId, role, extraCapabilities: options?.extraCapabilities ?? [], isCommander: Boolean(options?.commander), updatedAt: Date.now() }),
+    hiveSetCommander: async (workerId) => ({ ok: true, commanderId: workerId }),
+    hiveEmergencyStop: async () => { demoHiveEnabled = false; return { ok: true }; },
+    hiveExport: async () => ({ path: '/demo/logvex-hive.json' }),
 
     onEvent: () => () => {},
   };

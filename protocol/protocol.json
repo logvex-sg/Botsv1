@@ -1,7 +1,7 @@
 {
-  "$comment": "CANONICAL worker protocol. Single source of truth for the Logvex Fleet Manager worker wire contract. Both mirrors (host/src/shared/workers.ts and worker-mod/src/main/java/com/logvex/worker/core/Protocol.java) are checked against it by protocol/check-protocol.mjs, which runs from the host test suite. Edit this file first, then both mirrors, then run `npm test` in host/.",
+  "$comment": "CANONICAL worker protocol. Single source of truth for the Logvex Fleet Manager worker wire contract. Both mirrors (host/src/shared/workers.ts, bot/src/core/protocol/messages.ts and worker-mod/src/main/java/com/logvex/worker/core/Protocol.java) are checked against it by protocol/check-protocol.mjs, which runs from the host test suite. Edit this file first, then both mirrors, then run `npm test` in host/.",
   "name": "logvex-worker",
-  "version": 3,
+  "version": 4,
   "path": "/worker",
   "envelope": {
     "fields": [
@@ -10,7 +10,7 @@
       "id",
       "payload"
     ],
-    "note": "Newline-framed JSON. `v` is the protocol version; a mismatch is refused, not coerced. `id` correlates a request with its result/progress/error. A non-object payload is replaced with {}."
+    "note": "Newline-framed JSON. `v` is the protocol version; a mismatch is refused, not coerced. `id` correlates a request with its result/progress/error. A non-object payload is replaced with {}. v4 is additive over v3: `hello`/`register`/`status` may carry `runtime`; `nl-task` and the `config` frame are new."
   },
   "inbound": {
     "note": "worker -> host",
@@ -35,7 +35,8 @@
       "task",
       "ping",
       "kick",
-      "control"
+      "control",
+      "config"
     ]
   },
   "taskKinds": [
@@ -55,7 +56,8 @@
     "shulker-pack",
     "shulker-unpack",
     "restock",
-    "portal-scan"
+    "portal-scan",
+    "nl-task"
   ],
   "exclusiveTaskKinds": [
     "regear",

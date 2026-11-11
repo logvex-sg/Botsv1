@@ -212,6 +212,17 @@ const api = {
   saveStorageProfile: (name: string, description?: string) => invoke('storage:profiles:save', name, description),
   deleteStorageProfile: (id: string) => invoke('storage:profiles:delete', id),
 
+  // hive mode
+  hiveOverview: () => invoke('hive:overview'),
+  hiveMap: () => invoke('hive:map'),
+  hiveSetEnabled: (enabled: boolean) => invoke('hive:state', enabled),
+  hiveSetFormation: (formation: unknown) => invoke('hive:formation', formation),
+  hiveCommand: (instruction: string) => invoke('hive:command', instruction),
+  hiveSetRole: (workerId: string, role: string, options?: unknown) => invoke('hive:roles:set', workerId, role, options),
+  hiveSetCommander: (workerId: string) => invoke('hive:commander', workerId),
+  hiveEmergencyStop: (reason?: string) => invoke('hive:emergency-stop', reason),
+  hiveExport: (format: 'json' | 'csv') => invoke('hive:export', format),
+
   // live events
   onEvent: (callback: (event: unknown) => void) => {
     const listener = (_event: unknown, payload: unknown): void => callback(payload);

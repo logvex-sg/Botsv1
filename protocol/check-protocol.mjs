@@ -107,7 +107,7 @@ export function checkConsistency() {
   diff('exclusive task kinds (TS)', canonical.exclusiveTaskKinds, parseTsArray(ts, 'EXCLUSIVE_TASK_KINDS'), problems);
 
   const javaInbound = ['HELLO', 'REGISTER', 'STATUS', 'INVENTORY', 'EQUIPMENT', 'RESULT', 'PROGRESS', 'PONG', 'ERROR', 'LOG'];
-  const javaOutbound = ['HELLO_ACK', 'COMMAND', 'TASK', 'PING', 'KICK', 'CONTROL'];
+  const javaOutbound = ['HELLO_ACK', 'COMMAND', 'TASK', 'PING', 'KICK', 'CONTROL', 'CONFIG'];
   const javaInboundValues = javaInbound.map((n) => {
     const v = javaConstants.get(n);
     if (v === undefined) problems.push(`Protocol.java has no constant ${n}`);

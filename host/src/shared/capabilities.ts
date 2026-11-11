@@ -31,6 +31,7 @@ export const CAPABILITY_KEYS = [
   'shulker_unpack',
   'restock',
   'portal_scan',
+  'nl_task',
 ] as const;
 
 export type CapabilityKey = (typeof CAPABILITY_KEYS)[number];
@@ -59,6 +60,7 @@ const TASK_REQUIREMENTS: Record<TaskKind, readonly CapabilityKey[]> = {
   'shulker-unpack': ['shulker_unpack', 'container_move'],
   restock: ['restock', 'container_move'],
   'portal-scan': ['portal_scan'],
+  'nl-task': ['nl_task'],
 };
 
 export function requirementsFor(kind: TaskKind): readonly CapabilityKey[] {

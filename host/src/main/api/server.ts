@@ -363,6 +363,71 @@ export class ApiServer {
       }
     }
 
+    // ------------------------------------------------------------------ hive mode
+    if (path === '/api/v1/hive' && method === 'GET') return { body: ctx.hive.overview() };
+    if (path === '/api/v1/hive/overview' && method === 'GET') return { body: ctx.hive.overview() };
+    if (path === '/api/v1/hive/map' && method === 'GET') return { body: ctx.hive.map() };
+    if (path === '/api/v1/hive/roles' && method === 'GET') return { body: { roles: ctx.hive.listRoles() } };
+    if (path === '/api/v1/hive/objectives' && method === 'GET') {
+      return { body: { objectives: ctx.hive.overview().objectives } };
+    }
+    if (path === '/api/v1/hive/observations' && method === 'GET') {
+      return { body: { observations: ctx.hive.overview().recentObservations } };
+    }
+    if (path === '/api/v1/hive/commands' && method === 'GET') {
+      const limit = Number.parseInt(query.get('limit') ?? '', 10);
+      return { body: { commands: ctx.hive.listCommands(Number.isFinite(limit) ? limit : 100) } };
+    }
+    if (path === '/api/v1/hive/state' && method === 'POST') {
+      const enabled = body.enabled === true;
+      ctx.hive.setEnabled(enabled);
+      return { body: { ok: true, enabled } };
+    }
+    if (path === '/api/v1/hive/formation' && method === 'POST') {
+      const formation = ctx.hive.setFormation(body as Parameters<typeof ctx.hive.setFormation>[0]);
+      return { body: { ok: true, formation } };
+    }
+    if (path === '/api/v1/hive/command' && method === 'POST') {
+      const instruction = typeof body.instruction === 'string' ? body.instruction : '';
+      if (!instruction.trim()) return { status: 400, body: { error: 'instruction is required' } };
+      return { body: ctx.hive.runCommand(instruction) };
+    }
+    if (path === '/api/v1/hive/emergency-stop' && method === 'POST') {
+      ctx.hive.emergencyStop(typeof body.reason === 'string' ? body.reason : 'operator request');
+      return { body: { ok: true } };
+    }
+    if (path === '/api/v1/hive/observation' && method === 'POST') {
+      const observation = body as unknown as Parameters<typeof ctx.hive.recordObservation>[0];
+      if (!observation || typeof observation !== 'object' || typeof observation.id !== 'string') {
+        return { status: 400, body: { error: 'a full observation object is required' } };
+      }
+      ctx.hive.recordObservation(observation);
+      return { body: { ok: true } };
+    }
+    if (path === '/api/v1/hive/commander' && method === 'POST') {
+      const workerId = typeof body.workerId === 'string' ? body.workerId : '';
+      if (!workerId) return { status: 400, body: { error: 'workerId is required' } };
+      ctx.hive.setCommander(workerId);
+      return { body: { ok: true, commanderId: workerId } };
+    }
+    const hiveRoleMatch = /^\/api\/v1\/hive\/roles\/([^/]+)$/.exec(path);
+    if (hiveRoleMatch) {
+      const workerId = decodeURIComponent(hiveRoleMatch[1]);
+      if (method === 'PUT' || method === 'POST') {
+        const role = typeof body.role === 'string' ? (body.role as Parameters<typeof ctx.hive.assignRole>[1]) : 'GENERALIST';
+        const row = ctx.hive.assignRole(workerId, role, {
+          commander: body.commander === true,
+          extraCapabilities: Array.isArray(body.extraCapabilities) ? (body.extraCapabilities as string[]) : undefined,
+        });
+        return { body: row };
+      }
+      if (method === 'DELETE') return { body: { ok: true } };
+    }
+    const hiveObjectiveMatch = /^\/api\/v1\/hive\/objectives\/([^/]+)$/.exec(path);
+    if (hiveObjectiveMatch && method === 'DELETE') {
+      return { body: { ok: true, id: decodeURIComponent(hiveObjectiveMatch[1]) } };
+    }
+
     return undefined;
   }
 

@@ -31,7 +31,8 @@ public final class TaskCatalog {
         Protocol.TASK_SHULKER_UNPACK,
         Protocol.TASK_SHULKER_PACK,
         Protocol.TASK_RESTOCK,
-        Protocol.TASK_PORTAL_SCAN
+        Protocol.TASK_PORTAL_SCAN,
+        Protocol.TASK_NL_TASK
     );
 
     public static boolean isSupported(String kind) {
@@ -56,16 +57,17 @@ public final class TaskCatalog {
             Protocol.TASK_SHULKER_UNPACK,
             Protocol.TASK_SHULKER_PACK,
             Protocol.TASK_RESTOCK,
-            Protocol.TASK_PORTAL_SCAN
+            Protocol.TASK_PORTAL_SCAN,
+            Protocol.TASK_NL_TASK
         );
     }
 
     /**
      * Whether a kind changes game state and therefore requires the worker's task permissions to
      * allow it. Read-only kinds always run; {@code regear}, {@code command}, {@code chat},
-     * {@code efly} and the storage mutating kinds ({@code container-move}, {@code shulker-unpack},
-     * {@code restock}) move the client, talk to the server or move items, so a worker can refuse
-     * them.
+     * {@code efly}, the natural-language kind {@code nl-task} and the storage mutating kinds
+     * ({@code container-move}, {@code shulker-unpack}, {@code restock}) move the client, talk to the
+     * server or move items, so a worker can refuse them.
      */
     public static boolean isMutating(String kind) {
         if (kind == null) return false;
@@ -77,6 +79,7 @@ public final class TaskCatalog {
             || Protocol.TASK_CONTAINER_MOVE.equals(normalized)
             || Protocol.TASK_SHULKER_UNPACK.equals(normalized)
             || Protocol.TASK_SHULKER_PACK.equals(normalized)
-            || Protocol.TASK_RESTOCK.equals(normalized);
+            || Protocol.TASK_RESTOCK.equals(normalized)
+            || Protocol.TASK_NL_TASK.equals(normalized);
     }
 }

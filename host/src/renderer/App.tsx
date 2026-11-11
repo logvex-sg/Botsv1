@@ -25,13 +25,15 @@ import { WorkerModePage } from './pages/WorkerModePage';
 import { MultiversePage } from './pages/multiverse/MultiversePage';
 import { StatisticsPage } from './pages/StatisticsPage';
 import { StoragePage } from './pages/StoragePage';
+import { HivePage } from './pages/HivePage';
 import type { UiMode } from '../shared/types';
 
 export type PageId =
-  | 'dashboard' | 'workers' | 'groups' | 'tasks' | 'multiverse' | 'inventory' | 'regear' | 'commands' | 'consoles' | 'statistics' | 'storage' | 'worker-mode' | 'settings';
+  | 'dashboard' | 'hive' | 'workers' | 'groups' | 'tasks' | 'multiverse' | 'inventory' | 'regear' | 'commands' | 'consoles' | 'statistics' | 'storage' | 'worker-mode' | 'settings';
 
 const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '◉' },
+  { id: 'hive', label: 'HIVE MODE', icon: '⬢' },
   { id: 'workers', label: 'Workers', icon: '⛭' },
   { id: 'groups', label: 'Groups', icon: '◫' },
   { id: 'tasks', label: 'Tasks', icon: '▤' },
@@ -48,6 +50,7 @@ const NAV: { id: PageId; label: string; icon: string }[] = [
 
 const TITLES: Record<PageId, string> = {
   dashboard: 'Dashboard',
+  hive: 'HIVE MODE',
   workers: 'Workers',
   groups: 'Groups',
   tasks: 'Tasks',
@@ -62,7 +65,7 @@ const TITLES: Record<PageId, string> = {
   settings: 'Settings',
 };
 
-const PAGE_IDS: PageId[] = ['dashboard', 'workers', 'groups', 'tasks', 'multiverse', 'inventory', 'regear', 'commands', 'consoles', 'statistics', 'storage', 'worker-mode', 'settings'];
+const PAGE_IDS: PageId[] = ['dashboard', 'hive', 'workers', 'groups', 'tasks', 'multiverse', 'inventory', 'regear', 'commands', 'consoles', 'statistics', 'storage', 'worker-mode', 'settings'];
 
 /** Old ids from earlier versions map onto the new sections. */
 const ALIASES: Record<string, PageId> = {
@@ -220,6 +223,7 @@ function Shell() {
 
         <main className="content">
           {page === 'dashboard' && <DashboardPage onNavigate={setPage} push={push} />}
+          {page === 'hive' && <HivePage push={push} />}
           {page === 'workers' && <WorkersPage push={push} />}
           {page === 'groups' && <GroupsPage push={push} />}
           {page === 'tasks' && <TasksPage push={push} />}

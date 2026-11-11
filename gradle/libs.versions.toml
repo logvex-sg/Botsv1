@@ -1,5 +1,5 @@
 [versions]
-mod-version = "1.2.0"
+mod-version = "6.0.0"
 
 # Fabric (https://fabricmc.net/develop)
 # `java` is the language level the mod is compiled against and declares in fabric.mod.json.

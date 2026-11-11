@@ -56,6 +56,10 @@ import type {
 } from './types';
 import type { ControlAction, TaskKind, WorkerTaskResult } from './workers';
 import type { StatisticsReport } from '../main/packages/statistics';
+import type { FormationSpec, HiveRole } from '../main/packages/hive';
+import type { HiveMapData, HiveOverview } from '../main/hive/hive-service';
+import type { HiveCommandRow, HiveRoleRow } from '../main/db/hive-repositories';
+import type { CommandOutcome } from '../main/hive/hive-service';
 
 /** A normalised structure region, as the preview and create dialogs pass it. */
 export interface StructureRegion {
@@ -270,6 +274,17 @@ export interface FleetApi {
   // statistics
   getStatistics(): Promise<StatisticsReport>;
   exportStatistics(format: 'json' | 'csv'): Promise<{ path: string } | null>;
+
+  // hive mode
+  hiveOverview(): Promise<HiveOverview>;
+  hiveMap(): Promise<HiveMapData>;
+  hiveSetEnabled(enabled: boolean): Promise<{ ok: boolean; enabled: boolean }>;
+  hiveSetFormation(formation: Partial<FormationSpec>): Promise<{ ok: boolean; formation: FormationSpec }>;
+  hiveCommand(instruction: string): Promise<CommandOutcome>;
+  hiveSetRole(workerId: string, role: HiveRole, options?: { commander?: boolean; extraCapabilities?: string[] }): Promise<HiveRoleRow>;
+  hiveSetCommander(workerId: string): Promise<{ ok: boolean; commanderId: string }>;
+  hiveEmergencyStop(reason?: string): Promise<{ ok: boolean }>;
+  hiveExport(format: 'json' | 'csv'): Promise<{ path: string } | null>;
 
   // autonomous storage & world maintenance
   storageOverview(): Promise<StorageOverview>;
@@ -544,6 +559,15 @@ export const IPC = {
   disposalPreview: 'storage:disposal:preview',
   storageActivity: 'storage:activity',
   storageAsk: 'storage:ask',
+  hiveOverview: 'hive:overview',
+  hiveMap: 'hive:map',
+  hiveSetEnabled: 'hive:state',
+  hiveSetFormation: 'hive:formation',
+  hiveCommand: 'hive:command',
+  hiveSetRole: 'hive:roles:set',
+  hiveSetCommander: 'hive:commander',
+  hiveEmergencyStop: 'hive:emergency-stop',
+  hiveExport: 'hive:export',
   listStorageProfiles: 'storage:profiles:list',
   saveStorageProfile: 'storage:profiles:save',
   deleteStorageProfile: 'storage:profiles:delete',
