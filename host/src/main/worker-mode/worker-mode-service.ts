@@ -165,7 +165,7 @@ export class WorkerModeService {
   /**
    * Writes the worker config the Fabric mod reads, from the current Worker Mode settings.
    *
-   * The file is exactly what `worker-mod` expects (`logvex-worker.json`): host, port, token or
+   * The file is exactly what the mod's Worker half expects (`logvex-worker.json`): host, port, token or
    * pairing code, a stable worker id, the operator's display name, and the per-module toggles. The
    * operator drops it into each bot's `mods/` folder (or points the mod at this path), so the same
    * screen that tests a connection also produces the artefact that ships.

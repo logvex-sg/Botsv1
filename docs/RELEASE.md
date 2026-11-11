@@ -1,4 +1,4 @@
-# Logvex v6.0.0 — release guide
+# Logvex v6.1.0 — release guide
 
 This page explains what is in a Logvex release and, for each file, exactly what to do with it.
 
@@ -8,25 +8,28 @@ A Logvex release contains two kinds of thing:
 
 | Kind | Files | Platform |
 | --- | --- | --- |
-| **Minecraft mods** (Java, run inside the game) | `logvex-hunter-v6.0.0.jar`, `logvex-worker-v6.0.0.jar` | Any OS — the jars are platform-independent |
+| **Minecraft mod** (Java, runs inside the game) | `logvex-hunter-v6.1.0.jar` | Any OS — the jar is platform-independent |
 | **Fleet Manager** (Electron desktop app) | `...-windows-x64-setup.exe`, `...-linux-x86_64.AppImage`, `...-linux-x86_64.deb` | Windows, Debian/Ubuntu Linux |
 
 There is one release per version. The Windows and Linux files are the *same application* built for
 two platforms; you download only the one for your OS.
 
+The mod is **one jar**. It contains both halves: the Hunter features and the Worker. Every client
+that should be visible to the Fleet Manager runs the same file.
+
 ## Pick your files
 
 | You want to… | Download |
 | --- | --- |
-| Play with the Hunter addon in Minecraft | `logvex-hunter-v6.0.0.jar` (Windows, macOS, Linux — same file) |
-| Run bot clients the Fleet Manager can drive | `logvex-worker-v6.0.0.jar` (same file on every OS) |
-| Run the Fleet Manager on **Windows** | `Logvex-Fleet-Manager-v6.0.0-windows-x64-setup.exe` |
-| Run the Fleet Manager on **Debian/Ubuntu** (installed) | `Logvex-Fleet-Manager-v6.0.0-linux-x86_64.deb` |
-| Run the Fleet Manager on **any Linux** (no install) | `Logvex-Fleet-Manager-v6.0.0-linux-x86_64.AppImage` |
+| Play with the Hunter features in Minecraft | `logvex-hunter-v6.1.0.jar` (Windows, macOS, Linux — same file) |
+| Let the Fleet Manager drive this client | the same `logvex-hunter-v6.1.0.jar` |
+| Run the Fleet Manager on **Windows** | `Logvex-Fleet-Manager-v6.1.0-windows-x64-setup.exe` |
+| Run the Fleet Manager on **Debian/Ubuntu** (installed) | `Logvex-Fleet-Manager-v6.1.0-linux-x86_64.deb` |
+| Run the Fleet Manager on **any Linux** (no install) | `Logvex-Fleet-Manager-v6.1.0-linux-x86_64.AppImage` |
 | Verify your download | `SHA256SUMS.txt` |
 
-The two `.jar` files are the only things a player needs. The desktop app is optional — it is the
-Fleet Manager host that coordinates several bot clients.
+The `.jar` is the only thing a player needs. The desktop app is optional — it is the Fleet Manager
+controller that coordinates several clients.
 
 ---
 
@@ -47,9 +50,10 @@ signature does and does not prove, and how to verify it.
 
 1. Install Fabric Loader for Minecraft 1.21.11.
 2. Put [Meteor Client](https://meteorclient.com/) `1.21.11-SNAPSHOT` in `%APPDATA%\.minecraft\mods`.
-3. Copy `logvex-hunter-v6.0.0.jar` into the same `mods` folder.
-4. To drive this client from the Fleet Manager, also copy `logvex-worker-v6.0.0.jar` into `mods`.
-5. Launch the game. The addon registers a **Logvex Hunter** ClickGUI category.
+3. Copy `logvex-hunter-v6.1.0.jar` into the same `mods` folder. That one jar is both the Hunter
+   features and the Worker — a client the Fleet Manager should drive runs the same file.
+4. Launch the game. The mod registers a **Logvex Hunter** ClickGUI category and, when pointed at a
+   controller, a **Fleet Manager** category.
 
 ---
 
@@ -77,11 +81,10 @@ If the AppImage refuses to start because of FUSE, run it with
 ### Minecraft mods
 
 1. Install Fabric Loader for Minecraft 1.21.11.
-2. Put Meteor Client `1.21.11-SNAPSHOT` and `logvex-hunter-v6.0.0.jar` (and optionally
-   `logvex-worker-v6.0.0.jar`) in `~/.minecraft/mods`.
+2. Put Meteor Client `1.21.11-SNAPSHOT` and `logvex-hunter-v6.1.0.jar` in `~/.minecraft/mods`.
 3. Launch the game.
 
-Both mods need **Java 21** at runtime, which a stock 1.21.11 install already uses.
+The mod needs **Java 21** at runtime, which a stock 1.21.11 install already uses.
 
 ---
 
@@ -103,7 +106,7 @@ The printed hash must match the matching line in `SHA256SUMS.txt`.
 
 ## Connecting a bot to the Fleet Manager
 
-The Fleet Manager does not talk to the Hunter addon; it drives **Logvex Worker** clients.
+The Fleet Manager does not talk to the Hunter features; it drives the Worker half of the mod.
 
 1. Open the Fleet Manager on the host machine.
 2. **Dashboard → Generate pairing code** — copy the short code.
@@ -122,8 +125,7 @@ for every page and the REST API.
 # Minecraft mods (needs JDK 25 to build; the mods run on Java 21)
 export JAVA_HOME=/path/to/jdk-25
 ./gradlew clean test build
-# -> build/libs/logvex-hunter-6.0.0.jar
-# -> worker-mod/build/libs/logvex-worker-6.0.0.jar
+# -> build/libs/logvex-hunter-6.1.0.jar   (one jar: Hunter + Worker)
 
 # Fleet Manager (needs Node 20+)
 cd host
@@ -132,5 +134,5 @@ npm run package:linux   # -> release/ (AppImage + .deb)
 npm run package:win     # -> release/ (NSIS installer; needs Wine on Linux)
 ```
 
-The version string lives in one place for the mods (`gradle/libs.versions.toml`, `mod-version`) and
-in `host/package.json` / `bot/package.json` for the desktop apps. Bump all three together.
+The version string lives in `gradle/libs.versions.toml` (`mod-version`) for the mod and in
+`host/package.json` / `bot/package.json` for the desktop apps. Bump them together.

@@ -3,7 +3,7 @@
  *
  * The worker wire contract is declared three times: canonically in `protocol/protocol.json`, in
  * TypeScript for the host (`host/src/shared/workers.ts`) and in Java for the mod
- * (`worker-mod/src/main/java/com/logvex/worker/core/Protocol.java`). Nothing at compile time ties
+ * (`src/main/java/com/logvex/worker/core/Protocol.java`). Nothing at compile time ties
  * the three together, so this script reads all three as text and asserts they agree. It is run from
  * the host's Vitest suite (`host/tests/unit/protocol-consistency.test.ts`), so a drift between any
  * two of them fails the build instead of reaching a user as a frame the other side cannot parse.
@@ -88,7 +88,7 @@ export function checkConsistency() {
   const canonical = loadCanonical();
   const ts = readFileSync(join(repoRoot, 'host', 'src', 'shared', 'workers.ts'), 'utf8');
   const java = readFileSync(
-    join(repoRoot, 'worker-mod', 'src', 'main', 'java', 'com', 'logvex', 'worker', 'core', 'Protocol.java'),
+    join(repoRoot, 'src', 'main', 'java', 'com', 'logvex', 'worker', 'core', 'Protocol.java'),
     'utf8',
   );
   const javaConstants = parseJavaConstants(java);

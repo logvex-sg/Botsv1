@@ -11,14 +11,14 @@ direction — the host *reading* a client over HTTP — is the companion API and
 
 | Side | File | Role |
 | --- | --- | --- |
-| Worker (Java) | [`worker-mod/src/main/java/com/logvex/worker/core/Protocol.java`](../worker-mod/src/main/java/com/logvex/worker/core/Protocol.java) | The declared constants: version, message types, task kinds, payload field names, efly actions. |
+| Worker (Java) | [`src/main/java/com/logvex/worker/core/Protocol.java`](../src/main/java/com/logvex/worker/core/Protocol.java) | The declared constants: version, message types, task kinds, payload field names, efly actions. |
 | Host (TypeScript) | [`host/src/shared/workers.ts`](../host/src/shared/workers.ts) | The host mirror: the same constants plus the envelope decoder and the snapshot/task types. |
 | Drift guard | [`host/tests/unit/protocol-consistency.test.ts`](../host/tests/unit/protocol-consistency.test.ts) | Runs `protocol/check-protocol.mjs`, the canonical checker that reads all three mirrors (`protocol.json`, `workers.ts`, `Protocol.java`) and asserts they agree. |
 
 The two copies are kept in sync by hand, because one is Java and one is TypeScript. The drift test is
 what makes that safe: it parses the Java constants and compares them to the TypeScript ones, so a
 message type or task kind added to one side only fails `npm test` in CI instead of reaching a user as
-a frame the other side cannot understand. `worker-mod`'s own `TaskCatalogTest` covers the worker's
+a frame the other side cannot understand. the worker's own `TaskCatalogTest` covers the worker's
 copy in the same spirit.
 
 If you change the protocol, change it in this order:
@@ -27,7 +27,7 @@ If you change the protocol, change it in this order:
 2. Mirror it in `src/shared/workers.ts` and, if it is a task kind, add it to `TASK_KINDS` and to
    `TaskCatalog.KINDS`.
 3. Add the field to the relevant payload type and its decoder in `workers.ts`.
-4. Run `npm test` in `fleet-manager` and `./gradlew :worker-mod:test` at the root — the drift test
+4. Run `npm test` in `fleet-manager` and `./gradlew test` at the root — the drift test
    and the catalog test will tell you what you missed.
 5. Bump `Protocol.VERSION` if the envelope or an existing payload changes *shape*, and note it in
    [`../CHANGELOG.md`](../CHANGELOG.md).

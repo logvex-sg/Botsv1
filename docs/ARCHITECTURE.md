@@ -9,7 +9,7 @@ and this document disagree, one of them is a bug.
 ## 1. What the product is
 
 Logvex Multiverse is a central control system for **real Minecraft clients**. It does not simulate
-bots: every worker is an actual Minecraft: Java Edition client with the Logvex Worker mod installed,
+bots: every worker is an actual Minecraft: Java Edition client with the Logvex Hunter mod installed,
 which dials *out* to the Host. Nothing the Host shows about a worker is invented — it is what that
 client last reported.
 
@@ -18,8 +18,8 @@ Four components:
 | Component | Lives in | Responsibility |
 |-----------|----------|----------------|
 | **Host** | `host/` (Electron + React + TypeScript) | Registry, servers, groups, tasks, scheduling, inventory, equipment, analytics, permissions, persistence, UI |
-| **Worker** | `worker-mod/` (Fabric mod, Java 21) | The Minecraft-side executor: connects out, registers, reports, runs a closed set of client-side tasks |
-| **Meteor integration** | `worker-mod/src/main/java/com/logvex/worker/meteor/` | Exposes the worker inside Meteor's ClickGUI under a `Logvex Multiverse` category |
+| **Worker** | `src/main/java/com/logvex/worker/` (part of the Hunter mod, Java 21) | The Minecraft-side executor: connects out, registers, reports, runs a closed set of client-side tasks |
+| **Meteor integration** | `src/main/java/com/logvex/worker/meteor/` | Exposes the worker inside Meteor's ClickGUI under a `Logvex Multiverse` category |
 | **Multiverse** | Host-side organisational layer | Server profiles, worker groups, task environments, equipment presets, per-version compatibility |
 
 ### Direction of control
@@ -53,7 +53,7 @@ Botsv1/
 │   ├── src/renderer/          React UI (Vite)
 │   ├── src/shared/            Types + protocol mirror shared by main and renderer
 │   └── tests/                 Vitest: unit + integration (real sockets)
-├── worker-mod/                Fabric worker mod (Gradle subproject, builds on its own)
+└── src/main/java/com/logvex/worker/  Worker half of the same mod (same Gradle project)
 │   └── src/main/java/com/logvex/worker/
 │       ├── core/              Minecraft-free: protocol, config, link, task catalog
 │       ├── mc/                Game adapters (client-thread only)
@@ -111,7 +111,7 @@ Kept because they already fit and work:
   this is one, and it builds and packages today.
 - **SQLite (`better-sqlite3`)** for persistence. Synchronous, in-process, transactional, no server.
 - **`ws`** for the worker WebSocket. The Host needs a server; the Worker mod uses its own client.
-- **Fabric + Meteor** for the Worker mod, compiled to Java 21 bytecode (Minecraft 1.21.11 runs on
+- **Fabric + Meteor** for the mod (Hunter + Worker in one jar), compiled to Java 21 bytecode (Minecraft 1.21.11 runs on
   Java 21). The build runs on JDK 25 because Fabric Loom 1.18 requires a Java 25 runtime.
 
 Rejected / not introduced:

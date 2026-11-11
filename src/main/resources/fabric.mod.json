@@ -3,17 +3,22 @@
   "id": "logvex-hunter",
   "version": "${version}",
   "name": "Logvex Hunter",
-  "description": "A modular hunter dashboard, player tracker, combat coordinator, equipment manager, defensive stasis system and in-game swarm control for Meteor Client.",
+  "description": "One mod, two jobs. Hunter: a player tracker, combat coordinator, equipment manager, defensive stasis system and in-game swarm control for Meteor Client. Worker: dials out to a Logvex Fleet Manager controller so this client can be driven remotely (status, inventory, regear, efly, command, chat).",
   "authors": [
     "Logvex"
   ],
   "contact": {
     "sources": "https://github.com/logvex-sg/Botsv1"
   },
+  "license": "MIT",
   "environment": "client",
   "entrypoints": {
+    "client": [
+      "com.logvex.worker.WorkerMod"
+    ],
     "meteor": [
-      "com.logvex.hunter.HunterAddon"
+      "com.logvex.hunter.HunterAddon",
+      "com.logvex.worker.meteor.FleetAddon"
     ]
   },
   "mixins": [
@@ -30,6 +35,7 @@
   "depends": {
     "java": ">=${jdk_version}",
     "minecraft": "${minecraft_version}",
+    "fabricloader": ">=0.16.0",
     "meteor-client": "*"
   }
 }

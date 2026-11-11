@@ -46,17 +46,16 @@ If you just want to get running, start with the task-oriented walkthrough in
 - optionally **registers other clients** and polls their read-only stats,
 - serves a local, authenticated **companion HTTP API** so a desktop app can read and control it.
 
-**Logvex Fleet Manager** (the desktop app) is the **host**: a control plane that does not run bots
-and holds no game account. Each bot is a real Minecraft client running the **Logvex Worker** mod
-(`worker-mod/`), which dials the host over a WebSocket and answers a closed set of named tasks
-(status, inventory, count, search, equipment, regear, command, chat, position, **efly**). The host
-shows live state, pairs new workers with a short code, dispatches tasks and records the confirmed
-results. See [`worker-mod/README.md`](worker-mod/README.md) and
-[`host/README.md`](host/README.md).
+**Logvex Fleet Manager** (the desktop app) is the **controller**: a control plane that does not run
+bots and holds no game account. Each bot is a real Minecraft client running the same **Logvex
+Hunter** mod, whose Worker half dials the controller over a WebSocket and answers a closed set of
+named tasks (status, inventory, count, search, equipment, regear, command, chat, position, **efly**).
+The controller shows live state, pairs new workers with a short code, dispatches tasks and records the
+confirmed results. See [`host/README.md`](host/README.md).
 
 > **Scope.** The addon observes, records and coordinates Meteor's own modules around a target that
 > is selected manually or by its filters. It adds no unattended combat automation of its own. The
-> Worker mod has no combat task kind, and the Fleet Manager never fights for you — it steers a
+> The Worker half has no combat task kind, and the Fleet Manager never fights for you — it steers a
 > client only through that client's own modules, in controlled environments.
 
 ---
@@ -592,10 +591,10 @@ instead through its own **companion API** (see section 13) by a browser or a scr
 Hunter clients are coordinated in game with the **swarm** module (section 12b). The Fleet Manager's
 job is the other direction — controlling **Logvex Worker** clients.
 
-The Fleet Manager drives the **Logvex Worker** mod. Put `logvex-worker-<version>.jar` (from
-`worker-mod/build/libs`) into a bot client's `mods` folder, start it once so it writes
-`config/logvex-worker.json`, then point it at the Fleet Manager host. The simplest way is a pairing
-code from the Dashboard (**Generate pairing code**):
+The Fleet Manager drives the Worker half of the mod. Put `logvex-hunter-<version>.jar` into a bot
+client's `mods` folder, start it once so it writes `config/logvex-worker.json`, then point it at the
+Fleet Manager controller. The simplest way is a pairing code from the Dashboard (**Generate pairing
+code**):
 
 ```json
 {

@@ -1,5 +1,5 @@
 {
-  "$comment": "CANONICAL worker protocol. Single source of truth for the Logvex Fleet Manager worker wire contract. Both mirrors (host/src/shared/workers.ts, bot/src/core/protocol/messages.ts and worker-mod/src/main/java/com/logvex/worker/core/Protocol.java) are checked against it by protocol/check-protocol.mjs, which runs from the host test suite. Edit this file first, then both mirrors, then run `npm test` in host/.",
+  "$comment": "CANONICAL worker protocol. Single source of truth for the Logvex Fleet Manager worker wire contract. Both mirrors (host/src/shared/workers.ts, bot/src/core/protocol/messages.ts and src/main/java/com/logvex/worker/core/Protocol.java) are checked against it by protocol/check-protocol.mjs, which runs from the host test suite. Edit this file first, then both mirrors, then run `npm test` in host/.",
   "name": "logvex-worker",
   "version": 4,
   "path": "/worker",

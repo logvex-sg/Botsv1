@@ -1,7 +1,7 @@
 /**
  * The Fleet Manager side of the worker protocol.
  *
- * This mirrors `worker-mod/src/main/java/com/logvex/worker/core/Protocol.java`. The two are kept in
+ * This mirrors `src/main/java/com/logvex/worker/core/Protocol.java`. The two are kept in
  * sync by hand because one is TypeScript and one is Java; `tests/unit/worker-protocol-drift.test.ts`
  * reads the Java source and asserts this file matches it, so a drift between them fails the build
  * rather than failing in production. The contract is documented in `docs/PROTOCOL.md`.

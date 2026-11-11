@@ -6,6 +6,30 @@ Fleet Manager** desktop app. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.0] - 2026-11-11
+
+### Changed
+- **One mod instead of two.** The separate `logvex-worker` Fabric mod has been merged into the
+  Logvex Hunter mod. Both halves now build from one source set and ship as a single jar
+  (`logvex-hunter-v6.1.0.jar`), which declares one client entrypoint and two Meteor entrypoints
+  (`HunterAddon` and `FleetAddon`). There is no `worker-mod/` Gradle subproject and no second jar to
+  keep in step with the first.
+- **The desktop app is called the controller.** Docs, the landing page and the release guide now
+  describe the Fleet Manager as the controller that drives clients running the one mod, rather than
+  a "host" paired with a separate "worker mod".
+- Release, getting-started and usage docs updated for the single-jar install: put
+  `logvex-hunter-v6.1.0.jar` in `mods/` and every client the Fleet Manager should drive runs the
+  same file.
+
+### Fixed
+- **`SmokeTest.versionIsSet` no longer hardcodes the version.** It reads the version stamped into
+  `fabric.mod.json` and asserts `HunterAddon.VERSION` matches, so a version bump cannot leave the
+  two disagreeing (the test was still asserting the long-stale `1.1.0`).
+- **`HunterAddon.VERSION` was stale** (`1.1.0` while the build stamped `6.0.0`); it is now `6.1.0`,
+  matching `gradle/libs.versions.toml`.
+- `USAGE.md`'s table of contents listed the wrong sections (missing 12b and 19, and misnumbered the
+  last two); it now matches the headings.
+
 ## [6.0.0] - 2026-11-11
 
 ### Fixed

@@ -20,7 +20,7 @@ outbound connection, so the Host never needs an inbound port on a bot machine.
 └──────────────────────────────────────────────────────────────────────────────┘
         ▲ ws:// (workers dial out)      ▲ IPC (preload)     ▲ fetch/WebSocket (API token)
         │                               │                   │
-┌── worker-mod (Minecraft client) ─┐  ┌─ renderer (React) ─┐ └─ external tools / automation
+┌── Logvex Hunter mod (MC client) ─┐  ┌─ renderer (React) ─┐ └─ external tools / automation
 │  reads the client, runs tasks    │  │  shell, pages,     │
 │  reconnects forever              │  │  store, API bridge │
 └──────────────────────────────────┘  └────────────────────┘
@@ -62,7 +62,7 @@ in-memory database and drive a real WebSocket worker against it.
 ## The worker protocol
 
 The wire contract lives in `shared/workers.ts` and mirrors
-`worker-mod/src/main/java/com/logvex/worker/core/Protocol.java`. `tests/unit/worker-protocol-drift.test.ts`
+`src/main/java/com/logvex/worker/core/Protocol.java`. `tests/unit/worker-protocol-drift.test.ts`
 reads the Java source and asserts the two agree, so a drift fails the build rather than reaching a
 user as a frame neither side understands.
 

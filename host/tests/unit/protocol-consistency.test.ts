@@ -33,7 +33,7 @@ interface ProtocolChecker {
 const checker = (await import(pathToFileURL(join(repoRoot, 'protocol', 'check-protocol.mjs')).href)) as ProtocolChecker;
 const canonical = checker.loadCanonical();
 const javaSource = readFileSync(
-  join(repoRoot, 'worker-mod', 'src', 'main', 'java', 'com', 'logvex', 'worker', 'core', 'Protocol.java'),
+  join(repoRoot, 'src', 'main', 'java', 'com', 'logvex', 'worker', 'core', 'Protocol.java'),
   'utf8',
 );
 

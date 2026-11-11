@@ -19,7 +19,7 @@ the full reference, [USAGE.md](../USAGE.md) has every setting, endpoint and comm
 
 1. Install **Fabric Loader** for Minecraft **1.21.11** and put **Meteor Client** `1.21.11-SNAPSHOT`
    in your `mods` folder.
-2. Drop **`logvex-hunter-v6.0.0.jar`** in the same `mods` folder. Launch the game.
+2. Drop **`logvex-hunter-v6.1.0.jar`** in the same `mods` folder. Launch the game.
 3. Press **Right Shift** (Meteor's default) to open the ClickGUI, then open the **Logvex Hunter**
    category. That is the dashboard.
 
@@ -31,19 +31,20 @@ landing page <https://logvex-sg.github.io/Botsv1/>.
 
 ---
 
-## What the three pieces are
+## What you are installing
+
+There are two downloads, and one of them is the whole game side:
 
 | Piece | What it is | Do you need it? |
 | --- | --- | --- |
-| **LogVex Hunter** | A Meteor addon. Tracks players, records statistics, coordinates Meteor's combat modules, and can control *other* Hunter clients from in-game. | Yes, if you want any of this. |
-| **Logvex Worker** | A second Fabric mod. It dials **out** to a Fleet Manager and answers tasks (status, inventory, regear, command, chat, efly). | Only for Path B and C. |
-| **Logvex Fleet Manager** | A desktop app (Windows / Linux). It is the **host**: it sends tasks to Worker clients and reads back confirmed results. | Only for Path B and C. |
+| **Logvex Hunter** (the mod) | One Meteor addon jar. It holds the Hunter features (player tracking, statistics, combat coordination, swarm) **and** the Worker (dials **out** to a controller and answers tasks: status, inventory, regear, command, chat, efly). | Yes — this is the only thing you put in `mods`. |
+| **Logvex Fleet Manager** (the controller) | A desktop app (Windows / Linux). It sends tasks to clients running the mod and reads back confirmed results. | Only for Path B and C. |
 
 Two things worth knowing before you start:
 
 - **The Fleet Manager never logs into Minecraft.** It holds no account and needs no inbound port on a
-  bot machine. Each bot is a real Minecraft client running the Worker mod, which connects *to* the host.
-- **Nothing here attacks on its own.** The Hunter addon monitors and coordinates; it does not add
+  bot machine. Each bot is a real Minecraft client running the mod, which connects *to* the controller.
+- **Nothing here attacks on its own.** The Hunter features monitor and coordinate; they do not add
   unattended combat automation. HIVE MODE coordinates movement and tasks, and a broadcast that would
   arm combat on the whole fleet is refused unless you explicitly opt in.
 
@@ -100,9 +101,9 @@ You want a desktop app that drives a Minecraft client. Start with one bot; add m
 
 ### 2. Prepare the bot client (the Minecraft side)
 
-1. On the machine that will be the bot, install Fabric 1.21.11 + Meteor + **both** jars:
-   `logvex-hunter-v6.0.0.jar` and `logvex-worker-v6.0.0.jar`.
-2. Launch the game once so the Worker mod writes its config, then close it.
+1. On the machine that will be the bot, install Fabric 1.21.11 + Meteor + the one mod jar:
+   `logvex-hunter-v6.1.0.jar`.
+2. Launch the game once so the Worker half writes its config, then close it.
 3. Open `config/logvex-worker.json` and point it at the host:
    ```json
    {
@@ -141,7 +142,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 A worker starts with the safe defaults **off**: `allowCommands`, `allowChat`, `allowDigging`,
 `allowCrafting`, `allowDisposal` and `allowPortalRemoval` are all disabled; container moves, shulker
 pack/unpack and restock are on. Turn on only what this bot needs, in its `config/logvex-worker.json`
-(or the Worker mod's settings screen). **The host can narrow these but never widen them** — the
+(or the Worker settings screen). **The controller can narrow these but never widen them** — the
 runtime applies the intersection.
 
 ---
@@ -269,7 +270,7 @@ npx logvex-bot commands         list the server commands this worker may send
 | What | Where |
 | --- | --- |
 | Hunter addon settings | `config/logvex-hunter/` in your Minecraft folder (plus profiles) |
-| Worker mod settings | `config/logvex-worker.json` in the bot's Minecraft folder |
+| Worker settings | `config/logvex-worker.json` in the bot's Minecraft folder |
 | Fleet Manager data | the app's user-data directory — SQLite database (roster, groups, task history, storage, hive state) |
 | Bot runtime state | its own `stateDir`, default the current directory |
 
@@ -307,4 +308,4 @@ from the client's side — start there rather than guessing.
 | [docs/PROTOCOL.md](PROTOCOL.md) | The worker ↔ host wire protocol. |
 | [docs/ARCHITECTURE.md](ARCHITECTURE.md) | How the pieces fit together internally. |
 | [host/README.md](../host/README.md) | Every Fleet Manager page and its REST API. |
-| [worker-mod/README.md](../worker-mod/README.md) | The Worker mod in detail. |
+| [README.md](../README.md#worker-part-of-the-same-mod) | The Worker half of the mod in detail. |

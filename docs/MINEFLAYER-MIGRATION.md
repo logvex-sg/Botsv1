@@ -10,7 +10,7 @@ autonomous botting:
 
 | Plane | Transport | What it does | Verdict |
 | --- | --- | --- | --- |
-| **Worker protocol** (`host/src/main/workers`, `worker-mod/`) | WebSocket, JSON, `/worker` | A client dials *out* to the host; the host sends one of a closed set of task kinds; the client reports a result. | **Migrate to Mineflayer.** The protocol is already transport-agnostic and bot-shaped. |
+| **Worker protocol** (`host/src/main/workers`, `src/main/java/com/logvex/worker/`) | WebSocket, JSON, `/worker` | A client dials *out* to the host; the host sends one of a closed set of task kinds; the client reports a result. | **Migrate to Mineflayer.** The protocol is already transport-agnostic and bot-shaped. |
 | **Swarm** (`src/main/java/com/logvex/hunter/core/swarm`) | Raw TCP, newline JSON | One Meteor client drives other Meteor clients for combat. | **Stays Fabric.** It exists to coordinate in-game combat modules that only make sense inside a client. |
 | **Companion** (`core/companion`) | HTTP + SSE, `/api/v1/*` | A browser or script reads one Hunter client's state and sends control lines. | **Stays Fabric.** It is a window into a live human client, not a bot runner. |
 
@@ -26,8 +26,8 @@ So the split is:
   inventory, opening containers, moving items, packing and unpacking shulkers, walking to a chest,
   scanning portals, reporting status, and running a natural-language task. This is the autonomous
   execution framework.
-- **Fabric (`worker-mod/`, Hunter)** keeps what genuinely needs the game client: the Meteor module
-  UI, the combat coordination layer, the swarm, the HUD, and the companion API. `worker-mod` keeps
+- **Fabric (Hunter + Worker, one mod)** keeps what genuinely needs the game client: the Meteor module
+  UI, the combat coordination layer, the swarm, the HUD, and the companion API. The Worker half keeps
   working exactly as before and remains a first-class worker runtime.
 
 Both runtimes speak **the same worker protocol** to the same host. The host does not care which one

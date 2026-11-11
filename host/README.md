@@ -2,7 +2,7 @@
 
 The **Host** half of the Logvex bot platform. It does not run bots itself and it does not need a
 Minecraft account: it is a control plane. Real Minecraft clients that are already running the
-[**Logvex Worker** mod](../worker-mod) dial *out* to the Host over a WebSocket, register themselves,
+the **Logvex Hunter** mod (whose Worker half dials *out* to the Host over a WebSocket), register themselves,
 and then accept a closed set of tasks. The Host is where you watch and command them.
 
 That design has one big consequence: **the Host never needs an inbound port on a bot machine.** Each
@@ -23,7 +23,7 @@ window layer, so the whole backend is exercised in-process by the test suite.
         Logvex Worker (Minecraft client)            Logvex Fleet Manager (this app)
         ─────────────────────────────────           ────────────────────────────────
    ┌───────────────────────────────┐           ┌──────────────────────────────────┐
-   │  worker-mod (Fabric/Meteor)   │  dials →  │  Worker server (ws://host:8721)  │
+   │  Logvex Hunter mod (Fabric)   │  dials →  │  Worker server (ws://host:8721)  │
    │  • reads the client           │  out      │  • authenticates + pairs         │
    │  • executes named tasks       │  ←────────│  • stores snapshots & inventory  │
    │  • reconnects forever         │   tasks   │  • dispatches tasks, records     │
@@ -32,7 +32,7 @@ window layer, so the whole backend is exercised in-process by the test suite.
 ```
 
 - The worker is a Fabric/Meteor mod you drop into a bot's `mods/` folder. See
-  [`../worker-mod/README.md`](../worker-mod/README.md).
+  [`../README.md#worker-part-of-the-same-mod`](../README.md#worker-part-of-the-same-mod).
 - The Host is this app. It listens on one WebSocket port and one local HTTP API port, both on the
   Host machine only.
 
@@ -198,7 +198,7 @@ does not understand.
 ## Protocol
 
 The envelope is JSON: `{ v, type, id, payload }`. The message types mirror
-`worker-mod/src/main/java/com/logvex/worker/core/Protocol.java` and are re-declared in
+`src/main/java/com/logvex/worker/core/Protocol.java` and are re-declared in
 `src/shared/workers.ts`. `tests/unit/worker-protocol-drift.test.ts` reads the Java file and asserts
 the two agree, so a drift fails the build rather than reaching a user.
 
