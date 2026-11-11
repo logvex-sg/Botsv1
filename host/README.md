@@ -162,7 +162,7 @@ the two agree, so a drift fails the build rather than reaching a user.
 | --- | --- |
 | worker → host | `hello`, `register`, `status`, `inventory`, `equipment`, `result`, `progress`, `pong`, `error`, `log` |
 | host → worker | `hello-ack`, `command`, `task`, `ping`, `kick` |
-| task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position`, `efly` |
+| task kinds | `status`, `inventory`, `count`, `search`, `equipment`, `regear`, `command`, `chat`, `position`, `efly`, `container-read`, `container-move`, `shulker-read`, `shulker-pack`, `shulker-unpack`, `restock`, `portal-scan` |
 
 The task kinds are a **closed set**. The Host never sends code, a class name or a shell command; it
 sends one of these kinds with a validated payload, and the worker dispatches it through a fixed
@@ -203,6 +203,11 @@ The same functionality as the UI, for scripts, at `/api/v1/*` with a bearer toke
 | GET | `/api/v1/audit` | the audit trail (`?limit=` up to 1000) |
 | GET | `/api/v1/tags` | every tag in use |
 | GET | `/api/v1/statistics` | the full statistics report the Statistics page renders |
+| GET/POST | `/api/v1/storage/structures` | list or register a structure |
+| GET | `/api/v1/storage/structures/issues` | structures needing attention |
+| GET | `/api/v1/storage/structures/counts` | structure count by kind |
+| POST | `/api/v1/storage/structures/preview-change` | what a proposed change in a region would touch (`{ "region": { ... } }`) |
+| PATCH/DELETE | `/api/v1/storage/structures/{id}` | edit or remove a structure |
 
 ---
 
@@ -222,6 +227,10 @@ The same functionality as the UI, for scripts, at `/api/v1/*` with a bearer toke
 | Consoles | Statistics |
 | ![Worker Mode](docs/screenshots/11-worker-mode.png) | ![Settings](docs/screenshots/12-settings.png) |
 | Worker Mode | Settings |
+| ![Storage overview](docs/screenshots/13-storage-overview.png) | ![Storage categories](docs/screenshots/14-storage-categories.png) |
+| Storage — overview | Storage — item categories |
+| ![Category editor](docs/screenshots/15-storage-category-editor.png) | |
+| Editing a category's classifier rules | |
 
 The screenshots are captured from the renderer in demo mode (`?demo`), so they render without a live
 backend or a connected worker. To regenerate them:
@@ -303,6 +312,19 @@ src/
   over WebSocket, so both see the same events.
 - **Failure is contained.** A worker that hangs, crashes or floods is bounded: task timeouts raise,
   console buffers are capped, and a stale connection is replaced when the same id reconnects.
+- **Two items are never assumed interchangeable.** Storage categories carry real `ClassifierRule`s
+  (tags, enchantments, data components, namespace, durability), read off the metadata the worker
+  reports for each stack. A category with no rules falls back to id substrings, and metadata that was
+  never reported is treated as unknown, never as absent. The **Categories** tab in the Storage page
+  edits those rules directly.
+- **A structure is a region, and a protected one is never touched.** The **Structures** tab registers
+  storage rooms, farms, workshops, processing areas and temporary builds as inclusive boxes in one
+  dimension, with an owner note and a maintenance state. The `structure-registry` package answers
+  three questions over that registry: does a point fall inside a structure, does a proposed change
+  overlap any structure, and which structures need attention (protected, overdue, unconfirmed,
+  overlapping). A change preview lists every structure a proposed operation would touch and marks a
+  protected one not actionable — the preview never performs anything. Registered portals are
+  projected into the same registry, so one dashboard shows them alongside everything else.
 
 ---
 

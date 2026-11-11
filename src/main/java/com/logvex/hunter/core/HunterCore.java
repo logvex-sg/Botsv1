@@ -7,6 +7,7 @@ import com.logvex.hunter.core.event.HunterEvents;
 import com.logvex.hunter.core.instances.InstanceRegistry;
 import com.logvex.hunter.core.message.MessageManager;
 import com.logvex.hunter.core.model.PlayerSnapshot;
+import com.logvex.hunter.core.model.TargetEntry;
 import com.logvex.hunter.core.session.SessionManager;
 import com.logvex.hunter.core.stats.CombatEvent;
 import com.logvex.hunter.core.stats.Statistics;
@@ -46,6 +47,14 @@ public final class HunterCore {
     private TargetCandidate currentTarget;
     /** Number of this addon's modules currently active; supplied by the game layer. */
     private java.util.function.IntSupplier activeModuleCount = () -> 0;
+    /**
+     * A second sink every published event is forwarded to.
+     *
+     * <p>The addon has two audiences: the Minecraft-free consumers that subscribe to {@link #bus()},
+     * and the game-layer modules that listen with Meteor's {@code @EventHandler}. The core cannot
+     * depend on Meteor, so the game layer installs a forwarding sink here and this stays testable.
+     */
+    private java.util.function.Consumer<Object> eventSink = event -> {};
     private String serverAddress = "";
     private String dimension = "";
     private boolean connected;
@@ -285,17 +294,51 @@ public final class HunterCore {
         recordEvent(CombatEvent.Kind.KILL, "Kill: " + targetName, "");
     }
 
+    /**
+     * Records a controlled-session elimination and tells everyone.
+     *
+     * <p>Updates the kill statistics, the target entry, that player's history and the combat log,
+     * then publishes {@link HunterEvents.TargetEliminated} so the configurable message system can
+     * announce it. This is the single place a kill is recorded, so the counters can never disagree
+     * with the history.
+     */
+    public void recordElimination(PlayerSnapshot snapshot, TargetEntry entry, String weapon) {
+        String name = snapshot == null ? (entry == null ? "unknown" : entry.effectiveName()) : snapshot.name();
+        statistics.addKill(name);
+        if (entry != null) entry.addKill();
+        if (snapshot != null) {
+            sessions.history(snapshot.uuid(), snapshot.name()).addKill();
+        }
+        recordEvent(CombatEvent.Kind.KILL, "Eliminated " + name,
+            weapon == null || weapon.isBlank() ? "" : weapon);
+        publish(new HunterEvents.TargetEliminated(snapshot, entry, weapon == null ? "" : weapon));
+    }
+
     public void recordDeath() {
         statistics.addDeath();
         recordEvent(CombatEvent.Kind.DEATH, "Local player died", "");
     }
 
-    /** Publishes an event and, when it is a target change, keeps the cached candidate in sync. */
+    /** Installs the forwarding sink the game layer uses to reach its {@code @EventHandler} modules. */
+    public void setEventSink(java.util.function.Consumer<Object> sink) {
+        this.eventSink = sink == null ? event -> {} : sink;
+    }
+
+    /**
+     * Publishes an event to both audiences: the Minecraft-free {@link #bus()} and the game-layer
+     * sink. A sink that throws is contained, so a broken listener cannot stop a scan.
+     */
     public void publish(Object event) {
+        if (event == null) return;
         if (event instanceof HunterEvents.TargetSwitched switched) {
             bus.post(switched);
         } else {
             bus.post(event);
+        }
+        try {
+            eventSink.accept(event);
+        } catch (RuntimeException ignored) {
+            // The game-layer sink is best effort; the core bus already saw the event.
         }
     }
 

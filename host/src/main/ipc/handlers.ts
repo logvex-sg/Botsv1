@@ -34,15 +34,14 @@ export function registerIpc(context: AppContext, api: ApiServer, getWindow: () =
 
   // ---------------------------------------------------------- host pairing
   handle('host:pairing:get', () => context.currentPairingCode());
-  handle('host:pairing:create', () => {
-    const code = context.createPairingCode();
-    context.emitEvent('SYSTEM', 'Pairing code created; it admits one worker and expires shortly.');
-    return code;
-  });
+  handle('host:pairing:status', () => context.pairingStatus());
+  handle('host:pairing:create', () => context.createPairingCode());
   handle('host:pairing:clear', () => {
     context.clearPairingCode();
     return true;
   });
+  handle('host:pairing:revoke', (workerId: string) => context.revokeWorker(workerId));
+  handle('host:pairing:allow', (workerId: string) => context.allowWorker(workerId));
 
   // --------------------------------------------------------- worker server
   handle('workers:server:get', () => ({
@@ -197,6 +196,80 @@ export function registerIpc(context: AppContext, api: ApiServer, getWindow: () =
   // --------------------------------------------------------------- statistics
   handle('stats:get', () => buildStatistics(statisticsInput(context)));
   handle('stats:export', (format: 'json' | 'csv') => exportStatistics(context, getWindow(), format));
+
+  // -------------------------------------------- autonomous storage & maintenance
+  const storage = context.storage;
+  handle('storage:overview', () => storage.overview());
+  handle('storage:report', () => storage.maintenanceReport());
+
+  handle('storage:networks:list', () => storage.listNetworks());
+  handle('storage:networks:create', (input: Parameters<typeof storage.createNetwork>[0]) => storage.createNetwork(input));
+  handle('storage:networks:update', (id: string, patch: Parameters<typeof storage.updateNetwork>[1]) => storage.updateNetwork(id, patch));
+  handle('storage:networks:delete', (id: string) => storage.removeNetwork(id));
+  handle('storage:networks:pause', (id: string, paused: boolean) => storage.setNetworkPaused(id, paused));
+
+  handle('storage:categories:list', () => storage.listCategories());
+  handle('storage:categories:create', (input: Parameters<typeof storage.createCategory>[0]) => storage.createCategory(input));
+  handle('storage:categories:update', (id: string, patch: Parameters<typeof storage.updateCategory>[1]) => storage.updateCategory(id, patch));
+  handle('storage:categories:delete', (id: string) => storage.removeCategory(id));
+
+  handle('storage:containers:list', (networkId?: string) => storage.listContainers(networkId));
+  handle('storage:containers:create', (input: Parameters<typeof storage.createContainer>[0]) => storage.createContainer(input));
+  handle('storage:containers:update', (id: string, patch: Parameters<typeof storage.updateContainer>[1]) => storage.updateContainer(id, patch));
+  handle('storage:containers:delete', (id: string) => storage.removeContainer(id));
+
+  handle('storage:restock:list', (networkId?: string) => storage.listRestockRules(networkId));
+  handle('storage:restock:create', (input: Parameters<typeof storage.createRestockRule>[0]) => storage.createRestockRule(input));
+  handle('storage:restock:update', (id: string, patch: Parameters<typeof storage.updateRestockRule>[1]) => storage.updateRestockRule(id, patch));
+  handle('storage:restock:delete', (id: string) => storage.removeRestockRule(id));
+
+  handle('storage:disposal:list', () => storage.listDisposalRules());
+  handle('storage:disposal:create', (input: Parameters<typeof storage.createDisposalRule>[0]) => storage.createDisposalRule(input));
+  handle('storage:disposal:update', (id: string, patch: Parameters<typeof storage.updateDisposalRule>[1]) => storage.updateDisposalRule(id, patch));
+  handle('storage:disposal:delete', (id: string) => storage.removeDisposalRule(id));
+
+  handle('storage:portals:list', () => storage.listPortals());
+  handle('storage:portals:groups', () => storage.portalGroups());
+  handle('storage:portals:flagged', () => storage.flaggedPortals());
+  handle('storage:portals:preview-removal', (ids: string[]) => storage.previewPortalRemoval(ids));
+  handle('storage:portals:create', (input: Parameters<typeof storage.createPortal>[0]) => storage.createPortal(input));
+  handle('storage:portals:update', (id: string, patch: Parameters<typeof storage.updatePortal>[1]) => storage.updatePortal(id, patch));
+  handle('storage:portals:delete', (id: string) => storage.removePortal(id));
+
+  handle('storage:structures:list', () => storage.listStructures());
+  handle('storage:structures:issues', () => storage.structureIssues());
+  handle('storage:structures:counts', () => storage.structureCounts());
+  handle('storage:structures:preview-change', (region: Parameters<typeof storage.previewStructureChange>[0], options?: Parameters<typeof storage.previewStructureChange>[1]) => storage.previewStructureChange(region, options));
+  handle('storage:structures:create', (input: Parameters<typeof storage.createStructure>[0]) => storage.createStructure(input));
+  handle('storage:structures:update', (id: string, patch: Parameters<typeof storage.updateStructure>[1]) => storage.updateStructure(id, patch));
+  handle('storage:structures:delete', (id: string) => storage.removeStructure(id));
+
+  handle('storage:shulkers:list', (workerId?: string) => storage.listShulkers(workerId));
+  handle('storage:shulkers:suggestions', () => storage.shulkerSuggestions());
+  handle('storage:shulkers:update', (id: string, patch: Parameters<typeof storage.updateShulker>[1]) => storage.updateShulker(id, patch));
+
+  handle('storage:workflows:list', () => storage.listWorkflows());
+  handle('storage:workflows:operations', () => storage.operations());
+  handle('storage:workflows:create', (input: Parameters<typeof storage.createWorkflow>[0]) => storage.createWorkflow(input));
+  handle('storage:workflows:update', (id: string, patch: Parameters<typeof storage.updateWorkflow>[1]) => storage.updateWorkflow(id, patch));
+  handle('storage:workflows:delete', (id: string) => storage.removeWorkflow(id));
+
+  handle('storage:plan', (operation: string, networkId?: string | null, options?: { workerId?: string; portalIds?: string[] }) => storage.plan(operation, networkId, options));
+  handle('storage:plans:list', () => storage.listPlans());
+  handle('storage:plans:approve', (id: string) => storage.approvePlan(id));
+  handle('storage:plans:execute', (id: string) => storage.executePlan(id));
+  handle('storage:plans:discard', (id: string) => storage.discardPlan(id));
+
+  handle('storage:restock:needs', (workerId: string, networkId?: string | null) => storage.restockNeeds(workerId, networkId));
+  handle('storage:restock:plan', (workerId: string, networkId?: string | null) => storage.restockPlan(workerId, networkId));
+  handle('storage:disposal:preview', (workerId: string, networkId?: string | null) => storage.disposalPreview(workerId, networkId));
+
+  handle('storage:activity', (limit?: number, workerId?: string) => storage.listActivity(limit ?? 200, workerId));
+  handle('storage:ask', (request: string) => storage.ask(request));
+
+  handle('storage:profiles:list', () => storage.listProfiles());
+  handle('storage:profiles:save', (name: string, description?: string) => storage.saveProfile(name, description));
+  handle('storage:profiles:delete', (id: string) => storage.removeProfile(id));
 }
 
 function statisticsInput(context: AppContext): StatisticsInput {

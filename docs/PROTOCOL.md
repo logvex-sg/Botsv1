@@ -121,10 +121,24 @@ host UI offers only these.
 | `command` | **yes** | Send a server command, only if it is on the worker's allow-list. |
 | `chat` | **yes** | Send a chat line (length-limited). |
 | `efly` | **yes** | Engage/stop the client's own elytra flight (see below). |
+| `container-read` | no | Read a container at a position (`x`, `y`, `z`); reports its items, capacity and free slots. |
+| `container-move` | **yes** | Quick-move matching items (`query`) in or out of an already-open container (`direction`, `limit`). |
+| `shulker-read` | no | Report the shulker boxes the worker carries, and their contents. |
+| `shulker-unpack` | **yes** | Empty a carried shulker box (`slot`, optional) into the worker's inventory. |
+| `restock` | **yes** | Pull a shortfall of an item (`query`, `limit`) from a source container. |
+| `portal-scan` | no | Find nearby nether portals within `radius` (or, with `action: "remove"`, remove them). |
 
 **Mutating kinds are exclusive per worker.** The host refuses to start a second mutating kind
-(`regear`, `command`, `chat`, `efly`) on a worker that already has one in flight, so a flight and a
-regear can never race. This list mirrors the worker's `TaskCatalog.isMutating`.
+(`regear`, `command`, `chat`, `efly`, `container-move`, `shulker-unpack`, `restock`) on a worker that
+already has one in flight, so a flight and a regear can never race. This list mirrors the worker's
+`TaskCatalog.isMutating` and the Host's `EXCLUSIVE_TASK_KINDS`.
+
+## Storage payloads
+
+The storage kinds are parsed and validated in `StorageRequests` before they can reach the game, so a
+malformed request is refused at the boundary rather than touching the client. Coordinates must be
+finite; `limit` and `radius` are clamped to a maximum; an unknown `direction` or portal `action` is
+refused.
 
 ## EFly payload
 
@@ -143,6 +157,41 @@ in `EflyRequest` before it can reach the game, and mapped onto Meteor's own `Ely
 
 A malformed payload (unknown action, a partial or non-finite target) is refused before it reaches the
 client, and the worker answers with a failed result rather than guessing.
+
+## Item metadata
+
+Every item a worker reports — in an `inventory` snapshot, a `search` match, a container read or a
+shulker read — may carry four optional fields that let the host classify it honestly instead of
+assuming two items are interchangeable:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `tags` | string[] | Item tags the stack carries, e.g. `minecraft:logs`, `c:ingots`. |
+| `enchantments` | `{ id, level }[]` | Enchantments on the stack, by id and level. |
+| `components` | string[] | Data component ids present, e.g. `minecraft:container`. |
+| `customName` | string \| null | The stack's custom name in plain text, when it has one. |
+
+The fields are optional on purpose. A worker that predates metadata reporting omits them, and the
+host then treats a field as *not reported* rather than *absent*: a rule that needs a tag does not
+match an item whose tags were never read, and the routing falls back to the plain id match. This is
+what the classifier in `packages/item-classifier` decides on, and it is the reason the storage
+routing can tell a plain diamond pickaxe from an Efficiency V one.
+
+## In-game command
+
+The worker exposes the same controls through Meteor's command system, so an operator sitting at the
+client can drive it without the host: `.worker <subcommand>`.
+
+| Subcommand | What it does |
+| --- | --- |
+| `status` | The link state, pause/stop state and the live snapshot. |
+| `config` | The loaded `logvex-worker.json` values and the permitted task kinds. |
+| `events [count]` | The most recent link events. |
+| `connect` / `disconnect` / `reconnect` | Start, stop or restart the link. |
+| `pause` / `resume` | Gate mutating tasks (read-only tasks keep running), exactly as the host's control messages do. |
+| `enable` / `disable` | Stop or restart the service while staying connected for control. |
+| `inventory`, `count <query>`, `search <query>` | Read the carried inventory. |
+| `inspect <query>` | Show the real classification metadata (tags, enchantments, components) of matching carried stacks. |
 
 ## Security boundary
 

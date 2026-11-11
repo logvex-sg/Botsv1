@@ -38,6 +38,9 @@ const PAGES = [
   ['10-statistics', 'statistics'],
   ['11-worker-mode', 'worker-mode'],
   ['12-settings', 'settings'],
+  ['13-storage-overview', 'storage'],
+  ['14-storage-categories', 'storage', 'tab=categories'],
+  ['16-storage-structures', 'storage', 'tab=structures'],
 ];
 
 function findChrome() {
@@ -137,8 +140,8 @@ async function main() {
       width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false,
     });
 
-    for (const [name, page] of PAGES) {
-      const url = `${BASE_URL}/?demo&page=${page}`;
+    for (const [name, page, extra] of PAGES) {
+      const url = `${BASE_URL}/?demo&page=${page}${extra ? `&${extra}` : ''}`;
       await cdp.send('Page.navigate', { url });
       // Give the SPA time to mount and the demo store to settle.
       await sleep(1400);

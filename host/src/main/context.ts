@@ -29,13 +29,30 @@ import {
   WorkerInventoryRepository,
   WorkerRepository,
   WorkerTaskRepository,
+  WorkerTokenRepository,
 } from './db/repositories';
 import { EventBus } from './services/events/event-bus';
 import { WorkerService } from './workers/worker-service';
 import { WorkerModeService } from './worker-mode/worker-mode-service';
 import { MultiverseService } from './services/multiverse/multiverse-service';
+import { StorageService } from './services/storage/storage-service';
+import {
+  DisposalRuleRepository,
+  PortalRepository,
+  RestockRuleRepository,
+  ShulkerRepository,
+  StorageActivityRepository,
+  StorageCategoryRepository,
+  StorageContainerRepository,
+  StorageNetworkRepository,
+  StoragePlanRepository,
+  StorageProfileRepository,
+  StructureRepository,
+  WorkflowRepository,
+} from './db/storage-repositories';
+import { PairingService, type PairingCodeView, type PairingStatus } from './pairing/pairing-service';
 import { aggregate } from './packages/inventory-engine';
-import { DEFAULT_SETTINGS, type AppSettings, type HealthReport, type PairingCode } from '../shared/types';
+import { DEFAULT_SETTINGS, type AppSettings, type HealthReport } from '../shared/types';
 
 export interface AppContextOptions {
   databasePath?: string;
@@ -49,8 +66,6 @@ export interface AppContextOptions {
 }
 
 /** Characters for a pairing code: no 0/O/1/I/L so a code is easy to read out and type. */
-const PAIRING_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-
 export class AppContext {
   readonly db: FleetDatabase;
   readonly settingsRepo: SettingsRepository;
@@ -73,17 +88,33 @@ export class AppContext {
   readonly containers: ContainerRepository;
   readonly inventoryHistory: InventoryHistoryRepository;
   readonly audit: AuditRepository;
+  readonly workerTokens: WorkerTokenRepository;
+
+  // Autonomous storage & maintenance layer
+  readonly storageNetworks: StorageNetworkRepository;
+  readonly storageCategories: StorageCategoryRepository;
+  readonly storageContainers: StorageContainerRepository;
+  readonly restockRules: RestockRuleRepository;
+  readonly disposalRules: DisposalRuleRepository;
+  readonly portals: PortalRepository;
+  readonly shulkers: ShulkerRepository;
+  readonly structures: StructureRepository;
+  readonly workflows: WorkflowRepository;
+  readonly storagePlans: StoragePlanRepository;
+  readonly storageActivity: StorageActivityRepository;
+  readonly storageProfiles: StorageProfileRepository;
 
   readonly bus: EventBus;
   readonly workers: WorkerService;
   readonly workerMode: WorkerModeService;
   readonly multiverse: MultiverseService;
+  readonly storage: StorageService;
+  /** Owns the pairing code and the per-worker tokens; the worker server asks it to authenticate. */
+  readonly pairing: PairingService;
 
   private readonly startedAt = Date.now();
   private settings: AppSettings;
   private readonly startWorkerServer: boolean;
-  /** The active pairing code, if any. Single-use and time-limited. */
-  private pairing: PairingCode | null = null;
 
   private constructor(options: AppContextOptions) {
     const databasePath = options.databasePath ?? ':memory:';
@@ -108,12 +139,34 @@ export class AppContext {
     this.containers = new ContainerRepository(this.db);
     this.inventoryHistory = new InventoryHistoryRepository(this.db);
     this.audit = new AuditRepository(this.db);
+    this.workerTokens = new WorkerTokenRepository(this.db);
+
+    this.storageNetworks = new StorageNetworkRepository(this.db);
+    this.storageCategories = new StorageCategoryRepository(this.db);
+    this.storageContainers = new StorageContainerRepository(this.db);
+    this.restockRules = new RestockRuleRepository(this.db);
+    this.disposalRules = new DisposalRuleRepository(this.db);
+    this.portals = new PortalRepository(this.db);
+    this.shulkers = new ShulkerRepository(this.db);
+    this.structures = new StructureRepository(this.db);
+    this.workflows = new WorkflowRepository(this.db);
+    this.storagePlans = new StoragePlanRepository(this.db);
+    this.storageActivity = new StorageActivityRepository(this.db);
+    this.storageProfiles = new StorageProfileRepository(this.db);
 
     this.bus = new EventBus(this.events, this.notifications);
     this.settings = this.loadSettings();
 
     // A test-supplied token must be in place before the service reads it, so it is written first.
     if (options.workerToken) this.settingsRepo.set('workerToken', options.workerToken);
+
+    this.pairing = new PairingService({
+      tokens: this.workerTokens,
+      emit: (type, message, payload) => this.emitEvent(type, message, payload),
+      ttlSeconds: () => this.settings.pairingCodeTtlSeconds,
+      sharedToken: () => this.getWorkerToken(),
+      newWorkerId: () => `worker-${randomUUID().slice(0, 8)}`,
+    });
 
     this.workers = new WorkerService(
       {
@@ -131,12 +184,15 @@ export class AppContext {
           this.inventoryHistory.record(workerId, snapshot.capturedAt, aggregate([snapshot.carried]));
           this.inventoryHistory.prune(200);
         },
+        // The last capabilities a worker advertised, so a dispatch is refused when the worker
+        // cannot run the kind. Read from the roster the server keeps, not a second copy.
+        capabilitiesFor: (workerId) => this.workerRepo.get(workerId)?.capabilities,
       },
       {
         host: this.settings.workerServerHost,
         port: options.workerServerPort ?? this.settings.workerServerPort,
         token: this.getWorkerToken(),
-        verifyPairingCode: (code) => this.consumePairingCode(code),
+        authorizer: this.pairing,
       },
     );
     this.startWorkerServer = options.startWorkerServer !== false;
@@ -166,6 +222,36 @@ export class AppContext {
       isOnline: (workerId) => this.workers.server.isOnline(workerId),
     });
 
+    // The storage layer reuses the same worker task path and the same inventory snapshots as the
+    // rest of the host, so a planned move and a hand-run task are the same operation. It holds its
+    // own container reservations to keep two operations off the same container at once.
+    this.storage = new StorageService({
+      networks: this.storageNetworks,
+      categories: this.storageCategories,
+      containers: this.storageContainers,
+      restockRules: this.restockRules,
+      disposalRules: this.disposalRules,
+      portals: this.portals,
+      shulkers: this.shulkers,
+      structures: this.structures,
+      workflows: this.workflows,
+      plans: this.storagePlans,
+      activity: this.storageActivity,
+      profiles: this.storageProfiles,
+      emit: (type, message, payload) => this.emitEvent(type, message, payload),
+      runTask: async (workerId, kind, params) => {
+        try {
+          const result = await this.workers.runTask(workerId, kind as never, params);
+          return { ok: result.ok, error: result.ok ? undefined : result.message, data: result.data };
+        } catch (error) {
+          return { ok: false, error: (error as Error).message };
+        }
+      },
+      isOnline: (workerId) => this.workers.server.isOnline(workerId),
+      carriedFor: (workerId) => this.workerInventory.get(workerId)?.carried ?? [],
+      workerIds: () => this.workerRepo.list().map((worker) => worker.id),
+    });
+
     // Every worker event is offered to the rule engine exactly once, here, so a rule fires from the
     // same event stream the Activity view shows.
     this.bus.subscribe((event) => {
@@ -188,6 +274,14 @@ export class AppContext {
 
   /** Starts the worker server, and a Worker Mode connection when the operator asked for one. */
   start(): void {
+    // Seed the storage defaults once, best-effort: a fresh install then has categories to route by
+    // and the built-in workflows to run, without the operator having to create them by hand.
+    try {
+      this.storage.ensureDefaultCategories();
+      this.storage.ensureBuiltinWorkflows();
+    } catch (error) {
+      this.emitEvent('SYSTEM', `Could not seed storage defaults: ${(error as Error).message}`);
+    }
     if (this.startWorkerServer) void this.startWorkerServerNow();
     if (this.workerMode.getSettings().autoConnect) {
       void this.workerMode.connect().catch(() => {
@@ -304,38 +398,33 @@ export class AppContext {
   // ------------------------------------------------------------- pairing code
 
   /** The current pairing code and when it expires, or null when none is active. */
-  currentPairingCode(): PairingCode | null {
-    if (this.pairing && this.pairing.expiresAt <= Date.now()) this.pairing = null;
-    return this.pairing;
+  currentPairingCode(): PairingCodeView | null {
+    return this.pairing.currentCode();
   }
 
   /** Creates a fresh, single-use pairing code that a worker can present on its first join. */
-  createPairingCode(): PairingCode {
-    const ttl = Math.max(30, this.settings.pairingCodeTtlSeconds) * 1000;
-    const code = Array.from({ length: 8 }, () => PAIRING_ALPHABET[Math.floor(Math.random() * PAIRING_ALPHABET.length)]).join('');
-    // One clock sample, so createdAt and expiresAt always differ by exactly the TTL.
-    const now = Date.now();
-    this.pairing = { code, createdAt: now, expiresAt: now + ttl };
-    return this.pairing;
+  createPairingCode(): PairingCodeView {
+    return this.pairing.createCode();
   }
 
   /** Invalidates the current pairing code without creating a new one. */
   clearPairingCode(): void {
-    this.pairing = null;
+    this.pairing.clearCode();
   }
 
-  /**
-   * Validates a pairing code presented by a worker.
-   *
-   * A successful match is consumed immediately, so one code admits exactly one worker. Returns the
-   * shared token to grant on success, or null when the code is unknown or expired.
-   */
-  private consumePairingCode(code: string): string | null {
-    const active = this.currentPairingCode();
-    if (!active) return null;
-    if (active.code !== code.trim().toUpperCase()) return null;
-    this.pairing = null;
-    return this.getWorkerToken();
+  /** The pairing panel's whole state: the active code, its lifetime, and every paired worker. */
+  pairingStatus(): PairingStatus {
+    return this.pairing.status();
+  }
+
+  /** Revokes one worker's credential so it must be paired again. */
+  revokeWorker(workerId: string): boolean {
+    return this.pairing.revoke(workerId);
+  }
+
+  /** Lifts a worker's revocation without issuing a new token. */
+  allowWorker(workerId: string): boolean {
+    return this.pairing.allow(workerId);
   }
 
   // ------------------------------------------------------------ api token

@@ -72,6 +72,53 @@ the client's own modules.
 A malformed payload (unknown action, a partial or non-finite target) is refused in `EflyRequest`
 before it reaches the client, and the worker answers with a failed result rather than guessing.
 
+## Item metadata
+
+Every item the worker reports — carried, in a container, or inside a shulker — carries four optional
+fields read straight off the `ItemStack`, so the host never has to guess that two items are
+interchangeable:
+
+| Field | Source | Example |
+| --- | --- | --- |
+| `tags` | the stack's item tags | `minecraft:logs`, `c:ingots` |
+| `enchantments` | the stack's enchantments | `{ "id": "minecraft:efficiency", "level": 5 }` |
+| `components` | the data component ids present | `minecraft:container`, `minecraft:enchantments` |
+| `customName` | the stack's custom name, or null | `"Diamond Pickaxe"` |
+
+`ItemMetadata` reads these from the live `ItemStack` and `ItemEntry` serialises them; the host's
+`WorkerItem` type mirrors them. They are optional on the wire, so an older worker that omits them is
+still understood — the host then falls back to matching on the item id alone rather than assuming a
+tag is absent.
+
+## In-game command
+
+The worker registers `.worker` in Meteor's command system, so the same controls the host drives over
+the socket are available at the client:
+
+```
+.worker status              # link, pause/stop state and the live snapshot
+.worker config              # the loaded logvex-worker.json and permitted task kinds
+.worker events [count]      # recent link events
+.worker connect|disconnect|reconnect
+.worker pause|resume        # gate mutating tasks; read-only tasks keep running
+.worker enable|disable      # stop/restart the service while staying connected for control
+.worker inventory
+.worker count <query>
+.worker search <query>
+.worker inspect <query>     # show tags/enchantments/components of matching stacks
+.worker position            # coordinates, dimension and health
+.worker equipment           # armour pieces and loadout readiness
+.worker container <x> <y> <z>   # list the contents of the container at that block
+.worker shulkers            # list the decoded contents of carried shulker boxes
+.worker pack <query>        # pack matching loose items into a carried shulker box
+.worker unpack              # empty carried shulker boxes into the inventory
+.worker restock <query> [limit]  # top up an item from an already-open container
+.worker portals [remove]    # scan nearby nether portals, or remove them
+```
+
+`pause`, `resume`, `disconnectService` and `connectService` are the same methods the host's control
+frames call, so a `.worker pause` and a host `control: pause` cannot diverge.
+
 ## Command allow-list
 
 Commands are validated before they reach the server. `CommandValidator` accepts only the commands

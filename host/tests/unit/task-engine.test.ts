@@ -10,17 +10,30 @@ import {
   libraryByCategory,
   validateRequest,
 } from '../../src/main/packages/task-engine';
+import { TASK_KINDS } from '../../src/shared/workers';
 
 describe('task library', () => {
   it('defines every task kind exactly once', () => {
     const kinds = TASK_LIBRARY.map((def) => def.kind);
     expect(new Set(kinds).size).toBe(kinds.length);
-    expect(kinds.length).toBe(10);
+    expect(kinds.length).toBe(TASK_KINDS.length);
+  });
+
+  it('covers every wire task kind the worker protocol knows', () => {
+    for (const kind of TASK_KINDS) {
+      expect(definitionFor(kind), `no task definition for "${kind}"`).toBeDefined();
+    }
   });
 
   it('marks the mutating kinds as exclusive', () => {
-    for (const kind of ['regear', 'command', 'chat', 'efly']) {
+    for (const kind of ['regear', 'command', 'chat', 'efly', 'container-move', 'shulker-pack', 'shulker-unpack', 'restock']) {
       expect(definitionFor(kind as never)?.mutating).toBe(true);
+    }
+  });
+
+  it('keeps the read-only storage kinds non-exclusive', () => {
+    for (const kind of ['container-read', 'shulker-read', 'portal-scan']) {
+      expect(definitionFor(kind as never)?.mutating).toBe(false);
     }
   });
 

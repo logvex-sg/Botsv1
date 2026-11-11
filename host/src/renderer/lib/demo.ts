@@ -9,12 +9,16 @@
 import type { BulkResult, FleetApi, WorkerServerStatus } from '../../shared/ipc';
 import type {
   AppSettings, AuditEntry, AutomationRule, ContainerRecord, FleetEvent, GroupTemplate, ItemCountReport,
-  PairingCode, RegearComparison, RegearPreset, ScheduleRecord, ServerProfile, TaskPreset,
+  PairingCode, PairingStatus, PairedWorkerView, RegearComparison, RegearPreset, ScheduleRecord, ServerProfile, TaskPreset,
   WorkerCommandRecord, WorkerConsoleLine, WorkerGroup, WorkerInventorySnapshot, WorkerOverview,
   WorkerTaskRecord, WorkerView,
+  AutomationPlan, DisposalRule, PortalRecord, RestockRule, ShulkerRecord, StorageActivityEntry,
+  StorageCategory, StorageContainer, StorageNetwork, StorageOverview, StorageProfile, StructureRecord, WorkflowRecord,
 } from '../../shared/types';
 import { emptySnapshot, TASK_KINDS, type TaskKind, type WorkerItem, type WorkerTaskResult } from '../../shared/workers';
 import { buildStatistics } from '../../main/packages/statistics';
+import { plan as planWithAi } from '../../main/packages/ai-planner';
+import { countByKind, fromPortal, issues as structureIssues, previewChange } from '../../main/packages/structure-registry';
 
 const now = Date.now();
 
@@ -174,6 +178,12 @@ const events: FleetEvent[] = [
 
 let pairing: PairingCode | null = null;
 
+/** The demo's paired-worker roster, so the Dashboard's revoke/allow buttons have something to act on. */
+const pairedWorkers: PairedWorkerView[] = [
+  { workerId: 'w1', installationId: 'demo-install-1', label: 'LogvexOne', username: 'LogvexOne', createdAt: now - 900_000, lastPairedAt: now - 900_000, lastSeenAt: now - 5_000, revoked: false },
+  { workerId: 'w2', installationId: 'demo-install-2', label: 'LogvexTwo', username: 'LogvexTwo', createdAt: now - 600_000, lastPairedAt: now - 600_000, lastSeenAt: now - 8_000, revoked: false },
+];
+
 function fakeResult(workerId: string, kind: string, message = 'done'): WorkerTaskResult {
   return { ok: true, taskId: `demo-${kind}`, kind, message: `${workerId}: ${message}`, data: {} };
 }
@@ -199,6 +209,80 @@ let workerModeStatus: WorkerClientStatus = {
 };
 
 export function createDemoApi(): FleetApi {
+  // In-memory storage subsystem, so the Storage page renders with realistic values under ?demo.
+  let storageNetworks: StorageNetwork[] = [
+    { id: 'net-main', name: 'Main storage room', description: 'Overworld base sorting hall', mode: 'supervised', paused: false, workerIds: [], protectedItems: ['shulker_box', 'diamond'], reservations: [{ query: 'totem_of_undying', count: 4 }], exclusionAreas: ['minecraft:overworld 100 60 -400 200 80 -200'], createdAt: now, updatedAt: now },
+  ];
+  const storageCategories: StorageCategory[] = [
+    { id: 'cat-building', name: 'Building blocks', itemMatches: ['stone', 'cobble', 'plank'], rules: [{ kind: 'tag', tag: 'minecraft:planks' }, { kind: 'tag', tag: 'minecraft:stone_bricks' }], priority: 0, color: '#8b8b8b', protected: false, createdAt: now, updatedAt: now },
+    { id: 'cat-ores', name: 'Ores & ingots', itemMatches: ['iron_ingot', 'diamond', 'gold_ingot'], rules: [{ kind: 'tag', tag: 'c:ingots' }, { kind: 'tag', tag: 'c:ores' }], priority: 0, color: '#d4a24a', protected: false, createdAt: now, updatedAt: now },
+    { id: 'cat-valuables', name: 'Valuables', itemMatches: ['diamond', 'netherite', 'totem_of_undying'], rules: [{ kind: 'id-contains', contains: 'netherite' }, { kind: 'component', id: 'minecraft:enchantments' }], priority: 5, color: '#f0c419', protected: true, createdAt: now, updatedAt: now },
+  ];
+  const containerItem = (id: string, name: string, count: number, slot: number): WorkerItem => ({ id: `minecraft:${id}`, name, count, slot, damage: 0, maxDamage: 0, damageable: false });
+  let storageContainers: StorageContainer[] = [
+    { id: 'c-in', networkId: 'net-main', workerId: 'w1', label: 'Input chest', kind: 'input', x: 120, y: 64, z: -300, dimension: 'minecraft:overworld', categoryId: null, locked: false, permanent: false, capacity: 27, freeSlots: 0, full: true, items: [containerItem('cobblestone', 'Cobblestone', 64, 0), containerItem('oak_planks', 'Oak Planks', 12, 1)], inspectedAt: now - 30_000, createdAt: now, updatedAt: now },
+    { id: 'c-build', networkId: 'net-main', workerId: 'w1', label: 'Building blocks chest', kind: 'general', x: 121, y: 64, z: -300, dimension: 'minecraft:overworld', categoryId: 'cat-building', locked: false, permanent: true, capacity: 27, freeSlots: 14, full: false, items: [containerItem('stone', 'Stone', 40, 0)], inspectedAt: now - 45_000, createdAt: now, updatedAt: now },
+    { id: 'c-ore', networkId: 'net-main', workerId: 'w1', label: 'Ore chest', kind: 'general', x: 122, y: 64, z: -300, dimension: 'minecraft:overworld', categoryId: 'cat-ores', locked: false, permanent: true, capacity: 27, freeSlots: 20, full: false, items: [containerItem('iron_ingot', 'Iron Ingot', 128, 0)], inspectedAt: now - 60_000, createdAt: now, updatedAt: now },
+    { id: 'c-disposal', networkId: 'net-main', workerId: 'w2', label: 'Disposal chest', kind: 'disposal', x: 140, y: 64, z: -320, dimension: 'minecraft:overworld', categoryId: null, locked: false, permanent: true, capacity: 27, freeSlots: 26, full: false, items: [containerItem('gravel', 'Gravel', 5, 0)], inspectedAt: now - 120_000, createdAt: now, updatedAt: now },
+  ];
+  let restockRules: RestockRule[] = [
+    { id: 'rr-food', networkId: 'net-main', name: 'Keep food', query: 'cooked_beef', label: 'Cooked Beef', min: 16, max: 64, batch: 16, workerIds: [], enabled: true, priority: 0, createdAt: now, updatedAt: now },
+    { id: 'rr-blocks', networkId: 'net-main', name: 'Keep blocks', query: 'cobblestone', label: 'Cobblestone', min: 64, max: 192, batch: 64, workerIds: [], enabled: true, priority: 0, createdAt: now, updatedAt: now },
+  ];
+  let disposalRules: DisposalRule[] = [
+    { id: 'dr-cobble', name: 'Excess cobblestone', query: 'cobblestone', label: 'Cobblestone', targetContainerId: 'c-disposal', enabled: false, createdAt: now, updatedAt: now },
+    { id: 'dr-gravel', name: 'Gravel', query: 'gravel', label: 'Gravel', targetContainerId: 'c-disposal', enabled: true, createdAt: now, updatedAt: now },
+  ];
+  let portals: PortalRecord[] = [
+    { id: 'p-nether', name: 'Base nether portal', category: 'nether', dimension: 'minecraft:overworld', x: 128, y: 65, z: -300, permanent: true, temporary: false, needsMaintenance: false, tracking: true, lastSeenBy: 'w1', lastSeenAt: now - 3600_000, obsolete: false, notes: '', createdAt: now, updatedAt: now },
+    { id: 'p-farm', name: 'Farm temp portal', category: 'nether', dimension: 'minecraft:overworld', x: 800, y: 70, z: 1200, permanent: false, temporary: true, needsMaintenance: true, tracking: true, lastSeenBy: 'w3', lastSeenAt: now - 12 * 24 * 3600_000, obsolete: true, notes: 'scouting portal', createdAt: now, updatedAt: now },
+  ];
+  let structures: StructureRecord[] = [
+    { id: 'st-main', name: 'Main storage room', kind: 'storage_room', dimension: 'minecraft:overworld', x1: 100, y1: 60, z1: 200, x2: 140, y2: 75, z2: 240, ownership: 'base team', protected: true, maintenance: 'ok', lastSeenBy: 'w1', lastSeenAt: now - 3600_000, notes: 'chest wall and shulker wall', createdAt: now, updatedAt: now },
+    { id: 'st-farm', name: 'Wheat farm', kind: 'farm', dimension: 'minecraft:overworld', x1: 300, y1: 63, z1: 300, x2: 340, y2: 68, z2: 340, ownership: 'base team', protected: false, maintenance: 'due', lastSeenBy: 'w2', lastSeenAt: now - 3 * 24 * 3600_000, notes: '', createdAt: now, updatedAt: now },
+    { id: 'st-workshop', name: 'Enchanting workshop', kind: 'workshop', dimension: 'minecraft:overworld', x1: 150, y1: 60, z1: 260, x2: 165, y2: 70, z2: 275, ownership: '', protected: false, maintenance: 'ok', lastSeenBy: null, lastSeenAt: null, notes: 'needs confirming', createdAt: now, updatedAt: now },
+  ];
+  let shulkers: ShulkerRecord[] = [
+    { id: 's1', workerId: 'w1', slot: 9, label: 'Iron shulker', categoryId: 'cat-ores', mixed: false, empty: false, items: [containerItem('iron_ingot', 'Iron Ingot', 512, 0)], itemCount: 512, freeSlots: 19, reserved: false, markedForRemoval: false, inspectedAt: now - 90_000, createdAt: now, updatedAt: now },
+    { id: 's2', workerId: 'w1', slot: 10, label: '', categoryId: null, mixed: true, empty: false, items: [containerItem('cobblestone', 'Cobblestone', 64, 0), containerItem('iron_ingot', 'Iron Ingot', 32, 1)], itemCount: 96, freeSlots: 25, reserved: false, markedForRemoval: false, inspectedAt: now - 90_000, createdAt: now, updatedAt: now },
+    { id: 's3', workerId: 'w2', slot: 11, label: 'Empty reserve', categoryId: null, mixed: false, empty: true, items: [], itemCount: 0, freeSlots: 27, reserved: true, markedForRemoval: false, inspectedAt: now - 90_000, createdAt: now, updatedAt: now },
+  ];
+  let workflows: WorkflowRecord[] = [
+    { id: 'wf1', name: 'Empty shulker cleanup', description: 'Find empty shulkers, keep the reserve, move the rest to storage.', operations: ['inspect', 'shulker-cleanup'], networkId: null, mode: 'supervised', enabled: true, createdAt: now, updatedAt: now },
+    { id: 'wf2', name: 'Storage consolidation', description: 'Merge partial stacks while keeping categories separate.', operations: ['inspect', 'consolidate'], networkId: null, mode: 'supervised', enabled: true, createdAt: now, updatedAt: now },
+    { id: 'wf3', name: 'Inventory restock', description: 'Top every worker up to its configured minimums.', operations: ['inspect', 'restock'], networkId: null, mode: 'automatic', enabled: true, createdAt: now, updatedAt: now },
+  ];
+  let storagePlans: (AutomationPlan & { approved: boolean; executed: boolean })[] = [];
+  let storageActivity: StorageActivityEntry[] = [
+    { id: 'sa1', at: now - 300_000, operation: 'consolidate', workerId: 'w1', target: 'c-build', query: 'minecraft:stone', count: 40, ok: true, detail: 'merged 40x Stone', beforeAfter: '2 -> 1 stacks', source: 'workflow:Storage consolidation' },
+    { id: 'sa2', at: now - 600_000, operation: 'restock', workerId: 'w2', target: 'c-ore', query: 'minecraft:iron_ingot', count: 32, ok: true, detail: 'restocked 32x Iron Ingot', beforeAfter: '', source: 'workflow:Inventory restock' },
+    { id: 'sa3', at: now - 900_000, operation: 'dispose', workerId: 'w1', target: 'c-disposal', query: 'minecraft:gravel', count: 12, ok: false, detail: 'no unlocked disposal container on this worker', beforeAfter: '', source: 'plan' },
+  ];
+  let storageProfiles: StorageProfile[] = [
+    { id: 'sp1', name: 'Default', description: 'Seeded categories and built-in workflows', data: {}, createdAt: now },
+  ];
+  let portalRemovalRequested: string[] = [];
+
+  const buildDemoPlan = (operation: string, networkId: string | null): AutomationPlan => {
+    const steps = storageContainers.filter((c) => !c.locked).slice(0, 3).map((c, index) => ({
+      id: `step-${operation}-${index}`,
+      action: operation === 'dispose' ? 'dispose' : operation === 'shulker-cleanup' ? 'shulker-cleanup' : 'move',
+      detail: `${operation} step for ${c.label}`,
+      workerId: c.workerId,
+      sourceContainerId: c.id,
+      targetContainerId: null,
+      query: c.items[0]?.id ?? '',
+      count: c.items[0]?.count ?? 0,
+      slot: null,
+      requiresApproval: operation !== 'consolidate',
+      blocked: false,
+      blockedReason: '',
+    }));
+    const plan: AutomationPlan = { id: `plan-${Date.now()}`, operation, networkId, createdAt: Date.now(), steps, notes: steps.length === 0 ? ['nothing to do'] : [], actionable: steps.length > 0 };
+    storagePlans = [{ ...plan, approved: false, executed: false }, ...storagePlans].slice(0, 50);
+    return plan;
+  };
+
   return {
     getHealth: async () => ({
       ok: true, version: '2.0.0', uptimeMs: 123_456,
@@ -214,8 +298,15 @@ export function createDemoApi(): FleetApi {
     importConfig: async () => ({ imported: 2 }),
 
     getPairingCode: async () => pairing,
+    getPairingStatus: async (): Promise<PairingStatus> => ({
+      code: pairing,
+      secondsRemaining: pairing ? Math.max(0, Math.round((pairing.expiresAt - Date.now()) / 1000)) : 0,
+      workers: pairedWorkers,
+    }),
     createPairingCode: async () => { pairing = { code: 'DEMO2345', createdAt: now, expiresAt: now + 600_000 }; return pairing; },
     clearPairingCode: async () => { pairing = null; return true; },
+    revokePairedWorker: async (id) => { const w = pairedWorkers.find((p) => p.workerId === id); if (!w) return false; w.revoked = true; return true; },
+    allowPairedWorker: async (id) => { const w = pairedWorkers.find((p) => p.workerId === id); if (!w) return false; w.revoked = false; return true; },
 
     getWorkerServer: async () => server,
     regenerateWorkerToken: async () => server.token,
@@ -457,6 +548,125 @@ export function createDemoApi(): FleetApi {
       audit,
     }),
     exportStatistics: async () => ({ path: '/demo/logvex-statistics.json' }),
+
+    storageOverview: async (): Promise<StorageOverview> => ({
+      networks: storageNetworks.length,
+      containers: storageContainers.length,
+      shulkers: shulkers.length,
+      portals: portals.length,
+      fullContainers: storageContainers.filter((c) => c.full).length,
+      bottlenecks: storageContainers.filter((c) => c.full || !workers.find((w) => w.id === c.workerId)?.online).length,
+      pendingPlans: storagePlans.filter((p) => !p.executed).length,
+      pendingSteps: storagePlans.filter((p) => !p.executed).reduce((sum, p) => sum + p.steps.length, 0),
+      globalPaused: storageNetworks.every((n) => n.paused),
+      lastActivityAt: storageActivity[0]?.at ?? null,
+      recent: storageActivity.slice(0, 20),
+    }),
+    storageMaintenanceReport: async () => ({
+      generatedAt: Date.now(),
+      networks: storageNetworks.map((n) => ({
+        networkId: n.id, name: n.name, containers: storageContainers.filter((c) => c.networkId === n.id).length,
+        workers: new Set(storageContainers.filter((c) => c.networkId === n.id).map((c) => c.workerId)).size,
+        fullContainers: storageContainers.filter((c) => c.networkId === n.id && c.full).length,
+        missingContainers: 0, unusedContainers: 0, totalItems: 100, distinctItems: 5, bottlenecks: [],
+        unassignedCategories: [], unsortable: [], generatedAt: Date.now(),
+      })),
+      bottlenecks: [],
+      emptyShulkers: shulkers.filter((s) => s.empty).length,
+      mixedShulkers: shulkers.filter((s) => s.mixed).length,
+      obsoletePortals: portals.filter((p) => p.obsolete).length,
+      unsortable: [],
+      activity: storageActivity,
+    }),
+    listStorageNetworks: async () => storageNetworks,
+    createStorageNetwork: async (input) => {
+      const network: StorageNetwork = { id: `net-${Date.now()}`, name: input.name, description: input.description ?? '', mode: input.mode ?? 'supervised', paused: false, workerIds: input.workerIds ?? [], protectedItems: input.protectedItems ?? [], reservations: input.reservations ?? [], exclusionAreas: input.exclusionAreas ?? [], createdAt: Date.now(), updatedAt: Date.now() };
+      storageNetworks = [...storageNetworks, network];
+      return network;
+    },
+    updateStorageNetwork: async (id, patch) => { const n = storageNetworks.find((x) => x.id === id); if (n) Object.assign(n, patch, { updatedAt: Date.now() }); return n; },
+    deleteStorageNetwork: async (id) => { storageNetworks = storageNetworks.filter((n) => n.id !== id); return true; },
+    pauseStorageNetwork: async (id, paused) => { const n = storageNetworks.find((x) => x.id === id); if (n) { n.paused = paused; n.updatedAt = Date.now(); } return n; },
+    listStorageCategories: async () => storageCategories,
+    createStorageCategory: async (input) => { const c: StorageCategory = { id: `cat-${Date.now()}`, createdAt: Date.now(), updatedAt: Date.now(), ...input }; storageCategories.push(c); return c; },
+    updateStorageCategory: async (id, patch) => { const c = storageCategories.find((x) => x.id === id); if (c) Object.assign(c, patch, { updatedAt: Date.now() }); return c; },
+    deleteStorageCategory: async (id) => { const i = storageCategories.findIndex((c) => c.id === id); if (i >= 0) storageCategories.splice(i, 1); return true; },
+    listStorageContainers: async (networkId) => (networkId ? storageContainers.filter((c) => c.networkId === networkId) : storageContainers),
+    createStorageContainer: async (input) => { const c: StorageContainer = { id: `c-${Date.now()}`, networkId: input.networkId, workerId: input.workerId, label: input.label ?? 'container', kind: input.kind ?? 'general', x: input.x ?? 0, y: input.y ?? 0, z: input.z ?? 0, dimension: input.dimension ?? '', categoryId: input.categoryId ?? null, locked: input.locked ?? false, permanent: input.permanent ?? false, capacity: null, freeSlots: null, full: false, items: [], inspectedAt: 0, createdAt: Date.now(), updatedAt: Date.now() }; storageContainers.push(c); return c; },
+    updateStorageContainer: async (id, patch) => { const c = storageContainers.find((x) => x.id === id); if (c) Object.assign(c, patch, { updatedAt: Date.now() }); return c; },
+    deleteStorageContainer: async (id) => { storageContainers = storageContainers.filter((c) => c.id !== id); return true; },
+    listRestockRules: async (networkId) => (networkId ? restockRules.filter((r) => r.networkId === networkId) : restockRules),
+    createRestockRule: async (input) => { const r: RestockRule = { id: `rr-${Date.now()}`, createdAt: Date.now(), updatedAt: Date.now(), ...input }; restockRules.push(r); return r; },
+    updateRestockRule: async (id, patch) => { const r = restockRules.find((x) => x.id === id); if (r) Object.assign(r, patch, { updatedAt: Date.now() }); return r; },
+    deleteRestockRule: async (id) => { restockRules = restockRules.filter((r) => r.id !== id); return true; },
+    listDisposalRules: async () => disposalRules,
+    createDisposalRule: async (input) => { const r: DisposalRule = { id: `dr-${Date.now()}`, createdAt: Date.now(), updatedAt: Date.now(), ...input }; disposalRules.push(r); return r; },
+    updateDisposalRule: async (id, patch) => { const r = disposalRules.find((x) => x.id === id); if (r) Object.assign(r, patch, { updatedAt: Date.now() }); return r; },
+    deleteDisposalRule: async (id) => { disposalRules = disposalRules.filter((r) => r.id !== id); return true; },
+    listPortals: async () => portals,
+    portalGroups: async () => portals.map((p) => ({ key: p.id, dimension: p.dimension, portals: [p], x: p.x, y: p.y, z: p.z })),
+    flaggedPortals: async () => portals.filter((p) => p.obsolete || p.needsMaintenance).map((p) => ({ portalId: p.id, name: p.name, reason: p.obsolete ? 'obsolete' : 'maintenance', detail: p.obsolete ? 'temporary portal has not been seen recently' : 'marked for maintenance' })),
+    previewPortalRemoval: async (ids) => ids.map((id) => portals.find((p) => p.id === id)).filter((p): p is PortalRecord => Boolean(p)).map((p) => ({ portalId: p.id, name: p.name, dimension: p.dimension, x: p.x, y: p.y, z: p.z, authorised: !p.permanent, reasons: p.permanent ? ['portal is marked permanent'] : [], estimatedBlocks: 10 })),
+    createPortal: async (input) => { const p: PortalRecord = { id: `p-${Date.now()}`, createdAt: Date.now(), updatedAt: Date.now(), ...input }; portals.push(p); return p; },
+    updatePortal: async (id, patch) => { const p = portals.find((x) => x.id === id); if (p) Object.assign(p, patch, { updatedAt: Date.now() }); return p; },
+    deletePortal: async (id) => { portals = portals.filter((p) => p.id !== id); return true; },
+    listStructures: async () => [...structures, ...portals.map(fromPortal)],
+    structureIssues: async () => structureIssues([...structures, ...portals.map(fromPortal)]).map((issue) => ({ structureId: issue.structureId, name: issue.name, reason: issue.reason, detail: issue.detail })),
+    structureCounts: async () => countByKind([...structures, ...portals.map(fromPortal)]) as unknown as Record<string, number>,
+    previewStructureChange: async (region) => previewChange([...structures, ...portals.map(fromPortal)], region).map((preview) => ({ structureId: preview.structureId, name: preview.name, kind: preview.kind, actionable: preview.actionable, reasons: preview.reasons, estimatedBlocks: preview.estimatedBlocks })),
+    createStructure: async (input) => { const s: StructureRecord = { id: `st-${Date.now()}`, createdAt: Date.now(), updatedAt: Date.now(), ...input }; structures.push(s); return s; },
+    updateStructure: async (id, patch) => { const s = structures.find((x) => x.id === id); if (s) Object.assign(s, patch, { updatedAt: Date.now() }); return s; },
+    deleteStructure: async (id) => { structures = structures.filter((s) => s.id !== id); return true; },
+    listShulkers: async (workerId) => (workerId ? shulkers.filter((s) => s.workerId === workerId) : shulkers),
+    shulkerSuggestions: async () => shulkers.map((s) => ({ shulkerId: s.id, label: s.label || s.id, suggestion: s.empty ? 'empty — keep as reserve or assign to a category' : s.mixed ? 'mixed contents — split into single-category shulkers' : 'already organised', categoryId: s.categoryId })),
+    updateShulker: async (id, patch) => { const s = shulkers.find((x) => x.id === id); if (s) Object.assign(s, patch, { updatedAt: Date.now() }); return s; },
+    listWorkflows: async () => workflows,
+    storageOperations: async () => [
+      { id: 'inspect', label: 'Inspect containers', description: 'Ask workers to report the contents of registered containers.', mutating: false, autoSafe: true },
+      { id: 'sort', label: 'Sort incoming items', description: 'Move unsorted items from input containers into their category containers.', mutating: true, autoSafe: true },
+      { id: 'consolidate', label: 'Consolidate stacks', description: 'Merge partial stacks of the same item spread across containers.', mutating: true, autoSafe: true },
+      { id: 'restock', label: 'Restock inventories', description: 'Top workers up to their configured minimums.', mutating: true, autoSafe: true },
+      { id: 'shulker-cleanup', label: 'Clean up empty shulkers', description: 'Move surplus empty shulkers to the designated storage.', mutating: true, autoSafe: false },
+      { id: 'portal-cleanup', label: 'Clean up obsolete portals', description: 'Preview and, with approval, remove obsolete registered portals.', mutating: true, autoSafe: false },
+    ],
+    createWorkflow: async (input) => { const w: WorkflowRecord = { id: `wf-${Date.now()}`, createdAt: Date.now(), updatedAt: Date.now(), ...input }; workflows.push(w); return w; },
+    updateWorkflow: async (id, patch) => { const w = workflows.find((x) => x.id === id); if (w) Object.assign(w, patch, { updatedAt: Date.now() }); return w; },
+    deleteWorkflow: async (id) => { workflows = workflows.filter((w) => w.id !== id); return true; },
+    planStorageOperation: async (operation, networkId) => buildDemoPlan(operation, networkId ?? null),
+    listStoragePlans: async () => storagePlans,
+    approveStoragePlan: async (id) => { const p = storagePlans.find((x) => x.id === id); if (p) p.approved = true; return Boolean(p); },
+    executeStoragePlan: async (id) => {
+      const plan = storagePlans.find((x) => x.id === id);
+      if (!plan) throw new Error('That plan no longer exists.');
+      plan.executed = true;
+      const outcomes = plan.steps.map((step) => ({ stepId: step.id, workerId: step.workerId, ok: true, detail: 'done (demo)' }));
+      storageActivity = [{ id: `sa-${Date.now()}`, at: Date.now(), operation: plan.operation, workerId: plan.steps[0]?.workerId ?? '', target: '', query: plan.steps[0]?.query ?? '', count: plan.steps.length, ok: true, detail: `${plan.steps.length} step(s) executed (demo)`, beforeAfter: '', source: plan.id }, ...storageActivity];
+      return { planId: id, operation: plan.operation, ok: true, executed: plan.steps.length, failed: 0, skipped: 0, message: `${plan.steps.length} executed, 0 failed, 0 skipped`, outcomes };
+    },
+    discardStoragePlan: async (id) => { storagePlans = storagePlans.filter((p) => p.id !== id); return true; },
+    restockNeeds: async (workerId) => restockRules.filter((r) => r.enabled).map((r) => ({ ruleId: r.id, workerId, query: r.query, label: r.label, have: 8, min: r.min, max: r.max, amount: Math.max(0, r.min - 8), direction: 8 < r.min ? 'in' : 'ok' })),
+    restockPlan: async (workerId) => ({ steps: restockRules.filter((r) => r.enabled).map((r) => ({ ruleId: r.id, workerId, query: r.query, fromContainerId: 'c-in', count: Math.max(0, r.min - 8), detail: `restock ${Math.max(0, r.min - 8)}x ${r.label} from Input chest` })), unsatisfied: [] }),
+    disposalPreview: async () => ({ wouldDispose: [{ itemId: 'minecraft:gravel', itemName: 'Gravel', count: 5 }], refused: [{ itemId: 'minecraft:diamond', itemName: 'Diamond', reasons: ['item is valuable'] }] }),
+    storageActivity: async (limit) => storageActivity.slice(0, limit ?? 200),
+    storageAsk: async (request) => {
+      const text = request.toLowerCase();
+      const operation = text.includes('shulker') ? 'shulker-cleanup' : text.includes('consolidate') ? 'consolidate' : text.includes('restock') ? 'restock' : text.includes('portal') ? 'portal-cleanup' : null;
+      const ai = planWithAi(request, { grant: { subject: 'operator', level: 'administer' } });
+      const aiView = ai.intent
+        ? {
+            intent: ai.intent,
+            confidence: ai.confidence,
+            executable: ai.executable,
+            needsConfirmation: ai.needsConfirmation,
+            note: ai.note,
+            steps: ai.steps.map((step) => ({ id: step.id, system: step.system, summary: step.summary, authorised: step.authorised, blockedReason: step.blockedReason, destructive: step.destructive })),
+          }
+        : null;
+      return { request, operation, answer: operation ? `${operation}: planned in demo mode` : 'I did not recognise that request (demo).', plan: operation ? buildDemoPlan(operation, 'net-main') : null, ai: aiView };
+    },
+    listStorageProfiles: async () => storageProfiles,
+    saveStorageProfile: async (name, description) => { const p: StorageProfile = { id: `sp-${Date.now()}`, name, description: description ?? '', data: {}, createdAt: Date.now() }; storageProfiles.push(p); return p; },
+    deleteStorageProfile: async (id) => { storageProfiles = storageProfiles.filter((p) => p.id !== id); return true; },
 
     onEvent: () => () => {},
   };

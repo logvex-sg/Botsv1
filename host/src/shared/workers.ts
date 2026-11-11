@@ -27,6 +27,9 @@ export const WORKER_MODULES = [
   'EflyTask',
   'CountTask',
   'SearchTask',
+  'StorageTask',
+  'ShulkerTask',
+  'PortalTask',
 ] as const;
 
 export const WORKER_PROTOCOL_VERSION = 3;
@@ -86,6 +89,13 @@ export const TASK_KINDS = [
   'chat',
   'position',
   'efly',
+  'container-read',
+  'container-move',
+  'shulker-read',
+  'shulker-pack',
+  'shulker-unpack',
+  'restock',
+  'portal-scan',
 ] as const;
 
 export type TaskKind = (typeof TASK_KINDS)[number];
@@ -98,9 +108,13 @@ export function isTaskKind(value: string): value is TaskKind {
  * Task kinds that change state and may only run one at a time per worker.
  *
  * Mirrors the worker's `TaskCatalog.isMutating`: these move the client, talk to the server or move
- * items, so the server refuses a second conflicting one rather than letting them interleave.
+ * items, so the server refuses a second conflicting one rather than letting them interleave. The
+ * storage kinds (`container-move`, `shulker-pack`, `shulker-unpack`, `restock`) are exclusive
+ * because two at once could fight over the same container.
  */
-export const EXCLUSIVE_TASK_KINDS: readonly TaskKind[] = ['regear', 'command', 'chat', 'efly'];
+export const EXCLUSIVE_TASK_KINDS: readonly TaskKind[] = [
+  'regear', 'command', 'chat', 'efly', 'container-move', 'shulker-pack', 'shulker-unpack', 'restock',
+];
 
 export function isExclusiveKind(value: string): boolean {
   return (EXCLUSIVE_TASK_KINDS as readonly string[]).includes(value);
@@ -168,6 +182,18 @@ export interface WorkerItem {
   damage: number;
   maxDamage: number;
   damageable: boolean;
+  /**
+   * Item tags the stack carries, e.g. `minecraft:logs`. Optional: a worker that predates metadata
+   * reporting omits it, and a rule that needs a tag then simply does not match — absence is not
+   * evidence of presence. See `packages/item-classifier`.
+   */
+  tags?: string[];
+  /** Enchantments on the stack, by id and level. */
+  enchantments?: { id: string; level: number }[];
+  /** Data component ids present on the stack, e.g. `minecraft:container`. */
+  components?: string[];
+  /** The stack's custom name when it has one, else null. */
+  customName?: string | null;
 }
 
 /** A task result as reported by a worker. */

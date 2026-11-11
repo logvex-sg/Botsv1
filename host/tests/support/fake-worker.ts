@@ -26,6 +26,8 @@ export interface FakeWorkerOptions {
   /** When set, the worker presents this pairing code instead of a token on its first hello. */
   pairingCode?: string;
   protocolVersion?: number;
+  /** The worker's self-generated, permanent installation id; ties its token to this client. */
+  installationId?: string;
   /** Answers every task by default; return 'ignore' to simulate a worker that never replies. */
   onTask?: (kind: string, payload: Record<string, unknown>) => { ok: boolean; message: string; data?: Record<string, unknown> } | 'ignore';
   username?: string;
@@ -71,6 +73,7 @@ export class FakeWorker {
         protocolVersion: this.options.protocolVersion ?? WORKER_PROTOCOL_VERSION,
         workerId: this.options.workerId ?? '',
         username: this.options.username ?? 'TestWorker',
+        installationId: this.options.installationId ?? 'test-installation',
         modVersion: this.options.modVersion ?? '1.0.0',
       },
     });
@@ -244,7 +247,7 @@ export function baseSnapshot(workerId: string): WorkerSnapshot {
     totalItems: 66,
     distinctItems: 2,
     freeSlots: 20,
-    capabilities: ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position', 'efly'],
+    capabilities: ['status', 'inventory', 'count', 'search', 'equipment', 'regear', 'command', 'chat', 'position', 'efly', 'container-read', 'container-move', 'shulker-read', 'shulker-unpack', 'restock', 'portal-scan'],
     fabricVersion: '0.16.9',
     meteorVersion: '1.21.11-SNAPSHOT',
     modVersion: '2.0.0',

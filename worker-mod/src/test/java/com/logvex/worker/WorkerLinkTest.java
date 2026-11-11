@@ -463,4 +463,68 @@ class WorkerLinkTest {
         }
         throw new AssertionError("never saw a " + type + " frame");
     }
+
+    /**
+     * The in-game operator controls must mean the same thing as the host's.
+     *
+     * <p>{@code pause()}, {@code resume()}, {@code disconnectService()} and {@code connectService()}
+     * are what {@code .worker pause}/{@code .worker disable} call. They must gate tasks exactly as
+     * the host's control messages do, and must report the change back to the host.
+     */
+    @Test
+    void localServiceControlsGateTasksTheSameWayAsHostControls() throws Exception {
+        try (TestWebSocketServer server = new TestWebSocketServer()) {
+            FakeDispatcher dispatcher = new FakeDispatcher();
+            WorkerLink link = new WorkerLink(configFor(server.port()), dispatcher);
+            try {
+                link.start();
+                read(server);
+                accept(server, "worker-1");
+                read(server);
+
+                // Pausing locally refuses a mutating task and reports "paused" to the host.
+                assertTrue(link.pause(), "pause() should change state");
+                assertTrue(!link.pause(), "a second pause() is a no-op");
+                Envelope paused = awaitStatusWith(server, "paused", true);
+                assertTrue(paused.payload.get("paused").getAsBoolean());
+
+                JsonObject chat = new JsonObject();
+                chat.addProperty("kind", Protocol.TASK_CHAT);
+                chat.addProperty("line", "hello");
+                server.send(new Envelope(Protocol.TASK, "t-chat", chat).encode());
+                Envelope refused = awaitType(server, Protocol.RESULT);
+                assertTrue(!refused.payload.get("ok").getAsBoolean());
+                assertTrue(refused.payload.get("message").getAsString().contains("paused"));
+                assertEquals(0, dispatcher.dispatched.get(), "a paused worker must not dispatch a mutating task");
+
+                // Resuming locally lets the same task through.
+                assertTrue(link.resume(), "resume() should change state");
+                server.send(new Envelope(Protocol.TASK, "t-chat-2", chat).encode());
+                Envelope ok = awaitType(server, Protocol.RESULT);
+                assertTrue(ok.payload.get("ok").getAsBoolean());
+
+                // Stopping the service locally refuses even read-only tasks, but stays connected.
+                assertTrue(link.disconnectService(), "disconnectService() should change state");
+                Envelope stoppedStatus = awaitStatusWith(server, "stopped", true);
+                assertTrue(stoppedStatus.payload.get("stopped").getAsBoolean());
+                assertTrue(link.isRegistered(), "the worker must stay connected for control");
+
+                JsonObject count = new JsonObject();
+                count.addProperty("kind", Protocol.TASK_COUNT);
+                count.addProperty("query", "diamond");
+                server.send(new Envelope(Protocol.TASK, "t-count", count).encode());
+                Envelope stoppedRefused = awaitType(server, Protocol.RESULT);
+                assertTrue(!stoppedRefused.payload.get("ok").getAsBoolean());
+                assertTrue(stoppedRefused.payload.get("message").getAsString().contains("stopped"));
+
+                // Re-enabling the service restores read-only tasks.
+                assertTrue(link.connectService(), "connectService() should change state");
+                server.send(new Envelope(Protocol.TASK, "t-count-2", count).encode());
+                Envelope countOk = awaitType(server, Protocol.RESULT);
+                assertTrue(countOk.payload.get("ok").getAsBoolean());
+            } finally {
+                link.close();
+            }
+        }
+    }
 }

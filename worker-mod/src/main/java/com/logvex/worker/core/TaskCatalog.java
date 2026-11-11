@@ -24,7 +24,14 @@ public final class TaskCatalog {
         Protocol.TASK_COMMAND,
         Protocol.TASK_CHAT,
         Protocol.TASK_POSITION,
-        Protocol.TASK_EFLY
+        Protocol.TASK_EFLY,
+        Protocol.TASK_CONTAINER_READ,
+        Protocol.TASK_CONTAINER_MOVE,
+        Protocol.TASK_SHULKER_READ,
+        Protocol.TASK_SHULKER_UNPACK,
+        Protocol.TASK_SHULKER_PACK,
+        Protocol.TASK_RESTOCK,
+        Protocol.TASK_PORTAL_SCAN
     );
 
     public static boolean isSupported(String kind) {
@@ -42,14 +49,23 @@ public final class TaskCatalog {
             Protocol.TASK_COMMAND,
             Protocol.TASK_CHAT,
             Protocol.TASK_POSITION,
-            Protocol.TASK_EFLY
+            Protocol.TASK_EFLY,
+            Protocol.TASK_CONTAINER_READ,
+            Protocol.TASK_CONTAINER_MOVE,
+            Protocol.TASK_SHULKER_READ,
+            Protocol.TASK_SHULKER_UNPACK,
+            Protocol.TASK_SHULKER_PACK,
+            Protocol.TASK_RESTOCK,
+            Protocol.TASK_PORTAL_SCAN
         );
     }
 
     /**
      * Whether a kind changes game state and therefore requires the worker's task permissions to
-     * allow it. Read-only kinds always run; {@code regear}, {@code command}, {@code chat} and
-     * {@code efly} move the client or talk to the server, so a worker can refuse them.
+     * allow it. Read-only kinds always run; {@code regear}, {@code command}, {@code chat},
+     * {@code efly} and the storage mutating kinds ({@code container-move}, {@code shulker-unpack},
+     * {@code restock}) move the client, talk to the server or move items, so a worker can refuse
+     * them.
      */
     public static boolean isMutating(String kind) {
         if (kind == null) return false;
@@ -57,6 +73,10 @@ public final class TaskCatalog {
         return Protocol.TASK_REGEAR.equals(normalized)
             || Protocol.TASK_COMMAND.equals(normalized)
             || Protocol.TASK_CHAT.equals(normalized)
-            || Protocol.TASK_EFLY.equals(normalized);
+            || Protocol.TASK_EFLY.equals(normalized)
+            || Protocol.TASK_CONTAINER_MOVE.equals(normalized)
+            || Protocol.TASK_SHULKER_UNPACK.equals(normalized)
+            || Protocol.TASK_SHULKER_PACK.equals(normalized)
+            || Protocol.TASK_RESTOCK.equals(normalized);
     }
 }

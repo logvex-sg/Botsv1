@@ -21,6 +21,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { WorkerCommandRepository, WorkerInventoryRepository, WorkerRepository, WorkerTaskRepository } from '../db/repositories';
 import type { WorkerInventorySnapshot } from '../../shared/types';
 import type { FleetEventTypeName } from '../../shared/events';
+import type { HelloInfo, PairingOutcome, WorkerAuthorizer } from '../pairing/pairing-service';
 import {
   WORKER_PATH,
   WORKER_PROTOCOL_VERSION,
@@ -48,12 +49,13 @@ export interface WorkerServerOptions {
   port: number;
   token: string;
   /**
-   * Validates a short-lived pairing code from a worker's first `hello`.
+   * Decides whether a worker may join and, on a first pairing, which token to grant it.
    *
-   * Returns the shared token to grant that worker on success, or null when the code is unknown or
-   * expired. When absent, only the shared token is accepted (the pre-pairing behaviour).
+   * The server does not know the pairing policy itself: it hands the presented code or token to the
+   * authorizer and gets back a verdict plus the worker id to bind. When absent, only the shared
+   * token is accepted (a degenerate setup used by some tests).
    */
-  verifyPairingCode?: (code: string) => string | null;
+  authorizer?: WorkerAuthorizer;
   /** How long a worker may go without a heartbeat before it is considered degraded. */
   heartbeatTimeoutMs?: number;
   /** Default timeout for a dispatched task. */
@@ -359,6 +361,7 @@ export class WorkerServer {
     const modVersion = typeof payload.modVersion === 'string' ? payload.modVersion : '';
     const suppliedId = typeof payload.workerId === 'string' ? payload.workerId.trim() : '';
     const username = typeof payload.username === 'string' ? payload.username.trim() : '';
+    const installationId = typeof payload.installationId === 'string' ? payload.installationId.trim() : '';
 
     const refuse = (reason: string): null => {
       socket.send(encodeEnvelope({
@@ -370,21 +373,26 @@ export class WorkerServer {
       return null;
     };
 
-    // A worker may present the shared token (already paired) or a short-lived pairing code (first
-    // join). The pairing path hands back the token so the worker can store it and reconnect
-    // without the code later.
-    let grantedToken: string | null = null;
-    if (pairingCode.length > 0) {
-      grantedToken = this.options.verifyPairingCode?.(pairingCode) ?? null;
-      if (!grantedToken) return refuse('invalid or expired pairing code');
-    } else if (!this.tokenMatches(token)) {
-      return refuse('invalid token');
-    }
     if (protocolVersion !== WORKER_PROTOCOL_VERSION) {
       return refuse(`protocol mismatch: host speaks v${WORKER_PROTOCOL_VERSION}`);
     }
 
-    const workerId = suppliedId || username || randomUUID().slice(0, 8);
+    // A worker may present a short-lived pairing code (first join) or the token it was granted
+    // before. Both paths go through the authorizer, which owns expiry, single use and revocation.
+    const hello: HelloInfo = { installationId, workerId: suppliedId, username };
+    const outcome: PairingOutcome = this.options.authorizer
+      ? pairingCode.length > 0
+        ? this.options.authorizer.authorizeWithCode(pairingCode, hello)
+        : this.options.authorizer.authorizeWithToken(token, hello)
+      : pairingCode.length === 0 && this.tokenMatches(token)
+        ? { ok: true, token, workerId: suppliedId }
+        : { ok: false, reason: 'wrong-code', message: 'invalid token' };
+
+    if (!outcome.ok) return refuse(outcome.message);
+
+    // The granted token is only handed back on a pairing-code join; a token join already has it.
+    const grantedToken = pairingCode.length > 0 ? outcome.token : null;
+    const workerId = outcome.workerId || suppliedId || username || randomUUID().slice(0, 8);
 
     // A second connection claiming an id that is already live replaces the old one. This makes a
     // worker that reconnects after a network drop recover cleanly instead of being refused.
@@ -558,6 +566,19 @@ export class WorkerServer {
   }
 
   private storeInventory(workerId: string, data: Record<string, unknown>): void {
+    const toStringArray = (value: unknown): string[] | undefined => {
+      if (!Array.isArray(value)) return undefined;
+      const out = value.filter((entry): entry is string => typeof entry === 'string');
+      return out.length > 0 ? out : undefined;
+    };
+    const toEnchantments = (value: unknown): { id: string; level: number }[] | undefined => {
+      if (!Array.isArray(value)) return undefined;
+      const out = value
+        .filter((entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null)
+        .map((entry) => ({ id: typeof entry.id === 'string' ? entry.id : '', level: typeof entry.level === 'number' ? entry.level : 1 }))
+        .filter((entry) => entry.id.length > 0);
+      return out.length > 0 ? out : undefined;
+    };
     const toItems = (value: unknown): WorkerItem[] => {
       if (!Array.isArray(value)) return [];
       return value
@@ -570,6 +591,10 @@ export class WorkerServer {
           damage: typeof entry.damage === 'number' ? entry.damage : 0,
           maxDamage: typeof entry.maxDamage === 'number' ? entry.maxDamage : 0,
           damageable: entry.damageable === true,
+          tags: toStringArray(entry.tags),
+          enchantments: toEnchantments(entry.enchantments),
+          components: toStringArray(entry.components),
+          customName: typeof entry.customName === 'string' ? entry.customName : null,
         }))
         .filter((item) => item.id.length > 0);
     };
@@ -686,6 +711,8 @@ export class WorkerServer {
     return timingSafeEqual(a, b);
   }
 }
+
+export type { WorkerAuthorizer, HelloInfo } from '../pairing/pairing-service';
 
 /** Task kinds that change state, so only one may be in flight per worker at a time. */
 const EXCLUSIVE_KINDS = new Set<TaskKind>(EXCLUSIVE_TASK_KINDS);

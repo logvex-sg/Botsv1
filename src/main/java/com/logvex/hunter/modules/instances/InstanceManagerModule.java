@@ -75,6 +75,7 @@ public class InstanceManagerModule extends HunterModule {
 
     @Override
     public void onActivate() {
+        super.onActivate();
         core().statistics().recordModuleActivation(name);
         if (executor == null || executor.isShutdown()) {
             executor = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -88,6 +89,7 @@ public class InstanceManagerModule extends HunterModule {
 
     @Override
     public void onDeactivate() {
+        super.onDeactivate();
         stopServer();
         if (executor != null) {
             executor.shutdownNow();

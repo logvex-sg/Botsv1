@@ -20,17 +20,35 @@ interface Props {
   onNavigate: (page: PageId) => void;
 }
 
+/** Formats a whole-second countdown as m:ss, so a code's life is obvious at a glance. */
+function countdown(seconds: number): string {
+  const safe = Math.max(0, seconds);
+  const minutes = Math.floor(safe / 60);
+  return `${minutes}:${String(safe % 60).padStart(2, '0')}`;
+}
+
 export function DashboardPage({ push, onNavigate }: Props) {
   const store = useStore();
   const [code, setCode] = useState<PairingCode | null>(store.pairingCode);
+  /** A local ticking clock, so the code's remaining life updates once a second without a poll. */
+  const [now, setNow] = useState(() => Date.now());
 
   const overview = store.workerOverview;
   const workers = store.workers;
   const online = workers.filter((w) => w.online);
   const tasks = store.workerTasks;
   const activeTasks = tasks.filter((t) => t.status === 'PENDING' || t.status === 'DISPATCHED');
+  const paired = store.pairingStatus?.workers ?? [];
 
   useEffect(() => { setCode(store.pairingCode); }, [store.pairingCode]);
+
+  useEffect(() => {
+    if (!code) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [code]);
+
+  const secondsLeft = code ? Math.max(0, Math.round((code.expiresAt - now) / 1000)) : 0;
 
   const server = store.workerServer;
   const address = server ? `${server.host}:${server.port}` : '—';
@@ -40,6 +58,7 @@ export function DashboardPage({ push, onNavigate }: Props) {
       const created = await fleet.createPairingCode();
       setCode(created);
       store.setPairingCode(created);
+      void store.refreshPairing();
       push('Pairing code created — it admits one worker and expires shortly.');
     } catch (error) {
       push(toFriendlyError(error).title, 'error');
@@ -50,7 +69,20 @@ export function DashboardPage({ push, onNavigate }: Props) {
     await fleet.clearPairingCode();
     setCode(null);
     store.setPairingCode(null);
+    void store.refreshPairing();
     push('Pairing code cleared');
+  }, [push, store]);
+
+  const revoke = useCallback(async (workerId: string): Promise<void> => {
+    await fleet.revokePairedWorker(workerId);
+    void store.refreshPairing();
+    push(`${workerId} revoked — pair it again to reconnect.`, 'error');
+  }, [push, store]);
+
+  const allow = useCallback(async (workerId: string): Promise<void> => {
+    await fleet.allowPairedWorker(workerId);
+    void store.refreshPairing();
+    push(`${workerId} allowed again.`);
   }, [push, store]);
 
   return (
@@ -77,17 +109,51 @@ export function DashboardPage({ push, onNavigate }: Props) {
 
         <Card title="Pairing" sub="Give a code to each worker once.">
           {code ? (
-            <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span className="mono" style={{ fontSize: 24, letterSpacing: 5, padding: '4px 12px', border: '1px dashed var(--accent)', borderRadius: 8 }}>{code.code}</span>
-              <Button small onClick={() => void copyText(code.code).then(() => push('Pairing code copied'))}>Copy</Button>
-              <Button small variant="ghost" onClick={() => void clearCode()}>Clear</Button>
-              <span className="card-sub" style={{ color: 'var(--text-dim)' }}>expires {new Date(code.expiresAt).toLocaleTimeString()}</span>
+            <div className="col" style={{ gap: 10 }}>
+              <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="mono" style={{ fontSize: 24, letterSpacing: 5, padding: '4px 12px', border: '1px dashed var(--accent)', borderRadius: 8 }}>{code.code}</span>
+                <Button small onClick={() => void copyText(code.code).then(() => push('Pairing code copied'))}>Copy</Button>
+                <Button small variant="ghost" onClick={() => void clearCode()}>Clear</Button>
+              </div>
+              <div className="card-sub" style={{ color: secondsLeft === 0 ? 'var(--error, #d9534f)' : 'var(--text-dim)' }}>
+                {secondsLeft === 0 ? 'expired — generate a new code' : `expires in ${countdown(secondsLeft)}`}
+              </div>
             </div>
           ) : (
             <Button variant="primary" onClick={() => void createCode()}>Generate pairing code</Button>
           )}
         </Card>
       </div>
+
+      <Card
+        title="Paired workers"
+        sub="One token per worker. Revoke a single worker without disturbing the rest."
+        actions={<Button small onClick={() => void store.refreshPairing()}>Refresh</Button>}
+      >
+        {paired.length === 0 ? (
+          <Empty>No worker has been paired yet. Generate a code above and enter it in the worker's in-game pairing screen.</Empty>
+        ) : (
+          <div className="col" style={{ gap: 8 }}>
+            {paired.map((entry) => (
+              <div key={entry.workerId} className="row between" style={{ gap: 10, alignItems: 'center' }}>
+                <div className="col" style={{ gap: 2 }}>
+                  <strong>{entry.username || entry.label || entry.workerId}</strong>
+                  <span className="card-sub mono" style={{ fontSize: 12 }}>{entry.workerId}</span>
+                </div>
+                <span className="card-sub" style={{ color: 'var(--text-dim)' }}>
+                  paired {relativeTime(entry.lastPairedAt)} · seen {relativeTime(entry.lastSeenAt)}
+                </span>
+                <Pill tone={entry.revoked ? 'error' : 'online'}>{entry.revoked ? 'revoked' : 'allowed'}</Pill>
+                {entry.revoked ? (
+                  <Button small onClick={() => void allow(entry.workerId)}>Allow</Button>
+                ) : (
+                  <Button small variant="danger" onClick={() => void revoke(entry.workerId)}>Revoke</Button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card
         title="Workers"

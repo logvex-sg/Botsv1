@@ -20,9 +20,32 @@ class TaskCatalogTest {
         assertTrue(kinds.contains(Protocol.TASK_EFLY));
         assertTrue(kinds.contains(Protocol.TASK_REGEAR));
         assertTrue(kinds.contains(Protocol.TASK_INVENTORY));
+        assertTrue(kinds.contains(Protocol.TASK_CONTAINER_READ));
+        assertTrue(kinds.contains(Protocol.TASK_CONTAINER_MOVE));
+        assertTrue(kinds.contains(Protocol.TASK_SHULKER_READ));
+        assertTrue(kinds.contains(Protocol.TASK_SHULKER_UNPACK));
+        assertTrue(kinds.contains(Protocol.TASK_SHULKER_PACK));
+        assertTrue(kinds.contains(Protocol.TASK_RESTOCK));
+        assertTrue(kinds.contains(Protocol.TASK_PORTAL_SCAN));
         for (String kind : kinds) {
             assertTrue(TaskCatalog.isSupported(kind), kind + " should be supported");
         }
+    }
+
+    @Test
+    void advertisesTheStorageKindsTheHostExpects() {
+        // These names are the Host's TASK_KINDS entries for storage; a rename on either side would
+        // make the Host offer a task this worker refuses, so the contract is pinned here.
+        assertEquals(
+            List.of(
+                Protocol.TASK_STATUS, Protocol.TASK_INVENTORY, Protocol.TASK_COUNT, Protocol.TASK_SEARCH,
+                Protocol.TASK_EQUIPMENT, Protocol.TASK_REGEAR, Protocol.TASK_COMMAND, Protocol.TASK_CHAT,
+                Protocol.TASK_POSITION, Protocol.TASK_EFLY, Protocol.TASK_CONTAINER_READ,
+                Protocol.TASK_CONTAINER_MOVE, Protocol.TASK_SHULKER_READ, Protocol.TASK_SHULKER_UNPACK,
+                Protocol.TASK_SHULKER_PACK, Protocol.TASK_RESTOCK, Protocol.TASK_PORTAL_SCAN
+            ),
+            TaskCatalog.all()
+        );
     }
 
     @Test
@@ -44,10 +67,17 @@ class TaskCatalogTest {
         assertTrue(TaskCatalog.isMutating(Protocol.TASK_COMMAND));
         assertTrue(TaskCatalog.isMutating(Protocol.TASK_CHAT));
         assertTrue(TaskCatalog.isMutating(Protocol.TASK_EFLY));
+        assertTrue(TaskCatalog.isMutating(Protocol.TASK_CONTAINER_MOVE));
+        assertTrue(TaskCatalog.isMutating(Protocol.TASK_SHULKER_UNPACK));
+        assertTrue(TaskCatalog.isMutating(Protocol.TASK_SHULKER_PACK));
+        assertTrue(TaskCatalog.isMutating(Protocol.TASK_RESTOCK));
         assertFalse(TaskCatalog.isMutating(Protocol.TASK_STATUS));
         assertFalse(TaskCatalog.isMutating(Protocol.TASK_INVENTORY));
         assertFalse(TaskCatalog.isMutating(Protocol.TASK_COUNT));
         assertFalse(TaskCatalog.isMutating(Protocol.TASK_POSITION));
+        assertFalse(TaskCatalog.isMutating(Protocol.TASK_CONTAINER_READ));
+        assertFalse(TaskCatalog.isMutating(Protocol.TASK_SHULKER_READ));
+        assertFalse(TaskCatalog.isMutating(Protocol.TASK_PORTAL_SCAN));
     }
 
     @Test

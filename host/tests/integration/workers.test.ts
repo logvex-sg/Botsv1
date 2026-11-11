@@ -84,13 +84,18 @@ describe('worker handshake', () => {
 });
 
 describe('pairing', () => {
-  it('admits a worker that presents a fresh pairing code and hands back the token', async () => {
+  it('admits a worker that presents a fresh pairing code and hands back a per-worker token', async () => {
     const code = ctx.context.createPairingCode().code;
     const worker = await startWorker({ workerId: 'w-p1', pairingCode: code });
     expect(worker.accepted).toBe(true);
-    expect(worker.grantedToken).toBe('test-worker-token');
+    // The host mints a token unique to this worker; it is not the host-local shared secret.
+    expect(worker.grantedToken).toBeTruthy();
+    expect(worker.grantedToken).not.toBe('test-worker-token');
     // The code is single-use, so it is gone now.
     expect(ctx.context.currentPairingCode()).toBeNull();
+    // The new token is recorded against this worker and can be used to reconnect.
+    const record = ctx.context.workerTokens.find({ workerId: 'w-p1' });
+    expect(record?.token).toBe(worker.grantedToken);
   });
 
   it('refuses a worker whose pairing code is wrong', async () => {
@@ -112,6 +117,47 @@ describe('pairing', () => {
     expect(first.accepted).toBe(true);
     const second = await startWorker({ workerId: 'w-p5', pairingCode: code });
     expect(second.accepted).toBe(false);
+  });
+
+  it('lets a paired worker reconnect with the token it was granted', async () => {
+    const code = ctx.context.createPairingCode().code;
+    const first = await startWorker({ workerId: 'w-p6', pairingCode: code, installationId: 'inst-p6' });
+    expect(first.accepted).toBe(true);
+    first.close();
+    await waitFor(() => !ctx.context.workers.server.isOnline('w-p6'));
+
+    const reconnect = await startWorker({ workerId: 'w-p6', token: first.grantedToken, installationId: 'inst-p6' });
+    expect(reconnect.accepted).toBe(true);
+    expect(reconnect.assignedId).toBe('w-p6');
+  });
+
+  it('refuses a revoked worker while another paired worker stays connected', async () => {
+    const a = await startWorker({ workerId: 'w-r1', pairingCode: ctx.context.createPairingCode().code, installationId: 'inst-r1' });
+    const b = await startWorker({ workerId: 'w-r2', pairingCode: ctx.context.createPairingCode().code, installationId: 'inst-r2' });
+    expect(a.accepted && b.accepted).toBe(true);
+    a.close();
+    await waitFor(() => !ctx.context.workers.server.isOnline('w-r1'));
+
+    ctx.context.revokeWorker('w-r1');
+    const refused = await startWorker({ workerId: 'w-r1', token: a.grantedToken, installationId: 'inst-r1' });
+    expect(refused.accepted).toBe(false);
+    expect(refused.refusalReason).toContain('revoked');
+
+    // The other worker is entirely unaffected by the revocation.
+    expect(ctx.context.workers.server.isOnline('w-r2')).toBe(true);
+  });
+
+  it('keeps the same worker id when the same installation pairs again', async () => {
+    const first = await startWorker({ workerId: 'w-id', pairingCode: ctx.context.createPairingCode().code, installationId: 'inst-stable' });
+    expect(first.accepted).toBe(true);
+    first.close();
+    await waitFor(() => !ctx.context.workers.server.isOnline('w-id'));
+
+    // A fresh code, a blank worker id, but the same installation id: identity is preserved.
+    const again = await startWorker({ workerId: '', pairingCode: ctx.context.createPairingCode().code, installationId: 'inst-stable' });
+    expect(again.accepted).toBe(true);
+    expect(again.assignedId).toBe('w-id');
+    expect(ctx.context.workerTokens.list()).toHaveLength(1);
   });
 });
 

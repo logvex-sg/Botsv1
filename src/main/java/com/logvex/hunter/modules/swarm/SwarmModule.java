@@ -132,6 +132,7 @@ public class SwarmModule extends HunterModule {
 
     @Override
     public void onActivate() {
+        super.onActivate();
         core().statistics().recordModuleActivation(name);
         applySettings();
         if (autoStart.get()) start();
@@ -139,6 +140,7 @@ public class SwarmModule extends HunterModule {
 
     @Override
     public void onDeactivate() {
+        super.onDeactivate();
         stop();
     }
 

@@ -488,4 +488,257 @@ export const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: '0006_worker_tokens',
+    up: (db) => {
+      // Per-worker credentials. Before this table the host handed every paired worker the same
+      // shared token, so revoking one revoked them all. Now each worker gets its own token keyed
+      // by the installation id it generated for itself, which is what lets a single worker be
+      // revoked without touching the rest, and lets a restarted worker keep its identity.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS worker_tokens (
+          worker_id TEXT PRIMARY KEY,
+          installation_id TEXT NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          label TEXT NOT NULL DEFAULT '',
+          username TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL,
+          last_paired_at INTEGER NOT NULL,
+          last_seen_at INTEGER NOT NULL,
+          revoked INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_worker_tokens_installation ON worker_tokens(installation_id);
+        CREATE INDEX IF NOT EXISTS idx_worker_tokens_token ON worker_tokens(token);
+      `);
+    },
+  },
+  {
+    id: '0007_autonomous_storage',
+    up: (db) => {
+      // The Autonomous Storage & World Maintenance layer: storage networks, their registered
+      // containers, categories, restock/disposal rules, the portal registry, the shulker registry,
+      // reusable workflows, stored plans and an activity log. Every container, portal and shulker
+      // row is a *reported* observation (with the time it was inspected); none is a live claim.
+      db.exec(`
+        -- A storage network is a named set of containers automation treats as one unit.
+        CREATE TABLE IF NOT EXISTS storage_networks (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT NOT NULL DEFAULT '',
+          mode TEXT NOT NULL DEFAULT 'supervised',
+          paused INTEGER NOT NULL DEFAULT 0,
+          worker_ids TEXT NOT NULL DEFAULT '[]',
+          protected_items TEXT NOT NULL DEFAULT '[]',
+          reservations TEXT NOT NULL DEFAULT '[]',
+          exclusion_areas TEXT NOT NULL DEFAULT '[]',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- A category an item or container can belong to, for routing and organisation.
+        CREATE TABLE IF NOT EXISTS storage_categories (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          item_matches TEXT NOT NULL DEFAULT '[]',
+          priority INTEGER NOT NULL DEFAULT 0,
+          color TEXT NOT NULL DEFAULT '#6d5efc',
+          protected INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_storage_categories_name ON storage_categories(name);
+
+        -- A registered container. Its items/capacity are the last *reported* observation.
+        CREATE TABLE IF NOT EXISTS storage_containers (
+          id TEXT PRIMARY KEY,
+          network_id TEXT NOT NULL,
+          worker_id TEXT NOT NULL,
+          label TEXT NOT NULL DEFAULT '',
+          kind TEXT NOT NULL DEFAULT 'general',
+          x INTEGER NOT NULL DEFAULT 0,
+          y INTEGER NOT NULL DEFAULT 0,
+          z INTEGER NOT NULL DEFAULT 0,
+          dimension TEXT NOT NULL DEFAULT '',
+          category_id TEXT,
+          locked INTEGER NOT NULL DEFAULT 0,
+          permanent INTEGER NOT NULL DEFAULT 0,
+          capacity INTEGER,
+          free_slots INTEGER,
+          full INTEGER NOT NULL DEFAULT 0,
+          items TEXT NOT NULL DEFAULT '[]',
+          inspected_at INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_storage_containers_network ON storage_containers(network_id);
+        CREATE INDEX IF NOT EXISTS idx_storage_containers_worker ON storage_containers(worker_id);
+
+        -- Restock rules: keep at least min and at most max of an item.
+        CREATE TABLE IF NOT EXISTS restock_rules (
+          id TEXT PRIMARY KEY,
+          network_id TEXT,
+          name TEXT NOT NULL,
+          query TEXT NOT NULL,
+          label TEXT NOT NULL DEFAULT '',
+          min_count INTEGER NOT NULL DEFAULT 0,
+          max_count INTEGER NOT NULL DEFAULT 0,
+          batch INTEGER NOT NULL DEFAULT 0,
+          worker_ids TEXT NOT NULL DEFAULT '[]',
+          enabled INTEGER NOT NULL DEFAULT 1,
+          priority INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- Disposal rules: items matching the query may be moved to a disposal container.
+        CREATE TABLE IF NOT EXISTS disposal_rules (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          query TEXT NOT NULL,
+          label TEXT NOT NULL DEFAULT '',
+          target_container_id TEXT,
+          enabled INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- The portal registry. Removal is always a separate, approved operation.
+        CREATE TABLE IF NOT EXISTS portal_records (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          category TEXT NOT NULL DEFAULT '',
+          dimension TEXT NOT NULL DEFAULT '',
+          x INTEGER NOT NULL DEFAULT 0,
+          y INTEGER NOT NULL DEFAULT 0,
+          z INTEGER NOT NULL DEFAULT 0,
+          permanent INTEGER NOT NULL DEFAULT 0,
+          temporary INTEGER NOT NULL DEFAULT 0,
+          needs_maintenance INTEGER NOT NULL DEFAULT 0,
+          tracking INTEGER NOT NULL DEFAULT 1,
+          last_seen_by TEXT,
+          last_seen_at INTEGER,
+          obsolete INTEGER NOT NULL DEFAULT 0,
+          notes TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- The shulker registry: one row per reported shulker box and its decoded contents.
+        CREATE TABLE IF NOT EXISTS shulker_records (
+          id TEXT PRIMARY KEY,
+          worker_id TEXT NOT NULL,
+          slot INTEGER NOT NULL DEFAULT -1,
+          label TEXT NOT NULL DEFAULT '',
+          category_id TEXT,
+          mixed INTEGER NOT NULL DEFAULT 0,
+          empty INTEGER NOT NULL DEFAULT 1,
+          items TEXT NOT NULL DEFAULT '[]',
+          item_count INTEGER NOT NULL DEFAULT 0,
+          free_slots INTEGER,
+          reserved INTEGER NOT NULL DEFAULT 0,
+          marked_for_removal INTEGER NOT NULL DEFAULT 0,
+          inspected_at INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_shulker_records_worker ON shulker_records(worker_id);
+
+        -- Reusable workflows: a name plus an ordered list of operation ids.
+        CREATE TABLE IF NOT EXISTS storage_workflows (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          operations TEXT NOT NULL DEFAULT '[]',
+          network_id TEXT,
+          mode TEXT NOT NULL DEFAULT 'supervised',
+          enabled INTEGER NOT NULL DEFAULT 1,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- Stored plans, so a supervised plan survives a restart until it is approved or discarded.
+        CREATE TABLE IF NOT EXISTS storage_plans (
+          id TEXT PRIMARY KEY,
+          operation TEXT NOT NULL,
+          network_id TEXT,
+          steps TEXT NOT NULL DEFAULT '[]',
+          notes TEXT NOT NULL DEFAULT '[]',
+          actionable INTEGER NOT NULL DEFAULT 0,
+          approved INTEGER NOT NULL DEFAULT 0,
+          executed INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL
+        );
+
+        -- The storage activity log: every automation action, with the worker and the outcome.
+        CREATE TABLE IF NOT EXISTS storage_activity (
+          id TEXT PRIMARY KEY,
+          at INTEGER NOT NULL,
+          operation TEXT NOT NULL,
+          worker_id TEXT NOT NULL DEFAULT '',
+          target TEXT NOT NULL DEFAULT '',
+          query TEXT NOT NULL DEFAULT '',
+          count INTEGER NOT NULL DEFAULT 0,
+          ok INTEGER NOT NULL DEFAULT 0,
+          detail TEXT NOT NULL DEFAULT '',
+          before_after TEXT NOT NULL DEFAULT '',
+          source TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_storage_activity_time ON storage_activity(at DESC);
+        CREATE INDEX IF NOT EXISTS idx_storage_activity_worker ON storage_activity(worker_id, at DESC);
+
+        -- Stored configuration profiles for the storage subsystem.
+        CREATE TABLE IF NOT EXISTS storage_profiles (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          description TEXT NOT NULL DEFAULT '',
+          data TEXT NOT NULL DEFAULT '{}',
+          created_at INTEGER NOT NULL
+        );
+      `);
+    },
+  },
+  {
+    id: '0008_storage_category_rules',
+    up: (db) => {
+      // Categories gain real-signal rules (tags, enchantments, components, namespace, durability) so
+      // routing can tell two similar items apart instead of matching a name fragment. Existing rows
+      // keep their `item_matches` and get an empty rule list, which the classifier reads as "no
+      // rules" and falls back to the substrings — no data migration and no behaviour change.
+      db.exec(`
+        ALTER TABLE storage_categories ADD COLUMN rules TEXT NOT NULL DEFAULT '[]';
+      `);
+    },
+  },
+  {
+    id: '0009_structures',
+    up: (db) => {
+      // The general structure registry (spec §9). Portals keep their own richer table; this one
+      // holds every other registered structure — storage rooms, farms, workshops, processing areas,
+      // temporary builds — with an inclusive region, ownership notes and a protected flag. The
+      // structure-registry engine reads these rows; automation never modifies a protected structure.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS structures (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'other',
+          dimension TEXT NOT NULL DEFAULT '',
+          x1 INTEGER NOT NULL DEFAULT 0,
+          y1 INTEGER NOT NULL DEFAULT 0,
+          z1 INTEGER NOT NULL DEFAULT 0,
+          x2 INTEGER NOT NULL DEFAULT 0,
+          y2 INTEGER NOT NULL DEFAULT 0,
+          z2 INTEGER NOT NULL DEFAULT 0,
+          ownership TEXT NOT NULL DEFAULT '',
+          protected INTEGER NOT NULL DEFAULT 0,
+          maintenance TEXT NOT NULL DEFAULT 'ok',
+          last_seen_by TEXT,
+          last_seen_at INTEGER,
+          notes TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_structures_kind ON structures(kind);
+      `);
+    },
+  },
 ];

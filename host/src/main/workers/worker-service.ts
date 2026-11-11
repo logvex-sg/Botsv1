@@ -38,6 +38,7 @@ import type {
 } from '../db/repositories';
 import type { EmitEvent } from './worker-server';
 import { WorkerServer } from './worker-server';
+import { canRun, normalize } from '../../shared/capabilities';
 import {
   TASK_KINDS,
   emptySnapshot,
@@ -66,6 +67,8 @@ export interface WorkerServiceDeps {
   emit: EmitEvent;
   /** Called when a worker reports an inventory, so history can be recorded. */
   onInventory?: (workerId: string, snapshot: WorkerInventorySnapshot) => void;
+  /** The capabilities a worker last advertised; absent means "unknown, do not gate". */
+  capabilitiesFor?: (workerId: string) => string[] | undefined;
 }
 
 export class WorkerService {
@@ -362,6 +365,20 @@ export class WorkerService {
    */
   async runTask(workerId: string, kind: TaskKind, params: Record<string, unknown> = {}): Promise<WorkerTaskResult> {
     if (!isTaskKind(kind)) throw new Error(`unknown task kind: ${kind}`);
+    // The Host must never ask a worker for a task it cannot run. The check uses the worker's last
+    // reported capabilities, but only when it has reported some that map to a known capability: a
+    // worker that has not sent a status yet is not gated, so a first dispatch is not refused before
+    // the worker has spoken.
+    const reported = this.deps.capabilitiesFor?.(workerId);
+    if (reported && reported.length > 0) {
+      const capabilities = normalize(reported);
+      if (capabilities.capabilities.length > 0) {
+        const eligibility = canRun(capabilities, kind);
+        if (!eligibility.ok) {
+          throw new Error(`worker ${workerId} cannot run ${kind}: ${eligibility.reason}`);
+        }
+      }
+    }
     this.deps.emit('WORKER_TASK_DISPATCHED', `${kind} → ${workerId}`, { workerId, kind });
     try {
       const result = await this.server.sendTask(workerId, kind, params);

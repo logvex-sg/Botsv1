@@ -138,6 +138,8 @@ Dashboard module settings (Meteor module `hunter-dashboard`):
 | `death-health-threshold` | Health at or below which a death is assumed. |
 | `save-on-stop` | Persist everything when the hunter stops. |
 | `autosave-interval` | Seconds between automatic saves (0 = off). |
+| `detect-eliminations` | Record a kill when a player you recently struck vanishes at low health. |
+| `elimination-window` | Seconds after your last hit within which a vanishing player still counts. |
 
 ---
 
@@ -289,8 +291,8 @@ and switch between them. The Messages screen supports:
 - per-event cooldowns.
 
 The `notifications` module also has toggles: `notify-detect`, `notify-disappear`, `notify-reappear`,
-`notify-entered-range`, and friends/ignored players are excluded by the tracker's protection
-settings.
+`notify-entered-range`, `notify-stasis`, `notify-connection`, `notify-eliminated`, and
+`send-to-server`. Friends/ignored players are excluded by the tracker's protection settings.
 
 ---
 

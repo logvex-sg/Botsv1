@@ -9,7 +9,7 @@
  * scheduler all agree on what a task is. It is pure and unit-testable.
  */
 import { TASK_KINDS, isExclusiveKind, isTaskKind, type TaskKind } from '../../../shared/workers';
-import { canRun, type CapabilityKey, type CapabilitySet } from '../capabilities';
+import { canRun, type CapabilityKey, type CapabilitySet } from '../../../shared/capabilities';
 
 export type TaskCategory =
   | 'Inventory'
@@ -96,6 +96,13 @@ export const TASK_LIBRARY: readonly TaskDefinition[] = [
   define('chat', 'Send a chat message', 'Send one chat line from the worker.', 'Communication', ['chat'], false, 10_000),
   define('position', 'Report position', 'Report the worker\'s current coordinates and dimension.', 'Movement', ['position_reporting'], false, 5_000),
   define('efly', 'Elytra flight', 'Start or stop elytra flight toward a target, through Meteor.', 'Movement', ['efly'], true, 20_000),
+  define('container-read', 'Read a container', 'List the contents of a container at a fixed position.', 'Storage', ['container_access'], false, 15_000),
+  define('container-move', 'Move items in/out of a container', 'Quick-move matching items between the worker and a container.', 'Storage', ['container_move', 'container_access'], false, 30_000),
+  define('shulker-read', 'Read shulker boxes', 'List the decoded contents of the shulker boxes the worker carries.', 'Storage', ['shulker_read', 'container_access'], false, 15_000),
+  define('shulker-pack', 'Pack a shulker box', 'Pack matching loose items into a carried shulker box.', 'Storage', ['shulker_pack', 'container_move'], false, 30_000),
+  define('shulker-unpack', 'Unpack a shulker box', 'Empty a carried shulker box into the worker\'s inventory.', 'Storage', ['shulker_unpack', 'container_move'], false, 30_000),
+  define('restock', 'Restock from storage', 'Top the worker\'s inventory up to a minimum from a source container.', 'Storage', ['restock', 'container_move'], false, 30_000),
+  define('portal-scan', 'Scan for portals', 'Find (or remove) nether and end portals near the worker.', 'Storage', ['portal_scan'], false, 20_000),
 ];
 
 const BY_KIND = new Map<TaskKind, TaskDefinition>(TASK_LIBRARY.map((def) => [def.kind, def]));

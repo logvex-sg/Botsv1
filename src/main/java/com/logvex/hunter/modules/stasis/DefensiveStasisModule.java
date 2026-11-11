@@ -142,12 +142,14 @@ public class DefensiveStasisModule extends HunterModule {
 
     @Override
     public void onActivate() {
+        super.onActivate();
         core().statistics().recordModuleActivation(name);
         lastLevel = StasisLevel.SAFE;
     }
 
     @Override
     public void onDeactivate() {
+        super.onDeactivate();
         lastLevel = StasisLevel.SAFE;
     }
 }

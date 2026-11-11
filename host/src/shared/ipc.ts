@@ -20,6 +20,7 @@ import type {
   ItemCountReport,
   NotificationItem,
   PairingCode,
+  PairingStatus,
   RegearComparison,
   RegearPreset,
   RuleCondition,
@@ -34,9 +35,56 @@ import type {
   WorkerOverview,
   WorkerTaskRecord,
   WorkerView,
+  AutomationMode,
+  AutomationPlan,
+  ContainerKind,
+  DisposalRule,
+  MaintenanceAnswer,
+  PlanExecutionResult,
+  PortalRecord,
+  RestockRule,
+  ShulkerRecord,
+  StorageActivityEntry,
+  StorageCategory,
+  StorageContainer,
+  StorageNetwork,
+  StorageNetworkReport,
+  StorageOverview,
+  StorageProfile,
+  StructureRecord,
+  WorkflowRecord,
 } from './types';
 import type { ControlAction, TaskKind, WorkerTaskResult } from './workers';
 import type { StatisticsReport } from '../main/packages/statistics';
+
+/** A normalised structure region, as the preview and create dialogs pass it. */
+export interface StructureRegion {
+  dimension: string;
+  minX: number;
+  minY: number;
+  minZ: number;
+  maxX: number;
+  maxY: number;
+  maxZ: number;
+}
+
+/** One flagged structure, as the dashboard shows it. */
+export interface StructureIssueView {
+  structureId: string;
+  name: string;
+  reason: string;
+  detail: string;
+}
+
+/** What a proposed change would touch, as the dashboard shows it. */
+export interface StructureChangeView {
+  structureId: string;
+  name: string;
+  kind: string;
+  actionable: boolean;
+  reasons: string[];
+  estimatedBlocks: number;
+}
 
 export interface WorkerServerStatus {
   enabled: boolean;
@@ -85,8 +133,11 @@ export interface FleetApi {
 
   // host pairing
   getPairingCode(): Promise<PairingCode | null>;
+  getPairingStatus(): Promise<PairingStatus>;
   createPairingCode(): Promise<PairingCode>;
   clearPairingCode(): Promise<boolean>;
+  revokePairedWorker(workerId: string): Promise<boolean>;
+  allowPairedWorker(workerId: string): Promise<boolean>;
 
   // worker server
   getWorkerServer(): Promise<WorkerServerStatus>;
@@ -220,6 +271,95 @@ export interface FleetApi {
   getStatistics(): Promise<StatisticsReport>;
   exportStatistics(format: 'json' | 'csv'): Promise<{ path: string } | null>;
 
+  // autonomous storage & world maintenance
+  storageOverview(): Promise<StorageOverview>;
+  storageMaintenanceReport(): Promise<{
+    generatedAt: number;
+    networks: StorageNetworkReport[];
+    bottlenecks: StorageNetworkReport['bottlenecks'];
+    emptyShulkers: number;
+    mixedShulkers: number;
+    obsoletePortals: number;
+    unsortable: { id: string; name: string; count: number }[];
+    activity: StorageActivityEntry[];
+  }>;
+
+  listStorageNetworks(): Promise<StorageNetwork[]>;
+  createStorageNetwork(input: {
+    name: string; description?: string; mode?: AutomationMode; workerIds?: string[];
+    protectedItems?: string[]; reservations?: { query: string; count: number }[]; exclusionAreas?: string[];
+  }): Promise<StorageNetwork>;
+  updateStorageNetwork(id: string, patch: Partial<StorageNetwork>): Promise<StorageNetwork | undefined>;
+  deleteStorageNetwork(id: string): Promise<boolean>;
+  pauseStorageNetwork(id: string, paused: boolean): Promise<StorageNetwork | undefined>;
+
+  listStorageCategories(): Promise<StorageCategory[]>;
+  createStorageCategory(input: Omit<StorageCategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<StorageCategory>;
+  updateStorageCategory(id: string, patch: Partial<StorageCategory>): Promise<StorageCategory | undefined>;
+  deleteStorageCategory(id: string): Promise<boolean>;
+
+  listStorageContainers(networkId?: string): Promise<StorageContainer[]>;
+  createStorageContainer(input: {
+    networkId: string; workerId: string; label?: string; kind?: ContainerKind;
+    x?: number; y?: number; z?: number; dimension?: string; categoryId?: string | null;
+    locked?: boolean; permanent?: boolean;
+  }): Promise<StorageContainer>;
+  updateStorageContainer(id: string, patch: Partial<StorageContainer>): Promise<StorageContainer | undefined>;
+  deleteStorageContainer(id: string): Promise<boolean>;
+
+  listRestockRules(networkId?: string): Promise<RestockRule[]>;
+  createRestockRule(input: Omit<RestockRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<RestockRule>;
+  updateRestockRule(id: string, patch: Partial<RestockRule>): Promise<RestockRule | undefined>;
+  deleteRestockRule(id: string): Promise<boolean>;
+
+  listDisposalRules(): Promise<DisposalRule[]>;
+  createDisposalRule(input: Omit<DisposalRule, 'id' | 'createdAt' | 'updatedAt'>): Promise<DisposalRule>;
+  updateDisposalRule(id: string, patch: Partial<DisposalRule>): Promise<DisposalRule | undefined>;
+  deleteDisposalRule(id: string): Promise<boolean>;
+
+  listPortals(): Promise<PortalRecord[]>;
+  portalGroups(): Promise<{ key: string; dimension: string; portals: PortalRecord[]; x: number; y: number; z: number }[]>;
+  flaggedPortals(): Promise<{ portalId: string; name: string; reason: string; detail: string }[]>;
+  previewPortalRemoval(portalIds: string[]): Promise<{ portalId: string; name: string; dimension: string; x: number; y: number; z: number; authorised: boolean; reasons: string[]; estimatedBlocks: number }[]>;
+  createPortal(input: Omit<PortalRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<PortalRecord>;
+  updatePortal(id: string, patch: Partial<PortalRecord>): Promise<PortalRecord | undefined>;
+  deletePortal(id: string): Promise<boolean>;
+
+  listStructures(): Promise<StructureRecord[]>;
+  structureIssues(): Promise<StructureIssueView[]>;
+  structureCounts(): Promise<Record<string, number>>;
+  previewStructureChange(region: StructureRegion, options?: { allowProtected?: boolean }): Promise<StructureChangeView[]>;
+  createStructure(input: Omit<StructureRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<StructureRecord>;
+  updateStructure(id: string, patch: Partial<StructureRecord>): Promise<StructureRecord | undefined>;
+  deleteStructure(id: string): Promise<boolean>;
+
+  listShulkers(workerId?: string): Promise<ShulkerRecord[]>;
+  shulkerSuggestions(): Promise<{ shulkerId: string; label: string; suggestion: string; categoryId: string | null }[]>;
+  updateShulker(id: string, patch: Partial<ShulkerRecord>): Promise<ShulkerRecord | undefined>;
+
+  listWorkflows(): Promise<WorkflowRecord[]>;
+  storageOperations(): Promise<{ id: string; label: string; description: string; mutating: boolean; autoSafe: boolean }[]>;
+  createWorkflow(input: Omit<WorkflowRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<WorkflowRecord>;
+  updateWorkflow(id: string, patch: Partial<WorkflowRecord>): Promise<WorkflowRecord | undefined>;
+  deleteWorkflow(id: string): Promise<boolean>;
+
+  planStorageOperation(operation: string, networkId?: string | null, options?: { workerId?: string; portalIds?: string[] }): Promise<AutomationPlan>;
+  listStoragePlans(): Promise<(AutomationPlan & { approved: boolean; executed: boolean })[]>;
+  approveStoragePlan(id: string): Promise<boolean>;
+  executeStoragePlan(id: string): Promise<PlanExecutionResult>;
+  discardStoragePlan(id: string): Promise<boolean>;
+
+  restockNeeds(workerId: string, networkId?: string | null): Promise<{ ruleId: string; workerId: string; query: string; label: string; have: number; min: number; max: number; amount: number; direction: string }[]>;
+  restockPlan(workerId: string, networkId?: string | null): Promise<{ steps: { ruleId: string; workerId: string; query: string; fromContainerId: string; count: number; detail: string }[]; unsatisfied: { ruleId: string; workerId: string; query: string; missing: number; reason: string }[] }>;
+  disposalPreview(workerId: string, networkId?: string | null): Promise<{ wouldDispose: { itemId: string; itemName: string; count: number }[]; refused: { itemId: string; itemName: string; reasons: string[] }[] }>;
+
+  storageActivity(limit?: number, workerId?: string): Promise<StorageActivityEntry[]>;
+  storageAsk(request: string): Promise<MaintenanceAnswer>;
+
+  listStorageProfiles(): Promise<StorageProfile[]>;
+  saveStorageProfile(name: string, description?: string): Promise<StorageProfile>;
+  deleteStorageProfile(id: string): Promise<boolean>;
+
   // live events
   onEvent(callback: (event: FleetEvent) => void): () => void;
 }
@@ -234,8 +374,11 @@ export const IPC = {
   importConfig: 'system:import',
 
   getPairingCode: 'host:pairing:get',
+  getPairingStatus: 'host:pairing:status',
   createPairingCode: 'host:pairing:create',
   clearPairingCode: 'host:pairing:clear',
+  revokePairedWorker: 'host:pairing:revoke',
+  allowPairedWorker: 'host:pairing:allow',
 
   getWorkerServer: 'workers:server:get',
   regenerateWorkerToken: 'workers:server:token',
@@ -345,4 +488,63 @@ export const IPC = {
 
   getStatistics: 'stats:get',
   exportStatistics: 'stats:export',
+
+  storageOverview: 'storage:overview',
+  storageMaintenanceReport: 'storage:report',
+  listStorageNetworks: 'storage:networks:list',
+  createStorageNetwork: 'storage:networks:create',
+  updateStorageNetwork: 'storage:networks:update',
+  deleteStorageNetwork: 'storage:networks:delete',
+  pauseStorageNetwork: 'storage:networks:pause',
+  listStorageCategories: 'storage:categories:list',
+  createStorageCategory: 'storage:categories:create',
+  updateStorageCategory: 'storage:categories:update',
+  deleteStorageCategory: 'storage:categories:delete',
+  listStorageContainers: 'storage:containers:list',
+  createStorageContainer: 'storage:containers:create',
+  updateStorageContainer: 'storage:containers:update',
+  deleteStorageContainer: 'storage:containers:delete',
+  listRestockRules: 'storage:restock:list',
+  createRestockRule: 'storage:restock:create',
+  updateRestockRule: 'storage:restock:update',
+  deleteRestockRule: 'storage:restock:delete',
+  listDisposalRules: 'storage:disposal:list',
+  createDisposalRule: 'storage:disposal:create',
+  updateDisposalRule: 'storage:disposal:update',
+  deleteDisposalRule: 'storage:disposal:delete',
+  listPortals: 'storage:portals:list',
+  portalGroups: 'storage:portals:groups',
+  flaggedPortals: 'storage:portals:flagged',
+  previewPortalRemoval: 'storage:portals:preview-removal',
+  createPortal: 'storage:portals:create',
+  updatePortal: 'storage:portals:update',
+  deletePortal: 'storage:portals:delete',
+  listStructures: 'storage:structures:list',
+  structureIssues: 'storage:structures:issues',
+  structureCounts: 'storage:structures:counts',
+  previewStructureChange: 'storage:structures:preview-change',
+  createStructure: 'storage:structures:create',
+  updateStructure: 'storage:structures:update',
+  deleteStructure: 'storage:structures:delete',
+  listShulkers: 'storage:shulkers:list',
+  shulkerSuggestions: 'storage:shulkers:suggestions',
+  updateShulker: 'storage:shulkers:update',
+  listWorkflows: 'storage:workflows:list',
+  storageOperations: 'storage:workflows:operations',
+  createWorkflow: 'storage:workflows:create',
+  updateWorkflow: 'storage:workflows:update',
+  deleteWorkflow: 'storage:workflows:delete',
+  planStorageOperation: 'storage:plan',
+  listStoragePlans: 'storage:plans:list',
+  approveStoragePlan: 'storage:plans:approve',
+  executeStoragePlan: 'storage:plans:execute',
+  discardStoragePlan: 'storage:plans:discard',
+  restockNeeds: 'storage:restock:needs',
+  restockPlan: 'storage:restock:plan',
+  disposalPreview: 'storage:disposal:preview',
+  storageActivity: 'storage:activity',
+  storageAsk: 'storage:ask',
+  listStorageProfiles: 'storage:profiles:list',
+  saveStorageProfile: 'storage:profiles:save',
+  deleteStorageProfile: 'storage:profiles:delete',
 } as const;

@@ -7,6 +7,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { FleetDatabase } from './database';
+import type { WorkerTokenRecord } from '../packages/pairing';
 import type {
   AuditEntry,
   AutomationRule,
@@ -1183,5 +1184,92 @@ export class AuditRepository {
       'DELETE FROM audit_log WHERE id NOT IN (SELECT id FROM audit_log ORDER BY at DESC LIMIT ?)',
       [keep],
     );
+  }
+}
+
+// ------------------------------------------------------------------------- worker tokens
+
+/**
+ * Per-worker credentials.
+ *
+ * A worker is identified by the `installationId` it generated for itself; the host keeps one row
+ * per worker and hands out a token unique to it. This is the storage behind
+ * {@link WorkerTokenView}: the raw `token` column never leaves the main process.
+ */
+export class WorkerTokenRepository {
+  constructor(private readonly db: FleetDatabase) {}
+
+  private map(row: Record<string, unknown>): WorkerTokenRecord {
+    return {
+      workerId: String(row.worker_id),
+      installationId: String(row.installation_id ?? ''),
+      token: String(row.token ?? ''),
+      label: String(row.label ?? ''),
+      username: String(row.username ?? ''),
+      createdAt: Number(row.created_at ?? 0),
+      lastPairedAt: Number(row.last_paired_at ?? 0),
+      lastSeenAt: Number(row.last_seen_at ?? 0),
+      revoked: Number(row.revoked ?? 0) !== 0,
+    };
+  }
+
+  /** The record for a worker id, or the one bound to an installation id. */
+  find(by: { workerId?: string; installationId?: string; token?: string }): WorkerTokenRecord | undefined {
+    if (by.workerId) {
+      const row = this.db.get('SELECT * FROM worker_tokens WHERE worker_id=?', [by.workerId]);
+      return row ? this.map(row) : undefined;
+    }
+    if (by.installationId) {
+      const row = this.db.get('SELECT * FROM worker_tokens WHERE installation_id=? ORDER BY created_at LIMIT 1', [by.installationId]);
+      return row ? this.map(row) : undefined;
+    }
+    if (by.token) {
+      const row = this.db.get('SELECT * FROM worker_tokens WHERE token=?', [by.token]);
+      return row ? this.map(row) : undefined;
+    }
+    return undefined;
+  }
+
+  list(): WorkerTokenRecord[] {
+    return this.db.all('SELECT * FROM worker_tokens ORDER BY created_at').map((row) => this.map(row));
+  }
+
+  /** Inserts or replaces a worker's credential, keeping its creation time on re-pair. */
+  upsert(record: Omit<WorkerTokenRecord, 'createdAt'> & { createdAt?: number }): WorkerTokenRecord {
+    const existing = this.find({ workerId: record.workerId });
+    const createdAt = record.createdAt ?? existing?.createdAt ?? now();
+    this.db.run(
+      `INSERT INTO worker_tokens (worker_id, installation_id, token, label, username, created_at, last_paired_at, last_seen_at, revoked)
+       VALUES (?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(worker_id) DO UPDATE SET
+         installation_id=excluded.installation_id, token=excluded.token, label=excluded.label,
+         username=excluded.username, last_paired_at=excluded.last_paired_at,
+         last_seen_at=excluded.last_seen_at, revoked=excluded.revoked`,
+      [
+        record.workerId,
+        record.installationId,
+        record.token,
+        record.label,
+        record.username,
+        createdAt,
+        record.lastPairedAt,
+        record.lastSeenAt,
+        record.revoked ? 1 : 0,
+      ],
+    );
+    return this.find({ workerId: record.workerId })!;
+  }
+
+  /** Marks a worker revoked (or allowed again). Its token stops being accepted while revoked. */
+  setRevoked(workerId: string, revoked: boolean): boolean {
+    return this.db.run('UPDATE worker_tokens SET revoked=? WHERE worker_id=?', [revoked ? 1 : 0, workerId]).changes > 0;
+  }
+
+  touch(workerId: string, at = now()): void {
+    this.db.run('UPDATE worker_tokens SET last_seen_at=? WHERE worker_id=?', [at, workerId]);
+  }
+
+  remove(workerId: string): boolean {
+    return this.db.run('DELETE FROM worker_tokens WHERE worker_id=?', [workerId]).changes > 0;
   }
 }

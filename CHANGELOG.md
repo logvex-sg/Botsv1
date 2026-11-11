@@ -8,6 +8,63 @@ Fleet Manager** desktop app. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **Hunter addon: the event pipeline now actually reaches the modules.** Core events were posted
+  only to the addon's own bus while most modules listened with Meteor's `@EventHandler`, so a whole
+  class of listeners never ran. `HunterCore.publish` now also forwards to a sink the game layer
+  installs (`HunterRuntime` → `MeteorClient.EVENT_BUS`), so `TargetSwitched`, `LocalPlayerDied`,
+  `InstanceStatusChanged` and friends reach every listener. The core stays Minecraft-free and
+  unit-testable.
+- **Hunter addon: kills are recorded again.** `TargetEliminated` was never published and
+  `HunterCore.recordKill` had no reachable caller, so the kill counter stayed at zero. A new
+  `EliminationLog` (Minecraft-free, unit-tested) confirms an elimination only when a player the
+  local player recently struck vanishes while at low health, and `HunterCore.recordElimination`
+  updates the statistics, the target entry, that player's history and the combat log in one place.
+  A plain disappearance is still not a kill.
+- **Worker: regear now equips carried armour.** The only move the worker performed was a container
+  quick-move, so a regear that needed armour but had no container open could never satisfy the
+  loadout. `ContainerMover.equipCarriedArmor` shift-clicks carried armour into empty armour slots
+  (using the item's `EQUIPPABLE` component), and regear runs it before any container withdrawal.
+- **Fleet Manager: the task console can now drive every task kind.** The Tasks page had a parameter
+  form for only a handful of kinds, so container, shulker, restock and portal tasks could not be
+  configured from the UI. The form is now schema-driven and covers all 17 kinds the worker
+  implements.
+
+### Added
+- **Fleet Manager: the structure registry (spec §9) is now wired end to end.** The
+  `structure-registry` engine — region validation, point-in-structure tests and change-impact
+  previews — was implemented and unit-tested but only reachable from tests. It now has a persistent
+  home: migration `0009` adds a `structures` table, `StructureRepository` round-trips it, and
+  `StorageService` exposes `listStructures`/`createStructure`/`updateStructure`/`removeStructure`,
+  plus `structureIssues`, `structuresDueForMaintenance`, `previewStructureChange` and
+  `structureCounts`. The **Structures** tab in the Storage page drives it through the real service:
+  register a storage room, farm, workshop, processing area, temporary build or other region, mark it
+  protected, set its maintenance state, and see the flagged list. Registered portals are projected
+  into the same list (and the same dashboard) rather than duplicated. The tab's **Preview change**
+  dialog runs `previewStructureChange` over an arbitrary region and reports which structures a change
+  would touch, whether each is actionable, and why not — a protected structure is always listed as
+  not actionable. IPC channels `storage:structures:*` and a `fleet.*` bridge method expose the whole
+  surface to the renderer.
+- **Fleet Manager: the maintenance assistant now shows the AI plan.** The AI planner (spec §13)
+  was implemented and tested but nothing called it. `storage.ask` now runs both engines over the
+  same sentence: the maintenance assistant maps it to an executable operation, and the planner
+  returns a checked plan (recognised intent, ordered steps, which are authorised, which are
+  destructive). The assistant tab renders the plan, and a deterministic planner with no match is
+  still reported honestly rather than guessed at.
+- **Worker: in-game commands for every storage feature (spec §16).** `.worker` gained `position`,
+  `equipment`, `container <x> <y> <z>`, `shulkers`, `pack <query>`, `unpack`,
+  `restock <query> [limit]` and `portals [remove]`, so each storage capability can be exercised from
+  the client without the host.
+- **Fleet Manager: complete task library.** The task library now defines the seven storage kinds
+  (`container-read`, `container-move`, `shulker-read`, `shulker-pack`, `shulker-unpack`, `restock`,
+  `portal-scan`) that the worker already implemented, so capability validation and the task
+  definitions cover the full set the protocol advertises. A test asserts the library covers every
+  wire kind.
+- **Hunter addon: more lifecycle events.** `ModuleStateChanged` is published from the module base
+  class for every module, and the runtime publishes `ConnectionChanged` and `LocalHealthChanged`.
+- **Hunter addon: configurable elimination announcements.** `NotificationModule` gained
+  `notify-eliminated`, and the dashboard gained `detect-eliminations` and `elimination-window`.
+
 ### Changed
 - **The Fleet Manager is now a host, not a bot runner.** `host/` was rebuilt around one
   idea: the desktop app *controls* workers, it does not *run* bots. It no longer launches Minecraft,
@@ -66,6 +123,34 @@ Fleet Manager** desktop app. The format follows
   migration that *creates* them while adding the host-schema migration that drops the retired ones,
   which made every worker write fail with `no such table: workers`. The creating migration is
   restored ahead of the dropping one.
+
+### Added
+- **Real item classification, end to end.** Items are no longer assumed interchangeable. The worker
+  reads the four facts that actually distinguish two stacks off the live `ItemStack` —
+  `tags`, `enchantments`, `components` and `customName` (`ItemMetadata`) — and reports them on every
+  item, in the carried inventory, a container read and a shulker read alike. The host's `WorkerItem`
+  carries the same optional fields, and the storage engine routes by *classification* rather than a
+  bare id match: `packages/item-classifier` decides the category from metadata when it is present,
+  and the classifier-aware `chooseDestination` picks the container dedicated to that category. When a
+  worker reports no metadata a category with no rules still falls back to its substrings, so an older
+  worker is understood and a tag that was never read is treated as unknown, never as absent.
+- **Storage categories now carry real classifier rules, and those rules actually drive routing.**
+  A category is no longer just a list of id substrings projected onto the classifier; it stores a
+  list of `ClassifierRule`s (`tag`, `enchantment`, `component`, `namespace`, `custom-name`,
+  `id-equals`, `id-contains`, `durability`, `stackable`) that are read straight off the item's
+  reported metadata. `StorageCategory.rules` is persisted (migration `0008` adds the column, and the
+  repository round-trips it), a fresh install is seeded with the built-in rule families rather than
+  substring lists, and the storage service builds one classifier per plan and classifies every item
+  through it — so the tags/enchantments/components/namespace classifier is the live code path, not a
+  projection of the substrings. The **Categories** tab in the Storage page views and edits these
+  rules (add, change kind, remove) through the real service, and a category with no rules keeps the
+  substring fallback.
+- **The worker's controls are now available in-game.** `.worker` registers with Meteor's command
+  system: `status`, `config`, `events`, `connect`/`disconnect`/`reconnect`, `pause`/`resume`,
+  `enable`/`disable`, `inventory`, `count`, `search`, and `inspect` — which prints the real tags,
+  enchantments and components of matching carried stacks. The pause/resume/stop methods are the same
+  ones the host's control frames call, so the two paths cannot diverge; a regression test drives both
+  and asserts they gate tasks identically.
 
 ## [1.2.0] - 2026-11-08
 

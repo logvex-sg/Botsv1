@@ -463,8 +463,464 @@ export interface PairingCode {
   expiresAt: number;
 }
 
+/** One worker's durable credential, as shown in the Dashboard. The token itself is never sent. */
+export interface PairedWorkerView {
+  workerId: string;
+  installationId: string;
+  label: string;
+  username: string;
+  createdAt: number;
+  lastPairedAt: number;
+  lastSeenAt: number;
+  revoked: boolean;
+}
+
+/** The whole pairing panel state: the active code, its remaining life and every paired worker. */
+export interface PairingStatus {
+  code: PairingCode | null;
+  secondsRemaining: number;
+  workers: PairedWorkerView[];
+}
+
 /** A single line a worker forwarded about itself. */
 export interface WorkerConsoleLine {
   at: number;
   message: string;
+}
+
+// ------------------------------------------------- autonomous storage & maintenance
+//
+// The storage subsystem is a layer on top of the existing worker/inventory system: it never
+// invents inventory state. A "storage network" is a named set of registered containers that live
+// on one or more workers; every container row is a *reported* observation (when it was inspected
+// and what it held), never a live claim. Automation only ever asks a worker to perform supported
+// inventory interactions and then records what the worker reported back.
+
+/**
+ * How much automation a subsystem is allowed to perform without asking.
+ *
+ * - `manual`     only act on an explicit operator request
+ * - `supervised` generate a plan and require approval before every execution
+ * - `automatic`  execute approved operations without asking again (still subject to safety rules)
+ */
+export type AutomationMode = 'manual' | 'supervised' | 'automatic';
+
+/** What kind of storage a registered container is. */
+export type ContainerKind = 'input' | 'output' | 'intermediate' | 'disposal' | 'shulker_reserve' | 'general';
+
+/**
+ * One rule a storage category matches items by.
+ *
+ * These are the real signals the game exposes — item tags, enchantments, data components, the mod
+ * namespace, durability — not just a substring of the display name. A category made of rules is
+ * therefore able to tell two items apart that merely look alike, which is the whole point of the
+ * classifier. `id-contains` and `id-equals` remain for the simple cases and for categories that
+ * predate rules.
+ *
+ * Defined in `shared` so the persisted category and the classifier that reads it cannot drift: there
+ * is one rule language, and `packages/item-classifier` is its only interpreter.
+ */
+export type ClassifierRule =
+  | { kind: 'id-equals'; id: string }
+  | { kind: 'id-contains'; contains: string }
+  | { kind: 'tag'; tag: string }
+  | { kind: 'namespace'; namespace: string }
+  | { kind: 'enchantment'; id: string; minLevel?: number }
+  | { kind: 'component'; id: string }
+  | { kind: 'custom-name'; contains: string }
+  | { kind: 'durability'; minPercent?: number; maxPercent?: number }
+  | { kind: 'stackable'; stackable: boolean };
+
+/** A category an item or container can belong to, used for routing and organisation. */
+export interface StorageCategory {
+  id: string;
+  name: string;
+  /**
+   * Substrings that match an item id or display name (e.g. "cobblestone").
+   *
+   * Kept as the simple, always-available form and the fallback: a category with no rules classifies
+   * purely on these, so an existing category keeps working unchanged.
+   */
+  itemMatches: string[];
+  /**
+   * The real-signal rules this category matches by, if any.
+   *
+   * When present they take precedence over {@link itemMatches}: a category is classified by its
+   * rules, and only falls back to the substrings when it has none. Absent (rather than empty) on a
+   * category created before rules existed, which is read as "no rules".
+   */
+  rules?: ClassifierRule[];
+  /** Priority for routing, higher wins when several categories match. */
+  priority: number;
+  color: string;
+  protected: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** One registered container in a storage network. */
+export interface StorageContainer {
+  id: string;
+  networkId: string;
+  /** The worker that reported this container; a container is only reachable from its own worker. */
+  workerId: string;
+  label: string;
+  kind: ContainerKind;
+  x: number;
+  y: number;
+  z: number;
+  dimension: string;
+  /** Category id this container is dedicated to, or null for a general container. */
+  categoryId: string | null;
+  /** When true the container is never modified by automation. */
+  locked: boolean;
+  /** When true this container is a permanent storage section, never suggested for removal. */
+  permanent: boolean;
+  /** Capacity in slots as last reported, or null when unknown. */
+  capacity: number | null;
+  /** Free slots as last reported, or null when unknown. */
+  freeSlots: number | null;
+  /** True when the last inspection found the container full. */
+  full: boolean;
+  /** The items it held at the last inspection. */
+  items: import('./workers').WorkerItem[];
+  inspectedAt: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A named set of containers that automation treats as one storage unit. */
+export interface StorageNetwork {
+  id: string;
+  name: string;
+  description: string;
+  mode: AutomationMode;
+  /** True while the network's automation is paused (global pause is separate). */
+  paused: boolean;
+  /** Worker ids that may service this network. Empty means "any online worker". */
+  workerIds: string[];
+  /** Item queries that are never moved or disposed from this network. */
+  protectedItems: string[];
+  /** Reserved quantities: never drop below this many of the query. */
+  reservations: { query: string; count: number }[];
+  /** Areas automation may act in, as "dimension x1 y1 z1 x2 y2 z2"; empty means "anywhere registered". */
+  exclusionAreas: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A reusable restock rule: keep at least `min` and at most `max` of `query` on a worker. */
+export interface RestockRule {
+  id: string;
+  networkId: string | null;
+  name: string;
+  query: string;
+  label: string;
+  min: number;
+  max: number;
+  /** How many to move in one restock when below the minimum. */
+  batch: number;
+  /** Worker ids this rule applies to; empty means "every worker in the network". */
+  workerIds: string[];
+  enabled: boolean;
+  priority: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A disposal rule: items matching `query` may be moved to a disposal container when authorised. */
+export interface DisposalRule {
+  id: string;
+  name: string;
+  query: string;
+  label: string;
+  /** The container kind to move them to; always a `disposal` container in practice. */
+  targetContainerId: string | null;
+  /** True when this rule may run without an explicit per-run request. */
+  enabled: boolean;
+  /** Never dispose of an item on the protected list, whatever this rule says. */
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A registered portal (an organisational record; its blocks are only removed on request). */
+export interface PortalRecord {
+  id: string;
+  name: string;
+  /** A free-form category ("nether", "end", "farm", ...). */
+  category: string;
+  dimension: string;
+  x: number;
+  y: number;
+  z: number;
+  /** 'permanent' portals are never suggested for cleanup. */
+  permanent: boolean;
+  /** 'temporary' portals are candidates for cleanup when obsolete. */
+  temporary: boolean;
+  /** True when the operator marked it as needing maintenance. */
+  needsMaintenance: boolean;
+  /** True while tracking is enabled for this portal. */
+  tracking: boolean;
+  /** The worker that last reported seeing it, or null. */
+  lastSeenBy: string | null;
+  lastSeenAt: number | null;
+  /** Set when the portal is believed obsolete (temporary and not recently seen). */
+  obsolete: boolean;
+  notes: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * A registered structure (spec §9). Portals are one kind; storage rooms, farms, workshops,
+ * processing areas and temporary builds are the others. The region is an inclusive box in one
+ * dimension; the structure registry engine validates it, tests containment, and previews what a
+ * change would touch. A protected structure is never modified by automation.
+ */
+export interface StructureRecord {
+  id: string;
+  name: string;
+  kind: StructureKind;
+  dimension: string;
+  x1: number;
+  y1: number;
+  z1: number;
+  x2: number;
+  y2: number;
+  z2: number;
+  /** A free-form note on who owns or authorises changes to this structure. */
+  ownership: string;
+  /** When true the structure is never modified by automation. */
+  protected: boolean;
+  maintenance: MaintenanceState;
+  lastSeenBy: string | null;
+  lastSeenAt: number | null;
+  notes: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type StructureKind =
+  | 'storage_room'
+  | 'farm'
+  | 'workshop'
+  | 'processing'
+  | 'portal'
+  | 'temporary'
+  | 'other';
+
+export type MaintenanceState = 'ok' | 'due' | 'overdue' | 'disabled';
+
+export const STRUCTURE_KINDS: readonly StructureKind[] = [
+  'storage_room', 'farm', 'workshop', 'processing', 'portal', 'temporary', 'other',
+];
+
+export const MAINTENANCE_STATES: readonly MaintenanceState[] = ['ok', 'due', 'overdue', 'disabled'];
+
+/** One shulker box a worker reported, with its decoded contents when known. */
+export interface ShulkerRecord {
+  id: string;
+  workerId: string;
+  /** The slot the shulker occupies in the reporting worker's inventory, when it is carried. */
+  slot: number;
+  label: string;
+  /** The dominant category id of its contents, or null when mixed/unknown. */
+  categoryId: string | null;
+  /** True when more than one category is present. */
+  mixed: boolean;
+  empty: boolean;
+  /** The items it held at the last inspection. */
+  items: import('./workers').WorkerItem[];
+  /** Total item count inside. */
+  itemCount: number;
+  /** Free slots inside the shulker (27 for a normal shulker box). */
+  freeSlots: number | null;
+  /** True when the shulker is one of the network's reserved empty-shulker supply. */
+  reserved: boolean;
+  /** True when the operator marked it for removal. */
+  markedForRemoval: boolean;
+  inspectedAt: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A single step in an automation plan, produced by an engine and either shown or executed. */
+export interface AutomationStep {
+  id: string;
+  /** The action verb, e.g. `move`, `consolidate`, `unpack-shulker`, `restock`, `dispose`. */
+  action: string;
+  /** A human-readable description of what will happen. */
+  detail: string;
+  /** The worker that would perform it. */
+  workerId: string;
+  /** The container it reads from, if any. */
+  sourceContainerId: string | null;
+  /** The container it writes to, if any. */
+  targetContainerId: string | null;
+  /** Item query the step acts on, if any. */
+  query: string;
+  /** How many items the step moves. */
+  count: number;
+  /** The inventory slot the step acts on (a shulker box, for example), when it targets one. */
+  slot: number | null;
+  /** Whether the step is allowed to run automatically or needs approval. */
+  requiresApproval: boolean;
+  /** Set when a safety rule blocked the step; the step must not be executed. */
+  blocked: boolean;
+  /** Why the step was blocked, when it was. */
+  blockedReason: string;
+}
+
+/** The result of planning an operation: what would happen, and what could not be done. */
+export interface AutomationPlan {
+  id: string;
+  /** What produced it, e.g. `consolidate`, `restock`, `shulker-unpack`, `workflow:empty-shulker-cleanup`. */
+  operation: string;
+  networkId: string | null;
+  createdAt: number;
+  steps: AutomationStep[];
+  /** Steps that were skipped with a reason (e.g. no destination, protected item). */
+  notes: string[];
+  /** True when the plan has at least one executable step. */
+  actionable: boolean;
+}
+
+/** A stored, reusable workflow definition (a named sequence of operations). */
+export interface WorkflowRecord {
+  id: string;
+  name: string;
+  description: string;
+  /** The operation ids to run in order. */
+  operations: string[];
+  /** The network the workflow applies to, or null for the whole fleet. */
+  networkId: string | null;
+  mode: AutomationMode;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** One recorded automation action: what happened, to what, by which worker and when. */
+export interface StorageActivityEntry {
+  id: string;
+  at: number;
+  /** The operation, e.g. `move`, `restock`, `dispose`, `shulker-unpack`, `portal-remove`. */
+  operation: string;
+  workerId: string;
+  /** A free-form target: a container id, a portal id, a worker id. */
+  target: string;
+  /** Item query, when the entry concerns a specific item. */
+  query: string;
+  count: number;
+  ok: boolean;
+  detail: string;
+  /** A short before/after summary where it is meaningful (e.g. "12 -> 4 free slots"). */
+  beforeAfter: string;
+  /** The plan or workflow that produced it, when any. */
+  source: string;
+}
+
+/** A container that automation could not act on, with the reason. */
+export interface StorageBottleneck {
+  containerId: string;
+  label: string;
+  workerId: string;
+  kind: ContainerKind;
+  /** 'full' | 'missing' | 'unreachable' | 'misplaced' | 'unsorted'. */
+  reason: string;
+  detail: string;
+  at: number;
+}
+
+/** The aggregated health of a network, computed from reported container rows only. */
+export interface StorageNetworkReport {
+  networkId: string;
+  name: string;
+  containers: number;
+  workers: number;
+  fullContainers: number;
+  missingContainers: number;
+  unusedContainers: number;
+  totalItems: number;
+  distinctItems: number;
+  bottlenecks: StorageBottleneck[];
+  /** Categories that have no container assigned. */
+  unassignedCategories: string[];
+  /** Items that match no category. */
+  unsortable: { id: string; name: string; count: number }[];
+  generatedAt: number;
+}
+
+/** The whole storage subsystem's headline state, for the dashboard. */
+export interface StorageOverview {
+  networks: number;
+  containers: number;
+  shulkers: number;
+  portals: number;
+  fullContainers: number;
+  bottlenecks: number;
+  pendingPlans: number;
+  pendingSteps: number;
+  globalPaused: boolean;
+  lastActivityAt: number | null;
+  recent: StorageActivityEntry[];
+}
+
+/** The result of an AI/command request: the plan it produced, or a plain answer. */
+export interface MaintenanceAnswer {
+  request: string;
+  /** The operation the request mapped to, or null when it was only a question. */
+  operation: string | null;
+  answer: string;
+  plan: AutomationPlan | null;
+  /**
+   * The AI planner's checked plan for the same request, or null when nothing matched.
+   *
+   * This is the spec's planning pipeline surfaced to the operator: a recognised intent, ordered
+   * steps, and whether each step is authorised and destructive. It is deterministic — the same
+   * request always yields the same plan — and it never executes anything.
+   */
+  ai: AiPlanView | null;
+}
+
+/** One step of an AI plan, as shown to the operator. */
+export interface AiPlanStepView {
+  id: string;
+  system: string;
+  summary: string;
+  authorised: boolean;
+  blockedReason: string;
+  destructive: boolean;
+}
+
+/** The AI planner's plan, reduced to what the assistant view renders. */
+export interface AiPlanView {
+  intent: string | null;
+  confidence: number;
+  executable: boolean;
+  needsConfirmation: boolean;
+  note: string;
+  steps: AiPlanStepView[];
+}
+
+/** The execution outcome of running a plan. */
+export interface PlanExecutionResult {
+  planId: string;
+  operation: string;
+  ok: boolean;
+  executed: number;
+  failed: number;
+  skipped: number;
+  message: string;
+  outcomes: { stepId: string; workerId: string; ok: boolean; detail: string }[];
+}
+
+/** A stored configuration profile for the storage subsystem. */
+export interface StorageProfile {
+  id: string;
+  name: string;
+  description: string;
+  /** A serialised snapshot of the subsystem configuration (networks, rules, categories). */
+  data: Record<string, unknown>;
+  createdAt: number;
 }

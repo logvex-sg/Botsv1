@@ -1,5 +1,7 @@
 package com.logvex.worker.core;
 
+import java.util.List;
+
 /**
  * One stack as reported to the host.
  *
@@ -14,6 +16,29 @@ public final class ItemEntry {
     public int damage;
     public int maxDamage;
     public boolean damageable;
+
+    /**
+     * Classification metadata. All four are optional: a stack reported without them is still valid,
+     * and the host treats a missing field as "not reported" rather than "absent", so a rule that
+     * needs a tag does not match an item whose tags were never read.
+     */
+    public List<String> tags;
+    public List<Enchant> enchantments;
+    public List<String> components;
+    public String customName;
+
+    /** One enchantment: its id and level. */
+    public static final class Enchant {
+        public String id = "";
+        public int level = 1;
+
+        public Enchant() {}
+
+        public Enchant(String id, int level) {
+            this.id = id == null ? "" : id;
+            this.level = level;
+        }
+    }
 
     public ItemEntry() {}
 
@@ -35,6 +60,11 @@ public final class ItemEntry {
     }
 
     public ItemEntry copyWithSlot(int newSlot) {
-        return new ItemEntry(id, name, count, newSlot, damage, maxDamage, damageable);
+        ItemEntry copy = new ItemEntry(id, name, count, newSlot, damage, maxDamage, damageable);
+        copy.tags = tags;
+        copy.enchantments = enchantments;
+        copy.components = components;
+        copy.customName = customName;
+        return copy;
     }
 }

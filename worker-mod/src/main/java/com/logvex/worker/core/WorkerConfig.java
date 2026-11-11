@@ -38,6 +38,14 @@ public final class WorkerConfig {
     public boolean allowChat = true;
     public boolean allowRegear = true;
     public boolean allowEfly = true;
+    /** Whether the storage tasks may move items between containers ({@code container-move}). */
+    public boolean allowContainerMoves = true;
+    /** Whether a shulker may be unpacked ({@code shulker-unpack}). */
+    public boolean allowShulkerUnpack = true;
+    /** Whether loose items may be packed into a shulker box ({@code shulker-pack}). */
+    public boolean allowShulkerPack = true;
+    /** Whether a worker may restock its own inventory ({@code restock}). */
+    public boolean allowRestock = true;
 
     public static WorkerConfig defaults() {
         return new WorkerConfig();
@@ -51,6 +59,10 @@ public final class WorkerConfig {
             case Protocol.TASK_CHAT -> allowChat;
             case Protocol.TASK_REGEAR -> allowRegear;
             case Protocol.TASK_EFLY -> allowEfly;
+            case Protocol.TASK_CONTAINER_MOVE -> allowContainerMoves;
+            case Protocol.TASK_SHULKER_UNPACK -> allowShulkerUnpack;
+            case Protocol.TASK_SHULKER_PACK -> allowShulkerPack;
+            case Protocol.TASK_RESTOCK -> allowRestock;
             default -> true;
         };
     }
@@ -79,6 +91,9 @@ public final class WorkerConfig {
             config.allowChat = Json.bool(root, "allowChat", config.allowChat);
             config.allowRegear = Json.bool(root, "allowRegear", config.allowRegear);
             config.allowEfly = Json.bool(root, "allowEfly", config.allowEfly);
+            config.allowContainerMoves = Json.bool(root, "allowContainerMoves", config.allowContainerMoves);
+            config.allowShulkerUnpack = Json.bool(root, "allowShulkerUnpack", config.allowShulkerUnpack);
+            config.allowRestock = Json.bool(root, "allowRestock", config.allowRestock);
             return config;
         } catch (Exception ex) {
             // A corrupt or unreadable file must not stop the worker from starting.

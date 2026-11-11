@@ -67,7 +67,9 @@ describe('worker mode client', () => {
     const worker = client({ token: '', pairingCode: code.code, workerId: 'app-2' });
     const status = await worker.connect();
     expect(status.state).toBe('registered');
-    expect(status.grantedToken).toBe('test-worker-token');
+    // A pairing-code join is handed a token unique to this worker, not the host-local shared secret.
+    expect(status.grantedToken).toBeTruthy();
+    expect(status.grantedToken).not.toBe('test-worker-token');
   });
 
   it('reports itself paused and stopped when the host drives it', async () => {

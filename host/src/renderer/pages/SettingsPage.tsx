@@ -105,12 +105,15 @@ export function SettingsPage({ push }: Props) {
         </div>
       </Card>
 
-      <Card title="Shared token" sub="What a worker presents after pairing. Regenerating invalidates every paired worker.">
+      <Card title="Host-local secret" sub="Only for the Worker Mode on this same machine. Remote workers get their own token when they pair with a code.">
         <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="mono" style={{ fontSize: 15 }}>{revealToken ? server?.token ?? '' : '••••••••••••••••••••'}</span>
           <Button small onClick={() => setRevealToken((v) => !v)}>{revealToken ? 'Hide' : 'Reveal'}</Button>
-          <Button small onClick={() => void copyText(server?.token ?? '').then(() => push('Token copied'))}>Copy</Button>
+          <Button small onClick={() => void copyText(server?.token ?? '').then(() => push('Secret copied'))}>Copy</Button>
           <Button small variant="danger" onClick={() => void regenerate()}>Regenerate</Button>
+        </div>
+        <div className="card-sub" style={{ marginTop: 8 }}>
+          Regenerating only affects this machine's Worker Mode. Paired workers keep their own tokens and stay connected.
         </div>
       </Card>
 

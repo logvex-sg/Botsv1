@@ -30,6 +30,30 @@ public final class ContainerMover {
      * @return the number of items actually moved out of the container
      */
     public static int withdrawFromOpenContainer(String query, int limit) {
+        return moveMatching(query, limit, true);
+    }
+
+    /**
+     * Quick-moves matching slots from the player's inventory into the open container.
+     *
+     * @return the number of items actually moved into the container
+     */
+    public static int depositToOpenContainer(String query, int limit) {
+        return moveMatching(query, limit, false);
+    }
+
+    /** Quick-moves every non-empty slot of the open container into the player (used to unpack). */
+    public static int withdrawAllFromOpenContainer() {
+        return moveMatching("", Integer.MAX_VALUE, true);
+    }
+
+    /**
+     * Quick-moves matching slots across the open screen.
+     *
+     * @param fromContainer true to move container slots into the player; false for the reverse
+     * @param query         an item query, or blank to match every non-empty slot
+     */
+    private static int moveMatching(String query, int limit, boolean fromContainer) {
         LocalPlayer player = player();
         if (player == null) return 0;
         AbstractContainerMenu menu = player.containerMenu;
@@ -40,11 +64,13 @@ public final class ContainerMover {
         List<Integer> windowSlots = new ArrayList<>();
         for (int windowSlot = 0; windowSlot < menu.slots.size(); windowSlot++) {
             var slot = menu.getSlot(windowSlot);
+            boolean inPlayerInventory = slot.container instanceof net.minecraft.world.entity.player.Inventory;
+            if (fromContainer == inPlayerInventory) continue;
             var stack = slot.getItem();
             if (stack.isEmpty()) continue;
             String id = InventoryReader.itemId(stack);
             String name = stack.getHoverName().getString();
-            if (ItemQuery.matches(id, name, query)) windowSlots.add(windowSlot);
+            if (query.isBlank() || ItemQuery.matches(id, name, query)) windowSlots.add(windowSlot);
         }
 
         for (int windowSlot : windowSlots) {
@@ -60,30 +86,42 @@ public final class ContainerMover {
     }
 
     /**
-     * Quick-moves the first carried slot matching the query. For armor and shields this equips the
-     * item; for everything else it moves the stack within the inventory.
+     * Quick-moves carried armour into empty armour slots, one piece at a time.
      *
-     * @return true when a move was issued
+     * <p>Shift-clicking an armour piece in the inventory screen is the vanilla way to equip it, so
+     * this needs no container to be open. Only stacks whose {@code EQUIPPABLE} component names a
+     * head, chest, legs or feet slot are candidates, so tools and food are never swept up.
+     *
+     * @param limit the most pieces to equip this call
+     * @return the number of pieces actually equipped
      */
-    public static boolean equipOrMoveCarried(String query) {
+    public static int equipCarriedArmor(int limit) {
         LocalPlayer player = player();
-        if (player == null) return false;
+        if (player == null || limit <= 0) return 0;
         AbstractContainerMenu menu = player.containerMenu;
-        if (menu == null) return false;
-        for (int windowSlot = 0; windowSlot < menu.slots.size(); windowSlot++) {
+        if (menu == null) return 0;
+        int equipped = 0;
+        for (int windowSlot = 0; windowSlot < menu.slots.size() && equipped < limit; windowSlot++) {
             var slot = menu.getSlot(windowSlot);
-            var stack = slot.getItem();
-            if (stack.isEmpty()) continue;
-            // Only the player's own inventory slots are candidates; a container's slots are not.
             if (!(slot.container instanceof net.minecraft.world.entity.player.Inventory)) continue;
-            String id = InventoryReader.itemId(stack);
-            String name = stack.getHoverName().getString();
-            if (!ItemQuery.matches(id, name, query)) continue;
+            var stack = slot.getItem();
+            if (stack.isEmpty() || !isArmor(stack)) continue;
             Minecraft.getInstance().gameMode.handleInventoryMouseClick(
                 menu.containerId, windowSlot, 0, ClickType.QUICK_MOVE, player);
-            return true;
+            equipped++;
         }
-        return false;
+        return equipped;
+    }
+
+    /** Whether a stack is a wearable armour piece (not a tool or a shield). */
+    private static boolean isArmor(net.minecraft.world.item.ItemStack stack) {
+        var equippable = stack.get(net.minecraft.core.component.DataComponents.EQUIPPABLE);
+        if (equippable == null) return false;
+        var slot = equippable.slot();
+        return slot == net.minecraft.world.entity.EquipmentSlot.HEAD
+            || slot == net.minecraft.world.entity.EquipmentSlot.CHEST
+            || slot == net.minecraft.world.entity.EquipmentSlot.LEGS
+            || slot == net.minecraft.world.entity.EquipmentSlot.FEET;
     }
 
     /** The carried item entries, used to build a "what changed" report. */

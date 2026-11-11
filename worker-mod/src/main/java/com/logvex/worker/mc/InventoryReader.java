@@ -128,7 +128,9 @@ public final class InventoryReader {
         String name = stack.getHoverName().getString();
         int damage = stack.isDamageableItem() ? stack.getDamageValue() : 0;
         int maxDamage = stack.isDamageableItem() ? stack.getMaxDamage() : 0;
-        entries.add(new ItemEntry(id, name, stack.getCount(), slot, damage, maxDamage, stack.isDamageableItem()));
+        ItemEntry entry = new ItemEntry(id, name, stack.getCount(), slot, damage, maxDamage, stack.isDamageableItem());
+        ItemMetadata.apply(entry, stack);
+        entries.add(entry);
     }
 
     /** The namespaced item id, e.g. {@code minecraft:diamond_sword}. */

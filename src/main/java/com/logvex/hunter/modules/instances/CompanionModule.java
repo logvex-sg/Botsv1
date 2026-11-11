@@ -69,6 +69,7 @@ public class CompanionModule extends HunterModule {
 
     @Override
     public void onActivate() {
+        super.onActivate();
         core().statistics().recordModuleActivation(name);
         applySettings();
         core().config().setCompanionEnabled(true);
@@ -78,6 +79,7 @@ public class CompanionModule extends HunterModule {
 
     @Override
     public void onDeactivate() {
+        super.onDeactivate();
         stopServer();
         core().config().setCompanionEnabled(false);
         core().markDirty();

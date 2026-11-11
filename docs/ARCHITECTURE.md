@@ -149,9 +149,14 @@ UNREGISTERED ─► PAIRING ─► CONNECTING ─► ONLINE ⇄ BUSY
 `UNRESPONSIVE` is derived: a worker that is `ONLINE` but whose heartbeat is overdue. This is
 deliberately distinct from `DISCONNECTED` — the socket is still open.
 
-**Capabilities** — the worker reports a versioned capability object; the Host refuses to offer a task
-whose required capability the worker does not advertise. Capabilities are versioned so a newer
-worker can advertise more without the Host guessing.
+**Capabilities** — the worker reports the task kinds it supports (see `docs/PROTOCOL.md`), and the
+Host maps those onto the capability keys a task requires before it will offer that task. The Host
+refuses to dispatch a kind whose required capability the worker does not advertise, so a task is
+never sent to a worker that cannot run it; the check lives once, in `shared/capabilities.ts`, and is
+applied both when the dispatch UI decides what to offer and when `WorkerService.runTask` is called
+directly. A worker that has not yet reported anything is not gated, so its first task is not refused
+before it has spoken. Capabilities are versioned so a newer worker can advertise more without the
+Host guessing.
 
 ---
 

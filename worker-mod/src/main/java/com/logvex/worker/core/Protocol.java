@@ -45,6 +45,13 @@ public final class Protocol {
     public static final String TASK_CHAT = "chat";
     public static final String TASK_POSITION = "position";
     public static final String TASK_EFLY = "efly";
+    public static final String TASK_CONTAINER_READ = "container-read";
+    public static final String TASK_CONTAINER_MOVE = "container-move";
+    public static final String TASK_SHULKER_READ = "shulker-read";
+    public static final String TASK_SHULKER_UNPACK = "shulker-unpack";
+    public static final String TASK_SHULKER_PACK = "shulker-pack";
+    public static final String TASK_RESTOCK = "restock";
+    public static final String TASK_PORTAL_SCAN = "portal-scan";
 
     // payload fields shared by more than one task
     public static final String FIELD_PAIRING_CODE = "pairingCode";
@@ -78,6 +85,17 @@ public final class Protocol {
     public static final String FIELD_FREE_SLOTS = "freeSlots";
     public static final String FIELD_CONTAINER_OPEN = "containerOpen";
     public static final String FIELD_TOTALS = "totals";
+    public static final String FIELD_LIMIT = "limit";
+    public static final String FIELD_DIRECTION = "direction";
+    public static final String FIELD_RADIUS = "radius";
+    public static final String FIELD_SLOT = "slot";
+    public static final String FIELD_LABEL = "label";
+    public static final String FIELD_MOVED = "moved";
+    public static final String FIELD_REMAINING = "remaining";
+    public static final String FIELD_CAPACITY = "capacity";
+    public static final String FIELD_EMPTY = "empty";
+    public static final String FIELD_SHULKERS = "shulkers";
+    public static final String FIELD_PORTALS = "portals";
 
     // control actions (the "control" message's payload.action). The worker owns its own
     // connection, so only it can drop it or dial it again; these make the host's Connect /

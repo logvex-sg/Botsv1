@@ -9,6 +9,7 @@ import com.logvex.worker.core.InventorySummary;
 import com.logvex.worker.core.ItemEntry;
 import com.logvex.worker.core.Json;
 import com.logvex.worker.core.Protocol;
+import com.logvex.worker.core.StorageRequests;
 import com.logvex.worker.core.TaskCatalog;
 import com.logvex.worker.core.TaskDispatcher;
 import com.logvex.worker.core.TaskResult;
@@ -78,6 +79,13 @@ public final class MinecraftTaskDispatcher implements TaskDispatcher {
                     case Protocol.TASK_CHAT -> chat(taskId, payload);
                     case Protocol.TASK_POSITION -> position(taskId);
                     case Protocol.TASK_EFLY -> efly(taskId, payload);
+                    case Protocol.TASK_CONTAINER_READ -> containerRead(taskId, payload);
+                    case Protocol.TASK_CONTAINER_MOVE -> containerMove(taskId, payload);
+                    case Protocol.TASK_SHULKER_READ -> shulkerRead(taskId, payload);
+                    case Protocol.TASK_SHULKER_UNPACK -> shulkerUnpack(taskId, payload);
+                    case Protocol.TASK_SHULKER_PACK -> shulkerPack(taskId, payload);
+                    case Protocol.TASK_RESTOCK -> restock(taskId, payload);
+                    case Protocol.TASK_PORTAL_SCAN -> portalScan(taskId, payload);
                     default -> TaskResult.failure(taskId, kind, "unsupported task kind: " + kind);
                 };
             }
@@ -186,6 +194,59 @@ public final class MinecraftTaskDispatcher implements TaskDispatcher {
         return EflyExecutor.start(taskId, request);
     }
 
+    // ----------------------------------------------------------------- storage
+
+    private TaskResult containerRead(String taskId, JsonObject payload) {
+        StorageRequests.ContainerRead request = StorageRequests.parseContainerRead(payload);
+        if (request == null) {
+            return TaskResult.failure(taskId, Protocol.TASK_CONTAINER_READ,
+                "invalid container-read request (x, y and z must be finite)");
+        }
+        return StorageExecutor.containerRead(taskId, request);
+    }
+
+    private TaskResult containerMove(String taskId, JsonObject payload) {
+        StorageRequests.ContainerMove request = StorageRequests.parseContainerMove(payload);
+        if (request == null) {
+            return TaskResult.failure(taskId, Protocol.TASK_CONTAINER_MOVE,
+                "invalid container-move request (direction must be withdraw/deposit and an item query is required)");
+        }
+        return StorageExecutor.containerMove(taskId, request);
+    }
+
+    private TaskResult shulkerRead(String taskId, JsonObject payload) {
+        return StorageExecutor.shulkerRead(taskId, StorageRequests.parseShulkerRead(payload));
+    }
+
+    private TaskResult shulkerUnpack(String taskId, JsonObject payload) {
+        return StorageExecutor.shulkerUnpack(taskId, StorageRequests.parseShulkerUnpack(payload));
+    }
+
+    private TaskResult shulkerPack(String taskId, JsonObject payload) {
+        StorageRequests.ShulkerPack request = StorageRequests.parseShulkerPack(payload);
+        if (request == null) return TaskResult.failure(taskId, Protocol.TASK_SHULKER_PACK,
+            "a shulker-pack needs a non-empty query");
+        return StorageExecutor.shulkerPack(taskId, request);
+    }
+
+    private TaskResult restock(String taskId, JsonObject payload) {
+        StorageRequests.Restock request = StorageRequests.parseRestock(payload);
+        if (request == null) {
+            return TaskResult.failure(taskId, Protocol.TASK_RESTOCK,
+                "invalid restock request (an item query and a positive limit are required)");
+        }
+        return StorageExecutor.restock(taskId, request);
+    }
+
+    private TaskResult portalScan(String taskId, JsonObject payload) {
+        StorageRequests.PortalScan request = StorageRequests.parsePortalScan(payload);
+        if (request == null) {
+            return TaskResult.failure(taskId, Protocol.TASK_PORTAL_SCAN,
+                "invalid portal-scan request (action must be scan or remove)");
+        }
+        return StorageExecutor.portalScan(taskId, request);
+    }
+
     // ----------------------------------------------------------------- writes
 
     /**
@@ -212,23 +273,40 @@ public final class MinecraftTaskDispatcher implements TaskDispatcher {
             return result;
         }
 
+        JsonArray movedItems = new JsonArray();
+
+        // Equipping carried armour needs no container: a shift-click in the inventory screen puts the
+        // piece on. Do it first so the container withdrawal below tops up whatever is still missing.
+        int armorNeeded = Math.max(0, requirements.minArmorPieces - before.armorPieces);
+        if (armorNeeded > 0) {
+            int equipped = WorkerGameBridge.call(() -> ContainerMover.equipCarriedArmor(armorNeeded), 0);
+            if (equipped > 0) {
+                JsonObject armorMove = new JsonObject();
+                armorMove.addProperty("query", "armor");
+                armorMove.addProperty("count", equipped);
+                movedItems.add(armorMove);
+            }
+        }
+
         boolean containerOpen = WorkerGameBridge.call(() -> {
             Player player = Minecraft.getInstance() == null ? null : Minecraft.getInstance().player;
             return InventoryReader.hasContainerOpen(player);
         }, false);
 
+        EquipmentReport afterArmor = WorkerGameBridge.call(() -> StatusCollector.evaluate(requirements), before);
+
         if (!containerOpen) {
             TaskResult result = TaskResult.ok(taskId, Protocol.TASK_REGEAR,
-                "no container open; nothing can be withdrawn");
-            result.with("report", before);
-            result.with("moved", 0);
-            result.with("movedItems", List.of());
+                afterArmor.ready ? "regear complete (equipped from inventory)"
+                    : "regear incomplete: " + afterArmor.missing.size() + " still missing (no container open)");
+            result.with("report", afterArmor);
+            result.with("before", before);
+            result.with("movedItems", movedItems);
             result.with("dryRun", false);
             return result;
         }
 
-        JsonArray movedItems = new JsonArray();
-        for (var line : before.lines) {
+        for (var line : afterArmor.lines) {
             if (line.satisfied) continue;
             int needed = line.missing();
             Integer moved = WorkerGameBridge.call(

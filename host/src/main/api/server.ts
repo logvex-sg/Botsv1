@@ -190,6 +190,25 @@ export class ApiServer {
       }
     }
 
+    // ---------------------------------------------------------------- pairing
+    if (path === '/api/v1/pairing' && method === 'GET') return { body: ctx.pairingStatus() };
+    if (path === '/api/v1/pairing/code' && method === 'POST') return { body: ctx.createPairingCode() };
+    if (path === '/api/v1/pairing/code' && method === 'DELETE') {
+      ctx.clearPairingCode();
+      return { body: { ok: true } };
+    }
+    const pairingMatch = /^\/api\/v1\/pairing\/workers\/([^/]+)(?:\/(revoke|allow))?$/.exec(path);
+    if (pairingMatch) {
+      const workerId = decodeURIComponent(pairingMatch[1]);
+      const action = pairingMatch[2];
+      if (action === 'revoke' && method === 'POST') {
+        return ctx.revokeWorker(workerId) ? { body: { ok: true } } : { status: 404, body: { error: 'unknown worker' } };
+      }
+      if (action === 'allow' && method === 'POST') {
+        return ctx.allowWorker(workerId) ? { body: { ok: true } } : { status: 404, body: { error: 'unknown worker' } };
+      }
+    }
+
     // ------------------------------------------------------------- multiverse
     if (path === '/api/v1/servers' && method === 'GET') {
       return { body: { servers: ctx.multiverse.listServers(query.get('archived') === 'true') } };
@@ -227,6 +246,121 @@ export class ApiServer {
         containers: ctx.multiverse.listContainers(),
         audit: ctx.multiverse.listAudit(1000),
       }) };
+    }
+
+    // --------------------------------------------- autonomous storage & maintenance
+    const storage = ctx.storage;
+    if (path === '/api/v1/storage/overview' && method === 'GET') return { body: storage.overview() };
+    if (path === '/api/v1/storage/report' && method === 'GET') return { body: storage.maintenanceReport() };
+
+    if (path === '/api/v1/storage/networks' && method === 'GET') return { body: { networks: storage.listNetworks() } };
+    if (path === '/api/v1/storage/networks' && method === 'POST') {
+      return { body: storage.createNetwork(body as Parameters<typeof storage.createNetwork>[0]) };
+    }
+    if (path === '/api/v1/storage/categories' && method === 'GET') return { body: { categories: storage.listCategories() } };
+    if (path === '/api/v1/storage/categories' && method === 'POST') {
+      return { body: storage.createCategory(body as Parameters<typeof storage.createCategory>[0]) };
+    }
+    if (path === '/api/v1/storage/containers' && method === 'GET') {
+      return { body: { containers: storage.listContainers(query.get('networkId') ?? undefined) } };
+    }
+    if (path === '/api/v1/storage/containers' && method === 'POST') {
+      return { body: storage.createContainer(body as Parameters<typeof storage.createContainer>[0]) };
+    }
+    if (path === '/api/v1/storage/restock-rules' && method === 'GET') {
+      return { body: { rules: storage.listRestockRules(query.get('networkId') ?? undefined) } };
+    }
+    if (path === '/api/v1/storage/restock-rules' && method === 'POST') {
+      return { body: storage.createRestockRule(body as Parameters<typeof storage.createRestockRule>[0]) };
+    }
+    if (path === '/api/v1/storage/disposal-rules' && method === 'GET') return { body: { rules: storage.listDisposalRules() } };
+    if (path === '/api/v1/storage/disposal-rules' && method === 'POST') {
+      return { body: storage.createDisposalRule(body as Parameters<typeof storage.createDisposalRule>[0]) };
+    }
+    if (path === '/api/v1/storage/portals' && method === 'GET') return { body: { portals: storage.listPortals() } };
+    if (path === '/api/v1/storage/portals' && method === 'POST') {
+      return { body: storage.createPortal(body as Parameters<typeof storage.createPortal>[0]) };
+    }
+    if (path === '/api/v1/storage/portals/flagged' && method === 'GET') return { body: { flagged: storage.flaggedPortals() } };
+    if (path === '/api/v1/storage/structures' && method === 'GET') return { body: { structures: storage.listStructures() } };
+    if (path === '/api/v1/storage/structures' && method === 'POST') {
+      return { body: storage.createStructure(body as Parameters<typeof storage.createStructure>[0]) };
+    }
+    if (path === '/api/v1/storage/structures/issues' && method === 'GET') return { body: { issues: storage.structureIssues() } };
+    if (path === '/api/v1/storage/structures/counts' && method === 'GET') return { body: { counts: storage.structureCounts() } };
+    if (path === '/api/v1/storage/structures/preview-change' && method === 'POST') {
+      const region = body.region as Parameters<typeof storage.previewStructureChange>[0];
+      const options = body.options as Parameters<typeof storage.previewStructureChange>[1];
+      return { body: { preview: storage.previewStructureChange(region, options) } };
+    }
+    if (path === '/api/v1/storage/shulkers' && method === 'GET') {
+      return { body: { shulkers: storage.listShulkers(query.get('workerId') ?? undefined) } };
+    }
+    if (path === '/api/v1/storage/workflows' && method === 'GET') return { body: { workflows: storage.listWorkflows() } };
+    if (path === '/api/v1/storage/workflows' && method === 'POST') {
+      return { body: storage.createWorkflow(body as Parameters<typeof storage.createWorkflow>[0]) };
+    }
+    if (path === '/api/v1/storage/operations' && method === 'GET') return { body: { operations: storage.operations() } };
+    if (path === '/api/v1/storage/plans' && method === 'GET') return { body: { plans: storage.listPlans() } };
+    if (path === '/api/v1/storage/plans' && method === 'POST') {
+      const operation = typeof body.operation === 'string' ? body.operation : '';
+      const networkId = typeof body.networkId === 'string' ? body.networkId : null;
+      return { body: storage.plan(operation, networkId, { workerId: typeof body.workerId === 'string' ? body.workerId : undefined }) };
+    }
+    if (path === '/api/v1/storage/activity' && method === 'GET') {
+      const limit = Number.parseInt(query.get('limit') ?? '', 10);
+      return { body: { activity: storage.listActivity(Number.isFinite(limit) ? limit : 200, query.get('workerId') ?? undefined) } };
+    }
+    if (path === '/api/v1/storage/profiles' && method === 'GET') return { body: { profiles: storage.listProfiles() } };
+    if (path === '/api/v1/storage/ask' && method === 'POST') {
+      return { body: storage.ask(typeof body.request === 'string' ? body.request : '') };
+    }
+
+    const storageMatch = /^\/api\/v1\/storage\/(networks|categories|containers|restock-rules|disposal-rules|portals|structures|workflows|plans)\/([^/]+)(?:\/([a-z-]+))?$/.exec(path);
+    if (storageMatch) {
+      const [, collection, rawId, action] = storageMatch;
+      const id = decodeURIComponent(rawId);
+      const patch = body as never;
+      switch (collection) {
+        case 'networks':
+          if (method === 'PATCH') return { body: storage.updateNetwork(id, patch) };
+          if (method === 'DELETE') return { body: { ok: storage.removeNetwork(id) } };
+          if (action === 'pause' && method === 'POST') return { body: storage.setNetworkPaused(id, body.paused !== false) };
+          break;
+        case 'categories':
+          if (method === 'PATCH') return { body: storage.updateCategory(id, patch) };
+          if (method === 'DELETE') return { body: { ok: storage.removeCategory(id) } };
+          break;
+        case 'containers':
+          if (method === 'PATCH') return { body: storage.updateContainer(id, patch) };
+          if (method === 'DELETE') return { body: { ok: storage.removeContainer(id) } };
+          break;
+        case 'restock-rules':
+          if (method === 'PATCH') return { body: storage.updateRestockRule(id, patch) };
+          if (method === 'DELETE') return { body: { ok: storage.removeRestockRule(id) } };
+          break;
+        case 'disposal-rules':
+          if (method === 'PATCH') return { body: storage.updateDisposalRule(id, patch) };
+          if (method === 'DELETE') return { body: { ok: storage.removeDisposalRule(id) } };
+          break;
+        case 'portals':
+          if (method === 'PATCH') return { body: storage.updatePortal(id, patch) };
+          if (method === 'DELETE') return { body: { ok: storage.removePortal(id) } };
+          break;
+        case 'structures':
+          if (method === 'PATCH') return { body: storage.updateStructure(id, patch) };
+          if (method === 'DELETE') return { body: { ok: storage.removeStructure(id) } };
+          break;
+        case 'workflows':
+          if (method === 'PATCH') return { body: storage.updateWorkflow(id, patch) };
+          if (method === 'DELETE') return { body: { ok: storage.removeWorkflow(id) } };
+          break;
+        case 'plans':
+          if (action === 'approve' && method === 'POST') return { body: { ok: storage.approvePlan(id) } };
+          if (action === 'execute' && method === 'POST') return { body: await storage.executePlan(id) };
+          if (method === 'DELETE') return { body: { ok: storage.discardPlan(id) } };
+          break;
+      }
     }
 
     return undefined;

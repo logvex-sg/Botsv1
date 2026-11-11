@@ -3,11 +3,23 @@
  * worker cannot run" rule.
  */
 import { describe, expect, it } from 'vitest';
-import { availableTaskKinds, canRun, normalize, requirementsFor } from '../../src/main/packages/capabilities';
+import { availableTaskKinds, canRun, normalize, requirementsFor } from '../../src/shared/capabilities';
 
 describe('normalize', () => {
   it('keeps known capability names', () => {
     expect(normalize(['inventory', 'efly']).capabilities.sort()).toEqual(['efly', 'inventory']);
+  });
+
+  it('maps reported task kinds onto the capabilities they require', () => {
+    const result = normalize(['container-read', 'shulker-read', 'portal-scan']).capabilities.sort();
+    expect(result).toEqual(['container_access', 'portal_scan', 'shulker_read']);
+  });
+
+  it('understands a real worker report that mixes kinds and keys', () => {
+    const result = normalize(['status', 'inventory', 'regear', 'efly', 'container-move']).capabilities.sort();
+    // status needs nothing; inventory -> inventory; regear -> regear+inventory;
+    // efly -> efly; container-move -> container_move+container_access.
+    expect(result).toEqual(['container_access', 'container_move', 'efly', 'inventory', 'regear']);
   });
 
   it('drops unknown names so a worker cannot smuggle in an unknown capability', () => {
@@ -41,6 +53,12 @@ describe('canRun', () => {
 
   it('accepts a full CapabilitySet object as well as a bare list', () => {
     expect(canRun({ version: 1, capabilities: ['chat'] }, 'chat').ok).toBe(true);
+  });
+
+  it('accepts a raw worker report of task kinds', () => {
+    expect(canRun(['container-read'], 'container-read').ok).toBe(true);
+    expect(canRun(['container-read'], 'container-move').ok).toBe(false);
+    expect(canRun(['shulker-read', 'container-read'], 'shulker-read').ok).toBe(true);
   });
 });
 

@@ -44,11 +44,17 @@ public final class HunterRuntime {
     private String lastServer = "";
     private String lastDimension = "";
     private boolean lastConnected;
+    private double lastHealth = -1;
 
     private HunterRuntime() {
         ConfigPaths paths = new ConfigPaths(FabricLoader.getInstance().getConfigDir());
         this.core = new HunterCore(paths);
         this.core.load();
+        // Forward every core event onto Meteor's bus, so modules that listen with @EventHandler
+        // actually receive it. The core itself stays Minecraft-free.
+        this.core.setEventSink(event -> {
+            if (MeteorClient.EVENT_BUS != null) MeteorClient.EVENT_BUS.post(event);
+        });
     }
 
     /** Creates (once) and returns the runtime. Must be called after Minecraft has started. */
@@ -92,6 +98,8 @@ public final class HunterRuntime {
         }
         if (connected != lastConnected) {
             core.setConnected(connected);
+            core.publish(new com.logvex.hunter.core.event.HunterEvents.ConnectionChanged(
+                connected, server, connected ? "connected" : "disconnected"));
         }
         if (!server.equals(lastServer)) {
             core.setServerAddress(server);
@@ -99,6 +107,13 @@ public final class HunterRuntime {
         if (!dimension.equals(lastDimension)) {
             core.setDimension(dimension);
         }
+
+        double health = localHealth();
+        if (connected && lastHealth >= 0 && Math.abs(health - lastHealth) >= 0.5) {
+            core.publish(new com.logvex.hunter.core.event.HunterEvents.LocalHealthChanged(health, lastHealth));
+        }
+        lastHealth = connected ? health : -1;
+
         lastServer = server;
         lastDimension = dimension;
         lastConnected = connected;

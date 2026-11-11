@@ -56,6 +56,7 @@ public class StatisticsModule extends HunterModule {
 
     @Override
     public void onActivate() {
+        super.onActivate();
         core().statistics().recordModuleActivation(name);
         core().sessions().setHistoryEntries(maxHistory.get());
         lastPlaytimeTick = runtime().now();
@@ -63,6 +64,7 @@ public class StatisticsModule extends HunterModule {
 
     @Override
     public void onDeactivate() {
+        super.onDeactivate();
         if (trackPlaytime.get()) flushPlaytime();
         if (exportOnStop.get()) export("stop");
     }

@@ -2,6 +2,7 @@ package com.logvex.worker.meteor;
 
 import com.logvex.worker.WorkerMod;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
+import meteordevelopment.meteorclient.commands.Commands;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 
@@ -23,6 +24,7 @@ public class FleetAddon extends MeteorAddon {
         WorkerMod.LOG.info("Initialising Fleet Manager Meteor integration");
         FleetRuntime.get().setLogSink(WorkerMod.LOG::info);
         FleetModules.register();
+        Commands.add(new FleetCommand());
     }
 
     @Override

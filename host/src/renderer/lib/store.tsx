@@ -8,7 +8,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { fleet } from './api';
 import type {
-  AppSettings, FleetEvent, HealthReport, NotificationItem, PairingCode, RegearPreset,
+  AppSettings, FleetEvent, HealthReport, NotificationItem, PairingCode, PairingStatus, RegearPreset,
   WorkerGroup, WorkerOverview, WorkerTaskRecord, WorkerView,
 } from '../../shared/types';
 import type { WorkerServerStatus } from '../../shared/ipc';
@@ -27,6 +27,8 @@ export interface AppState {
   regearPresets: RegearPreset[];
   workerServer: WorkerServerStatus | null;
   pairingCode: PairingCode | null;
+  /** The whole pairing panel state: active code, its remaining life and every paired worker. */
+  pairingStatus: PairingStatus | null;
 }
 
 const initialState: AppState = {
@@ -43,6 +45,7 @@ const initialState: AppState = {
   regearPresets: [],
   workerServer: null,
   pairingCode: null,
+  pairingStatus: null,
 };
 
 interface StoreValue extends AppState {
@@ -52,6 +55,7 @@ interface StoreValue extends AppState {
   refreshRegearPresets: () => Promise<void>;
   refreshEvents: () => Promise<void>;
   refreshServer: () => Promise<void>;
+  refreshPairing: () => Promise<void>;
   setPairingCode: (code: PairingCode | null) => void;
 }
 
@@ -76,17 +80,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [health, settings, events, notifications, workerServer, pairingCode, workersPart] = await Promise.all([
+      const [health, settings, events, notifications, workerServer, pairingStatus, workersPart] = await Promise.all([
         fleet.getHealth(),
         fleet.getSettings(),
         fleet.listEvents(200),
         fleet.listNotifications(),
         fleet.getWorkerServer().catch(() => null),
-        fleet.getPairingCode().catch(() => null),
+        fleet.getPairingStatus().catch(() => null),
         loadWorkers(),
       ]);
       if (!mounted.current) return;
-      setState({ ready: true, error: null, health, settings, events, notifications, workerServer, pairingCode, ...workersPart });
+      setState({
+        ready: true, error: null, health, settings, events, notifications, workerServer,
+        pairingStatus, pairingCode: pairingStatus?.code ?? null, ...workersPart,
+      });
     } catch (error) {
       if (!mounted.current) return;
       setState((prev) => ({ ...prev, ready: true, error: (error as Error).message }));
@@ -114,11 +121,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshServer = useCallback(async () => {
-    const [workerServer, pairingCode] = await Promise.all([
+    const [workerServer, pairingStatus] = await Promise.all([
       fleet.getWorkerServer().catch(() => null),
-      fleet.getPairingCode().catch(() => null),
+      fleet.getPairingStatus().catch(() => null),
     ]);
-    if (mounted.current) setState((prev) => ({ ...prev, workerServer, pairingCode }));
+    if (mounted.current) setState((prev) => ({ ...prev, workerServer, pairingStatus, pairingCode: pairingStatus?.code ?? null }));
+  }, []);
+
+  const refreshPairing = useCallback(async () => {
+    const pairingStatus = await fleet.getPairingStatus().catch(() => null);
+    if (mounted.current) setState((prev) => ({ ...prev, pairingStatus, pairingCode: pairingStatus?.code ?? null }));
   }, []);
 
   const setPairingCode = useCallback((code: PairingCode | null) => {
@@ -139,9 +151,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (mounted.current) setState((prev) => ({ ...prev, ...part }));
         });
       }
-      if (typed.type === 'WORKER_REGISTERED' || typed.type === 'WORKER_DISCONNECTED') {
+      if (typed.type === 'WORKER_REGISTERED' || typed.type === 'WORKER_DISCONNECTED' || typed.type === 'WORKER_PAIRED') {
         void fleet.getWorkerServer().then((workerServer) => {
           if (mounted.current) setState((prev) => ({ ...prev, workerServer }));
+        });
+        void fleet.getPairingStatus().then((pairingStatus) => {
+          if (mounted.current) setState((prev) => ({ ...prev, pairingStatus, pairingCode: pairingStatus?.code ?? null }));
         });
       }
     });
@@ -154,9 +169,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<StoreValue>(
     () => ({
-      ...state, refresh, refreshWorkers, refreshWorkerTasks, refreshRegearPresets, refreshEvents, refreshServer, setPairingCode,
+      ...state, refresh, refreshWorkers, refreshWorkerTasks, refreshRegearPresets, refreshEvents, refreshServer, refreshPairing, setPairingCode,
     }),
-    [state, refresh, refreshWorkers, refreshWorkerTasks, refreshRegearPresets, refreshEvents, refreshServer, setPairingCode],
+    [state, refresh, refreshWorkers, refreshWorkerTasks, refreshRegearPresets, refreshEvents, refreshServer, refreshPairing, setPairingCode],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

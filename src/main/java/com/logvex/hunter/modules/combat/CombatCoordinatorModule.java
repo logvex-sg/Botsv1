@@ -164,12 +164,14 @@ public class CombatCoordinatorModule extends HunterModule {
 
     @Override
     public void onActivate() {
+        super.onActivate();
         core().statistics().recordModuleActivation(name);
         applied = false;
     }
 
     @Override
     public void onDeactivate() {
+        super.onDeactivate();
         releaseManaged();
     }
 

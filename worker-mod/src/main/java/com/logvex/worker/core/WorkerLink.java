@@ -118,6 +118,61 @@ public final class WorkerLink implements AutoCloseable {
         this.persistHook = hook == null ? () -> {} : hook;
     }
 
+    /**
+     * Pauses mutating tasks locally, as if the host had sent a {@code pause} control.
+     *
+     * <p>Read-only tasks keep running, exactly as when the host pauses: the in-game operator and the
+     * host share one control surface, so an operator's pause must mean the same thing.
+     *
+     * @return true when the state changed
+     */
+    public boolean pause() {
+        if (paused) return false;
+        paused = true;
+        log("paused locally");
+        reportStatus();
+        return true;
+    }
+
+    /** Resumes mutating tasks locally. Returns true when the state changed. */
+    public boolean resume() {
+        if (!paused) return false;
+        paused = false;
+        log("resumed locally");
+        reportStatus();
+        return true;
+    }
+
+    /**
+     * Stops the service locally, as if the host had sent a {@code disconnect} control.
+     *
+     * <p>The worker stays connected and reachable for control; only task execution stops. That is
+     * deliberately not {@link #stop()}, which tears the connection down.
+     */
+    public boolean disconnectService() {
+        if (stopped) return false;
+        stopped = true;
+        log("service stopped locally");
+        reportStatus();
+        return true;
+    }
+
+    /** Restarts the service locally. Returns true when the state changed. */
+    public boolean connectService() {
+        if (!stopped) return false;
+        stopped = false;
+        log("service started locally");
+        reportStatus();
+        return true;
+    }
+
+    /** Sends a status snapshot to the host now, when connected. Safe to call off the network thread. */
+    public void reportStatus() {
+        if (client != null && isRegistered()) {
+            sendSnapshot(Protocol.STATUS);
+        }
+    }
+
     public synchronized void start() {
         if (!running.compareAndSet(false, true)) return;
         supervisor = daemonThread(this::supervise, "logvex-worker-link");

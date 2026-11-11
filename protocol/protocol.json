@@ -48,13 +48,24 @@
     "command",
     "chat",
     "position",
-    "efly"
+    "efly",
+    "container-read",
+    "container-move",
+    "shulker-read",
+    "shulker-pack",
+    "shulker-unpack",
+    "restock",
+    "portal-scan"
   ],
   "exclusiveTaskKinds": [
     "regear",
     "command",
     "chat",
-    "efly"
+    "efly",
+    "container-move",
+    "shulker-pack",
+    "shulker-unpack",
+    "restock"
   ],
   "eflyActions": [
     "start",
@@ -89,7 +100,18 @@
     "armor": "FIELD_ARMOR",
     "freeSlots": "FIELD_FREE_SLOTS",
     "containerOpen": "FIELD_CONTAINER_OPEN",
-    "totals": "FIELD_TOTALS"
+    "totals": "FIELD_TOTALS",
+    "limit": "FIELD_LIMIT",
+    "direction": "FIELD_DIRECTION",
+    "radius": "FIELD_RADIUS",
+    "slot": "FIELD_SLOT",
+    "label": "FIELD_LABEL",
+    "moved": "FIELD_MOVED",
+    "remaining": "FIELD_REMAINING",
+    "capacity": "FIELD_CAPACITY",
+    "empty": "FIELD_EMPTY",
+    "shulkers": "FIELD_SHULKERS",
+    "portals": "FIELD_PORTALS"
   },
   "controlActions": [
     "connect",

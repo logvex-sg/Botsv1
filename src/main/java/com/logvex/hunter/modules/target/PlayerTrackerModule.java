@@ -211,12 +211,14 @@ public class PlayerTrackerModule extends HunterModule {
 
     @Override
     public void onActivate() {
+        super.onActivate();
         tickCounter = scanInterval.get();
         core().statistics().recordModuleActivation(name);
     }
 
     @Override
     public void onDeactivate() {
+        super.onDeactivate();
         core().resetSessionState();
     }
 

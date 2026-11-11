@@ -49,6 +49,11 @@ public class NotificationModule extends HunterModule {
     private final Setting<Boolean> notifyConnection = sgGeneral.add(new BoolSetting.Builder()
         .name("notify-connection").description("Announce connection loss.").defaultValue(true).build());
 
+    private final Setting<Boolean> notifyEliminated = sgGeneral.add(new BoolSetting.Builder()
+        .name("notify-eliminated")
+        .description("Announce a confirmed controlled-session elimination.")
+        .defaultValue(true).build());
+
     private final Setting<Boolean> sendToServer = sgGeneral.add(new BoolSetting.Builder()
         .name("send-to-server")
         .description("Also type the message into server chat. Respects server chat restrictions.")
@@ -83,6 +88,7 @@ public class NotificationModule extends HunterModule {
 
     @Override
     public void onActivate() {
+        super.onActivate();
         core().statistics().recordModuleActivation(name);
         HunterCore core = core();
         EventBus bus = core.bus();
@@ -121,10 +127,17 @@ public class NotificationModule extends HunterModule {
                 emit(MessageEvent.CONNECTION_LOST, values);
             }
         }));
+        subscriptions.add(bus.subscribe(HunterEvents.TargetEliminated.class, e -> {
+            if (!notifyEliminated.get()) return;
+            Map<String, String> values = base(e.snapshot(), e.entry(), 0);
+            values.put("weapon", e.weapon() == null || e.weapon().isBlank() ? "none" : e.weapon());
+            emit(MessageEvent.TARGET_ELIMINATED, values);
+        }));
     }
 
     @Override
     public void onDeactivate() {
+        super.onDeactivate();
         for (EventBus.Subscription subscription : subscriptions) subscription.close();
         subscriptions.clear();
     }

@@ -6,18 +6,22 @@ import com.logvex.hunter.core.config.HunterProfile;
 import com.logvex.hunter.core.event.HunterEvents;
 import com.logvex.hunter.core.model.PlayerSnapshot;
 import com.logvex.hunter.core.stats.CombatEvent;
+import com.logvex.hunter.core.stats.EliminationLog;
 import com.logvex.hunter.core.target.TargetCandidate;
 import com.logvex.hunter.mc.HunterChat;
 import com.logvex.hunter.mc.HunterRuntime;
 import com.logvex.hunter.modules.HunterModule;
 import com.logvex.hunter.modules.HunterRegistry;
 import meteordevelopment.meteorclient.MeteorClient;
+import meteordevelopment.meteorclient.events.entity.player.AttackEntityEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 
 /**
  * The master switch and session driver for the whole addon.
@@ -54,8 +58,19 @@ public class HunterDashboardModule extends HunterModule {
         .name("autosave-interval").description("Seconds between automatic saves. 0 disables autosave.")
         .defaultValue(300).min(0).sliderRange(0, 1800).build());
 
+    private final Setting<Boolean> detectEliminations = sgGeneral.add(new BoolSetting.Builder()
+        .name("detect-eliminations")
+        .description("Record a kill when a player you recently struck and left at low health vanishes.")
+        .defaultValue(true).build());
+
+    private final Setting<Integer> eliminationWindow = sgGeneral.add(new IntSetting.Builder()
+        .name("elimination-window")
+        .description("Seconds after your last hit within which a vanishing player still counts.")
+        .defaultValue(8).min(1).sliderRange(1, 30).visible(detectEliminations::get).build());
+
     private boolean deathSeen;
     private long lastAutosave;
+    private EliminationLog eliminations = new EliminationLog();
 
     public HunterDashboardModule() {
         super(HunterAddon.CATEGORY, "hunter-dashboard", "Master switch and session driver for the hunter.");
@@ -90,10 +105,39 @@ public class HunterDashboardModule extends HunterModule {
         }
     }
 
+    /**
+     * Remembers which player the local player just struck, so a later disappearance can be judged.
+     *
+     * <p>Only player entities count; hitting a mob is not an elimination of a tracked player.
+     */
     @EventHandler
-    private void onTargetEliminated(HunterEvents.TargetEliminated event) {
-        if (event.snapshot() == null) return;
-        core().recordKill(event.snapshot().name());
+    private void onAttackEntity(AttackEntityEvent event) {
+        if (!detectEliminations.get() || !core().running()) return;
+        Entity target = event.entity;
+        if (!(target instanceof Player player)) return;
+        if (MeteorClient.mc != null && player == MeteorClient.mc.player) return;
+        eliminations.noteAttack(player.getUUID().toString().toLowerCase(java.util.Locale.ROOT),
+            player.getScoreboardName(), runtime().now());
+    }
+
+    /**
+     * Judges a vanished player: a kill only when they were recently struck and left at low health.
+     *
+     * <p>This is the honest detector. Walking out of render distance is not a kill, so a plain
+     * disappearance records nothing.
+     */
+    @EventHandler
+    private void onTargetLost(HunterEvents.TargetLost event) {
+        if (!detectEliminations.get() || !core().running()) return;
+        PlayerSnapshot snapshot = event.snapshot();
+        if (snapshot == null) return;
+        String key = snapshot.uuid() == null
+            ? "name:" + snapshot.name().toLowerCase(java.util.Locale.ROOT)
+            : snapshot.uuid().toString().toLowerCase(java.util.Locale.ROOT);
+        eliminations.noteHealth(key, snapshot.health(), runtime().now());
+        if (eliminations.confirm(key, runtime().now())) {
+            core().recordElimination(snapshot, event.entry(), runtime().localWeapon());
+        }
     }
 
     /** Starts the hunter: begins a session and optionally enables the companion modules. */
@@ -176,12 +220,14 @@ public class HunterDashboardModule extends HunterModule {
 
     @Override
     public void onActivate() {
+        super.onActivate();
         core().statistics().recordModuleActivation(name);
         lastAutosave = runtime().now();
     }
 
     @Override
     public void onDeactivate() {
+        super.onDeactivate();
         if (saveOnStop.get()) core().saveAll();
     }
 }

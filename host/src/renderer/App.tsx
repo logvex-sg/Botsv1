@@ -24,10 +24,11 @@ import { SettingsPage } from './pages/SettingsPage';
 import { WorkerModePage } from './pages/WorkerModePage';
 import { MultiversePage } from './pages/multiverse/MultiversePage';
 import { StatisticsPage } from './pages/StatisticsPage';
+import { StoragePage } from './pages/StoragePage';
 import type { UiMode } from '../shared/types';
 
 export type PageId =
-  | 'dashboard' | 'workers' | 'groups' | 'tasks' | 'multiverse' | 'inventory' | 'regear' | 'commands' | 'consoles' | 'statistics' | 'worker-mode' | 'settings';
+  | 'dashboard' | 'workers' | 'groups' | 'tasks' | 'multiverse' | 'inventory' | 'regear' | 'commands' | 'consoles' | 'statistics' | 'storage' | 'worker-mode' | 'settings';
 
 const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '◉' },
@@ -40,6 +41,7 @@ const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: 'commands', label: 'Commands', icon: '⌘' },
   { id: 'consoles', label: 'Consoles', icon: '▷' },
   { id: 'statistics', label: 'Statistics', icon: '▥' },
+  { id: 'storage', label: 'Storage', icon: '▤' },
   { id: 'worker-mode', label: 'Worker Mode', icon: '⇄' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
 ];
@@ -55,11 +57,12 @@ const TITLES: Record<PageId, string> = {
   commands: 'Commands',
   consoles: 'Consoles',
   statistics: 'Statistics',
+  storage: 'Autonomous Storage & Maintenance',
   'worker-mode': 'Worker Mode',
   settings: 'Settings',
 };
 
-const PAGE_IDS: PageId[] = ['dashboard', 'workers', 'groups', 'tasks', 'multiverse', 'inventory', 'regear', 'commands', 'consoles', 'statistics', 'worker-mode', 'settings'];
+const PAGE_IDS: PageId[] = ['dashboard', 'workers', 'groups', 'tasks', 'multiverse', 'inventory', 'regear', 'commands', 'consoles', 'statistics', 'storage', 'worker-mode', 'settings'];
 
 /** Old ids from earlier versions map onto the new sections. */
 const ALIASES: Record<string, PageId> = {
@@ -72,6 +75,9 @@ const ALIASES: Record<string, PageId> = {
   automation: 'multiverse',
   stats: 'statistics',
   metrics: 'statistics',
+  store: 'storage',
+  storage_maintenance: 'storage',
+  maintenance: 'storage',
   accounts: 'settings',
   activity: 'consoles',
   console: 'consoles',
@@ -219,6 +225,7 @@ function Shell() {
           {page === 'tasks' && <TasksPage push={push} />}
           {page === 'multiverse' && <MultiversePage push={push} />}
           {page === 'statistics' && <StatisticsPage push={push} />}
+          {page === 'storage' && <StoragePage push={push} />}
           {page === 'inventory' && <InventoryPage push={push} />}
           {page === 'regear' && <RegearPage push={push} />}
           {page === 'commands' && <CommandsPage push={push} />}

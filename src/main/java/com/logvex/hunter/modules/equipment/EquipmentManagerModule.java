@@ -137,6 +137,7 @@ public class EquipmentManagerModule extends HunterModule {
 
     @Override
     public void onActivate() {
+        super.onActivate();
         core().statistics().recordModuleActivation(name);
         lastAnnounce = 0;
         lastWarning = "";
