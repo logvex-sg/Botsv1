@@ -3,6 +3,9 @@
 This guide covers both products in this repository end to end: the **LogVex Hunter** Meteor addon
 and the **Logvex Fleet Manager** desktop app, and how to wire them together.
 
+If you just want to get running, start with the task-oriented walkthrough in
+[`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md). This page is the full reference.
+
 - [1. What the ecosystem does](#1-what-the-ecosystem-does)
 - [2. Requirements](#2-requirements)
 - [3. Install the addon](#3-install-the-addon)
@@ -15,14 +18,16 @@ and the **Logvex Fleet Manager** desktop app, and how to wire them together.
 - [10. Defensive stasis](#10-defensive-stasis)
 - [11. Statistics](#11-statistics)
 - [12. Multi-instance management](#12-multi-instance-management)
+- [12b. In-game swarm (control many clients from one)](#12b-in-game-swarm-control-many-clients-from-one)
 - [13. The companion API](#13-the-companion-api)
 - [14. Fleet Manager: install and run](#14-fleet-manager-install-and-run)
 - [15. Fleet Manager: pages and workflow](#15-fleet-manager-pages-and-workflow)
-- [16. Connecting the Fleet Manager to the addon](#16-connecting-the-fleet-manager-to-the-addon)
+- [16. Connecting a worker client to the Fleet Manager](#16-connecting-a-worker-client-to-the-fleet-manager)
 - [17. Configuration files](#17-configuration-files)
 - [18. Command reference](#18-command-reference)
-- [19. Module reference](#19-module-reference)
-- [20. Troubleshooting](#20-troubleshooting)
+- [19. Remote control from the Fleet Manager](#19-remote-control-from-the-fleet-manager)
+- [20. Module reference](#20-module-reference)
+- [21. Troubleshooting](#21-troubleshooting)
 
 ---
 

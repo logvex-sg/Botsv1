@@ -101,7 +101,8 @@ The remapped, release-ready jar is written to `build/libs/logvex-hunter-6.0.0.ja
 
 ### Commands
 
-See [`USAGE.md`](USAGE.md) for the full use guide. The command reference:
+See [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md) for a task-oriented walkthrough, and
+[`USAGE.md`](USAGE.md) for the full reference. The command reference:
 
 ```
 .hunter                       # status summary
